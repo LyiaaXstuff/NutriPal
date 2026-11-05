@@ -1,0 +1,1358 @@
+{
+  "apiVersion": "2024-11-30",
+  "modelId": "prebuilt-layout",
+  "stringIndexType": "unicodeCodePoint",
+  "content": "Nutrition Information\nServing size 50 g\nServings per package 4\nNutrient\nPer serving\nPer 100 g\nPer 100 ml\n% Daily Value\nEnergy\n450 kJ / 108 kcal\n900 kJ / 216 kcal\n1350 kJ / 324 kcal\n5%\nProtein\n3 g\n6 g\n9 g\n6%\nInositol\n20 mg\n60 mg\nVitamin B12\n2.4 µg\n4.8 µg\n7.2 µg\n20%\nSugars\n<0.5 g\n1 g\n1.5 g\n1%\n",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "words": [
+        {
+          "content": "Nutrition",
+          "confidence": 0.99,
+          "span": {
+            "offset": 0,
+            "length": 9
+          }
+        },
+        {
+          "content": "Information",
+          "confidence": 0.99,
+          "span": {
+            "offset": 10,
+            "length": 11
+          }
+        },
+        {
+          "content": "Serving",
+          "confidence": 0.99,
+          "span": {
+            "offset": 22,
+            "length": 7
+          }
+        },
+        {
+          "content": "size",
+          "confidence": 0.99,
+          "span": {
+            "offset": 30,
+            "length": 4
+          }
+        },
+        {
+          "content": "50",
+          "confidence": 0.99,
+          "span": {
+            "offset": 35,
+            "length": 2
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 38,
+            "length": 1
+          }
+        },
+        {
+          "content": "Servings",
+          "confidence": 0.99,
+          "span": {
+            "offset": 40,
+            "length": 8
+          }
+        },
+        {
+          "content": "per",
+          "confidence": 0.99,
+          "span": {
+            "offset": 49,
+            "length": 3
+          }
+        },
+        {
+          "content": "package",
+          "confidence": 0.99,
+          "span": {
+            "offset": 53,
+            "length": 7
+          }
+        },
+        {
+          "content": "4",
+          "confidence": 0.99,
+          "span": {
+            "offset": 61,
+            "length": 1
+          }
+        },
+        {
+          "content": "Nutrient",
+          "confidence": 0.99,
+          "span": {
+            "offset": 63,
+            "length": 8
+          }
+        },
+        {
+          "content": "Per",
+          "confidence": 0.99,
+          "span": {
+            "offset": 72,
+            "length": 3
+          }
+        },
+        {
+          "content": "serving",
+          "confidence": 0.99,
+          "span": {
+            "offset": 76,
+            "length": 7
+          }
+        },
+        {
+          "content": "Per",
+          "confidence": 0.99,
+          "span": {
+            "offset": 84,
+            "length": 3
+          }
+        },
+        {
+          "content": "100",
+          "confidence": 0.99,
+          "span": {
+            "offset": 88,
+            "length": 3
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 92,
+            "length": 1
+          }
+        },
+        {
+          "content": "Per",
+          "confidence": 0.99,
+          "span": {
+            "offset": 94,
+            "length": 3
+          }
+        },
+        {
+          "content": "100",
+          "confidence": 0.99,
+          "span": {
+            "offset": 98,
+            "length": 3
+          }
+        },
+        {
+          "content": "ml",
+          "confidence": 0.99,
+          "span": {
+            "offset": 102,
+            "length": 2
+          }
+        },
+        {
+          "content": "%",
+          "confidence": 0.99,
+          "span": {
+            "offset": 105,
+            "length": 1
+          }
+        },
+        {
+          "content": "Daily",
+          "confidence": 0.99,
+          "span": {
+            "offset": 107,
+            "length": 5
+          }
+        },
+        {
+          "content": "Value",
+          "confidence": 0.99,
+          "span": {
+            "offset": 113,
+            "length": 5
+          }
+        },
+        {
+          "content": "Energy",
+          "confidence": 0.99,
+          "span": {
+            "offset": 119,
+            "length": 6
+          }
+        },
+        {
+          "content": "450",
+          "confidence": 0.99,
+          "span": {
+            "offset": 126,
+            "length": 3
+          }
+        },
+        {
+          "content": "kJ",
+          "confidence": 0.99,
+          "span": {
+            "offset": 130,
+            "length": 2
+          }
+        },
+        {
+          "content": "/",
+          "confidence": 0.99,
+          "span": {
+            "offset": 133,
+            "length": 1
+          }
+        },
+        {
+          "content": "108",
+          "confidence": 0.99,
+          "span": {
+            "offset": 135,
+            "length": 3
+          }
+        },
+        {
+          "content": "kcal",
+          "confidence": 0.99,
+          "span": {
+            "offset": 139,
+            "length": 4
+          }
+        },
+        {
+          "content": "900",
+          "confidence": 0.99,
+          "span": {
+            "offset": 144,
+            "length": 3
+          }
+        },
+        {
+          "content": "kJ",
+          "confidence": 0.99,
+          "span": {
+            "offset": 148,
+            "length": 2
+          }
+        },
+        {
+          "content": "/",
+          "confidence": 0.99,
+          "span": {
+            "offset": 151,
+            "length": 1
+          }
+        },
+        {
+          "content": "216",
+          "confidence": 0.99,
+          "span": {
+            "offset": 153,
+            "length": 3
+          }
+        },
+        {
+          "content": "kcal",
+          "confidence": 0.99,
+          "span": {
+            "offset": 157,
+            "length": 4
+          }
+        },
+        {
+          "content": "1350",
+          "confidence": 0.99,
+          "span": {
+            "offset": 162,
+            "length": 4
+          }
+        },
+        {
+          "content": "kJ",
+          "confidence": 0.99,
+          "span": {
+            "offset": 167,
+            "length": 2
+          }
+        },
+        {
+          "content": "/",
+          "confidence": 0.99,
+          "span": {
+            "offset": 170,
+            "length": 1
+          }
+        },
+        {
+          "content": "324",
+          "confidence": 0.99,
+          "span": {
+            "offset": 172,
+            "length": 3
+          }
+        },
+        {
+          "content": "kcal",
+          "confidence": 0.99,
+          "span": {
+            "offset": 176,
+            "length": 4
+          }
+        },
+        {
+          "content": "5%",
+          "confidence": 0.99,
+          "span": {
+            "offset": 181,
+            "length": 2
+          }
+        },
+        {
+          "content": "Protein",
+          "confidence": 0.99,
+          "span": {
+            "offset": 184,
+            "length": 7
+          }
+        },
+        {
+          "content": "3",
+          "confidence": 0.99,
+          "span": {
+            "offset": 192,
+            "length": 1
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 194,
+            "length": 1
+          }
+        },
+        {
+          "content": "6",
+          "confidence": 0.99,
+          "span": {
+            "offset": 196,
+            "length": 1
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 198,
+            "length": 1
+          }
+        },
+        {
+          "content": "9",
+          "confidence": 0.99,
+          "span": {
+            "offset": 200,
+            "length": 1
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 202,
+            "length": 1
+          }
+        },
+        {
+          "content": "6%",
+          "confidence": 0.99,
+          "span": {
+            "offset": 204,
+            "length": 2
+          }
+        },
+        {
+          "content": "Inositol",
+          "confidence": 0.99,
+          "span": {
+            "offset": 207,
+            "length": 8
+          }
+        },
+        {
+          "content": "20",
+          "confidence": 0.99,
+          "span": {
+            "offset": 216,
+            "length": 2
+          }
+        },
+        {
+          "content": "mg",
+          "confidence": 0.99,
+          "span": {
+            "offset": 219,
+            "length": 2
+          }
+        },
+        {
+          "content": "60",
+          "confidence": 0.99,
+          "span": {
+            "offset": 222,
+            "length": 2
+          }
+        },
+        {
+          "content": "mg",
+          "confidence": 0.99,
+          "span": {
+            "offset": 225,
+            "length": 2
+          }
+        },
+        {
+          "content": "Vitamin",
+          "confidence": 0.99,
+          "span": {
+            "offset": 228,
+            "length": 7
+          }
+        },
+        {
+          "content": "B12",
+          "confidence": 0.99,
+          "span": {
+            "offset": 236,
+            "length": 3
+          }
+        },
+        {
+          "content": "2.4",
+          "confidence": 0.99,
+          "span": {
+            "offset": 240,
+            "length": 3
+          }
+        },
+        {
+          "content": "µg",
+          "confidence": 0.99,
+          "span": {
+            "offset": 244,
+            "length": 2
+          }
+        },
+        {
+          "content": "4.8",
+          "confidence": 0.99,
+          "span": {
+            "offset": 247,
+            "length": 3
+          }
+        },
+        {
+          "content": "µg",
+          "confidence": 0.99,
+          "span": {
+            "offset": 251,
+            "length": 2
+          }
+        },
+        {
+          "content": "7.2",
+          "confidence": 0.99,
+          "span": {
+            "offset": 254,
+            "length": 3
+          }
+        },
+        {
+          "content": "µg",
+          "confidence": 0.99,
+          "span": {
+            "offset": 258,
+            "length": 2
+          }
+        },
+        {
+          "content": "20%",
+          "confidence": 0.99,
+          "span": {
+            "offset": 261,
+            "length": 3
+          }
+        },
+        {
+          "content": "Sugars",
+          "confidence": 0.99,
+          "span": {
+            "offset": 265,
+            "length": 6
+          }
+        },
+        {
+          "content": "<0.5",
+          "confidence": 0.99,
+          "span": {
+            "offset": 272,
+            "length": 4
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 277,
+            "length": 1
+          }
+        },
+        {
+          "content": "1",
+          "confidence": 0.99,
+          "span": {
+            "offset": 279,
+            "length": 1
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 281,
+            "length": 1
+          }
+        },
+        {
+          "content": "1.5",
+          "confidence": 0.99,
+          "span": {
+            "offset": 283,
+            "length": 3
+          }
+        },
+        {
+          "content": "g",
+          "confidence": 0.99,
+          "span": {
+            "offset": 287,
+            "length": 1
+          }
+        },
+        {
+          "content": "1%",
+          "confidence": 0.99,
+          "span": {
+            "offset": 289,
+            "length": 2
+          }
+        }
+      ],
+      "lines": [
+        {
+          "content": "Nutrition Information",
+          "spans": [
+            {
+              "offset": 0,
+              "length": 21
+            }
+          ]
+        },
+        {
+          "content": "Serving size 50 g",
+          "spans": [
+            {
+              "offset": 22,
+              "length": 17
+            }
+          ]
+        },
+        {
+          "content": "Servings per package 4",
+          "spans": [
+            {
+              "offset": 40,
+              "length": 22
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "rowCount": 6,
+      "columnCount": 5,
+      "cells": [
+        {
+          "rowIndex": 5,
+          "columnIndex": 4,
+          "kind": "content",
+          "content": "1%",
+          "spans": [
+            {
+              "offset": 289,
+              "length": 2
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                400,
+                150,
+                480,
+                150,
+                480,
+                170,
+                400,
+                170
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 5,
+          "columnIndex": 3,
+          "kind": "content",
+          "content": "1.5 g",
+          "spans": [
+            {
+              "offset": 283,
+              "length": 5
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                300,
+                150,
+                380,
+                150,
+                380,
+                170,
+                300,
+                170
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 5,
+          "columnIndex": 2,
+          "kind": "content",
+          "content": "1 g",
+          "spans": [
+            {
+              "offset": 279,
+              "length": 3
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                200,
+                150,
+                280,
+                150,
+                280,
+                170,
+                200,
+                170
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 5,
+          "columnIndex": 1,
+          "kind": "content",
+          "content": "<0.5 g",
+          "spans": [
+            {
+              "offset": 272,
+              "length": 6
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                100,
+                150,
+                180,
+                150,
+                180,
+                170,
+                100,
+                170
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 5,
+          "columnIndex": 0,
+          "kind": "content",
+          "content": "Sugars",
+          "spans": [
+            {
+              "offset": 265,
+              "length": 6
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                0,
+                150,
+                80,
+                150,
+                80,
+                170,
+                0,
+                170
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 4,
+          "columnIndex": 4,
+          "kind": "content",
+          "content": "20%",
+          "spans": [
+            {
+              "offset": 261,
+              "length": 3
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                400,
+                120,
+                480,
+                120,
+                480,
+                140,
+                400,
+                140
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 4,
+          "columnIndex": 3,
+          "kind": "content",
+          "content": "7.2 µg",
+          "spans": [
+            {
+              "offset": 254,
+              "length": 6
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                300,
+                120,
+                380,
+                120,
+                380,
+                140,
+                300,
+                140
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 4,
+          "columnIndex": 2,
+          "kind": "content",
+          "content": "4.8 µg",
+          "spans": [
+            {
+              "offset": 247,
+              "length": 6
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                200,
+                120,
+                280,
+                120,
+                280,
+                140,
+                200,
+                140
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 4,
+          "columnIndex": 1,
+          "kind": "content",
+          "content": "2.4 µg",
+          "spans": [
+            {
+              "offset": 240,
+              "length": 6
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                100,
+                120,
+                180,
+                120,
+                180,
+                140,
+                100,
+                140
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 4,
+          "columnIndex": 0,
+          "kind": "content",
+          "content": "Vitamin B12",
+          "spans": [
+            {
+              "offset": 228,
+              "length": 11
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                0,
+                120,
+                80,
+                120,
+                80,
+                140,
+                0,
+                140
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 3,
+          "columnIndex": 3,
+          "kind": "content",
+          "content": "60 mg",
+          "spans": [
+            {
+              "offset": 222,
+              "length": 5
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                300,
+                90,
+                380,
+                90,
+                380,
+                110,
+                300,
+                110
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 3,
+          "columnIndex": 1,
+          "kind": "content",
+          "content": "20 mg",
+          "spans": [
+            {
+              "offset": 216,
+              "length": 5
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                100,
+                90,
+                180,
+                90,
+                180,
+                110,
+                100,
+                110
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 3,
+          "columnIndex": 0,
+          "kind": "content",
+          "content": "Inositol",
+          "spans": [
+            {
+              "offset": 207,
+              "length": 8
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                0,
+                90,
+                80,
+                90,
+                80,
+                110,
+                0,
+                110
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 2,
+          "columnIndex": 4,
+          "kind": "content",
+          "content": "6%",
+          "spans": [
+            {
+              "offset": 204,
+              "length": 2
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                400,
+                60,
+                480,
+                60,
+                480,
+                80,
+                400,
+                80
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 2,
+          "columnIndex": 3,
+          "kind": "content",
+          "content": "9 g",
+          "spans": [
+            {
+              "offset": 200,
+              "length": 3
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                300,
+                60,
+                380,
+                60,
+                380,
+                80,
+                300,
+                80
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 2,
+          "columnIndex": 2,
+          "kind": "content",
+          "content": "6 g",
+          "spans": [
+            {
+              "offset": 196,
+              "length": 3
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                200,
+                60,
+                280,
+                60,
+                280,
+                80,
+                200,
+                80
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 2,
+          "columnIndex": 1,
+          "kind": "content",
+          "content": "3 g",
+          "spans": [
+            {
+              "offset": 192,
+              "length": 3
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                100,
+                60,
+                180,
+                60,
+                180,
+                80,
+                100,
+                80
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 2,
+          "columnIndex": 0,
+          "kind": "content",
+          "content": "Protein",
+          "spans": [
+            {
+              "offset": 184,
+              "length": 7
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                0,
+                60,
+                80,
+                60,
+                80,
+                80,
+                0,
+                80
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 1,
+          "columnIndex": 4,
+          "kind": "content",
+          "content": "5%",
+          "spans": [
+            {
+              "offset": 181,
+              "length": 2
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                400,
+                30,
+                480,
+                30,
+                480,
+                50,
+                400,
+                50
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 1,
+          "columnIndex": 3,
+          "kind": "content",
+          "content": "1350 kJ / 324 kcal",
+          "spans": [
+            {
+              "offset": 162,
+              "length": 18
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                300,
+                30,
+                380,
+                30,
+                380,
+                50,
+                300,
+                50
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 1,
+          "columnIndex": 2,
+          "kind": "content",
+          "content": "900 kJ / 216 kcal",
+          "spans": [
+            {
+              "offset": 144,
+              "length": 17
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                200,
+                30,
+                280,
+                30,
+                280,
+                50,
+                200,
+                50
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 1,
+          "columnIndex": 1,
+          "kind": "content",
+          "content": "450 kJ / 108 kcal",
+          "spans": [
+            {
+              "offset": 126,
+              "length": 17
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                100,
+                30,
+                180,
+                30,
+                180,
+                50,
+                100,
+                50
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 1,
+          "columnIndex": 0,
+          "kind": "content",
+          "content": "Energy",
+          "spans": [
+            {
+              "offset": 119,
+              "length": 6
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                0,
+                30,
+                80,
+                30,
+                80,
+                50,
+                0,
+                50
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 0,
+          "columnIndex": 4,
+          "kind": "columnHeader",
+          "content": "% Daily Value",
+          "spans": [
+            {
+              "offset": 105,
+              "length": 13
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                400,
+                0,
+                480,
+                0,
+                480,
+                20,
+                400,
+                20
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 0,
+          "columnIndex": 3,
+          "kind": "columnHeader",
+          "content": "Per 100 ml",
+          "spans": [
+            {
+              "offset": 94,
+              "length": 10
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                300,
+                0,
+                380,
+                0,
+                380,
+                20,
+                300,
+                20
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 0,
+          "columnIndex": 2,
+          "kind": "columnHeader",
+          "content": "Per 100 g",
+          "spans": [
+            {
+              "offset": 84,
+              "length": 9
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                200,
+                0,
+                280,
+                0,
+                280,
+                20,
+                200,
+                20
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 0,
+          "columnIndex": 1,
+          "kind": "columnHeader",
+          "content": "Per serving",
+          "spans": [
+            {
+              "offset": 72,
+              "length": 11
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                100,
+                0,
+                180,
+                0,
+                180,
+                20,
+                100,
+                20
+              ]
+            }
+          ]
+        },
+        {
+          "rowIndex": 0,
+          "columnIndex": 0,
+          "kind": "columnHeader",
+          "content": "Nutrient",
+          "spans": [
+            {
+              "offset": 63,
+              "length": 8
+            }
+          ],
+          "boundingRegions": [
+            {
+              "pageNumber": 1,
+              "polygon": [
+                0,
+                0,
+                80,
+                0,
+                80,
+                20,
+                0,
+                20
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

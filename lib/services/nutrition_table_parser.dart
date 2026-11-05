@@ -315,16 +315,32 @@ class NutritionTableParser {
         'Some cells could not be read confidently. Compare marked rows with the photo or retake it.',
       );
     }
-    final metadataText = lines.map((l) => l.text).join('\n');
-    final serving = _servingMetadata(metadataText);
+    return fromTable(
+      columns: publicColumns,
+      rows: rows,
+      rawText: rawText.isEmpty ? lines.map((l) => l.text).join('\n') : rawText,
+      metadataText: lines.map((l) => l.text).join('\n'),
+      warnings: warnings,
+    );
+  }
+
+  /// Shared serving metadata and conservative legacy calculation projections.
+  static NutritionLabelData fromTable({
+    required List<NutritionColumn> columns,
+    required List<NutritionRow> rows,
+    required String rawText,
+    String? metadataText,
+    List<String> warnings = const [],
+  }) {
+    final serving = _servingMetadata(metadataText ?? rawText);
     NutritionValues? projection(NutritionColumnBasis basis) {
-      final matches = publicColumns.where((c) => c.basis == basis).toList();
+      final matches = columns.where((c) => c.basis == basis).toList();
       return matches.length == 1
           ? _legacyValues(rows, matches.single.id)
           : null;
     }
 
-    final per100Columns = publicColumns
+    final per100Columns = columns
         .where(
           (c) =>
               c.basis == NutritionColumnBasis.per100g ||
@@ -333,8 +349,8 @@ class NutritionTableParser {
         .toList();
     final per100 = per100Columns.length == 1 ? per100Columns.single : null;
     return NutritionLabelData(
-      rawText: rawText.isEmpty ? metadataText : rawText,
-      columns: List.unmodifiable(publicColumns),
+      rawText: rawText,
+      columns: List.unmodifiable(columns),
       rows: List.unmodifiable(rows),
       extractionWarnings: List.unmodifiable(warnings.toSet()),
       servingSizeAmount: serving.amount,
@@ -349,6 +365,74 @@ class NutritionTableParser {
           : per100.basis == NutritionColumnBasis.per100g
           ? 'g'
           : 'ml',
+    );
+  }
+
+  static NutritionColumnBasis basisForHeader(String label) {
+    final m = _header.firstMatch(label.replaceAll(RegExp(r'\s+'), ' '));
+    if (m == null) return NutritionColumnBasis.unknown;
+    final lower = m.group(0)!.toLowerCase();
+    if (lower.contains('100')) {
+      return lower.contains('ml')
+          ? NutritionColumnBasis.per100ml
+          : NutritionColumnBasis.per100g;
+    }
+    return RegExp(r'daily|nilai|%').hasMatch(lower)
+        ? NutritionColumnBasis.dailyValue
+        : NutritionColumnBasis.perServing;
+  }
+
+  static bool isMetadata(String text) => _metadata.hasMatch(text);
+  static String cleanNutrientName(String text) => _cleanName(text);
+  static String? unitInName(String text) => _nameUnit(text);
+
+  /// Parse only inside a single Azure cell; numbers never migrate between cells.
+  static NutritionCell parsePrintedCell(
+    String text, {
+    required NutritionColumnBasis basis,
+    String? rowUnit,
+    bool needsReview = false,
+  }) {
+    final matches = _amount.allMatches(text).toList();
+    final quantities = <NutritionQuantity>[];
+    for (final m in matches) {
+      final amount = _parseNumber(m.group(2)!);
+      if (amount == null || !amount.isFinite || amount < 0) continue;
+      final explicitUnit = m.group(3) ?? '';
+      final unit = explicitUnit.isNotEmpty
+          ? _normaliseUnit(explicitUnit)
+          : basis == NutritionColumnBasis.dailyValue
+          ? '%'
+          : rowUnit ?? '';
+      quantities.add(
+        NutritionQuantity(
+          amount: amount,
+          numberText: m.group(2)!,
+          unit: unit,
+          comparator: (m.group(1) ?? '').trim(),
+          rawText: m.group(0)!.trim(),
+        ),
+      );
+    }
+    final remainder = text
+        .replaceAll(_amount, '')
+        .replaceAll(RegExp(r'[\s/();]+'), '');
+    final energyPair =
+        quantities.length == 2 &&
+        quantities.map((q) => q.unit).toSet().containsAll(['kJ', 'kcal']);
+    return NutritionCell(
+      quantities: List.unmodifiable(quantities),
+      rawText: text,
+      needsReview:
+          needsReview ||
+          remainder.isNotEmpty ||
+          quantities.isEmpty ||
+          (quantities.length > 1 && !energyPair) ||
+          quantities.any(
+            (q) =>
+                q.unit.isEmpty ||
+                ((q.unit == '%') != (basis == NutritionColumnBasis.dailyValue)),
+          ),
     );
   }
 

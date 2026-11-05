@@ -201,6 +201,7 @@ class NutritionLabelData {
   final List<NutritionColumn> columns;
   final List<NutritionRow> rows;
   final List<String> extractionWarnings;
+  final String extractionMethod;
 
   const NutritionLabelData({
     this.servingSizeAmount,
@@ -215,6 +216,7 @@ class NutritionLabelData {
     this.columns = const [],
     this.rows = const [],
     this.extractionWarnings = const [],
+    this.extractionMethod = 'On-device text recognition',
   });
 
   bool get hasServingSize {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/nutrition_label_data.dart';
 import '../widgets/nutrition_table.dart';
+import '../widgets/nutrition_portion_card.dart';
 
 class ExtractedNutritionReviewScreen extends StatelessWidget {
   final NutritionLabelData data;
@@ -48,6 +49,11 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
               style: TextStyle(color: Color(0xFF67558E), height: 1.5),
             ),
             const SizedBox(height: 20),
+            Text(
+              'Read with ${data.extractionMethod}',
+              style: const TextStyle(color: Color(0xFF67558E)),
+            ),
+            const SizedBox(height: 12),
             _card(
               Column(
                 children: [
@@ -132,6 +138,8 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(height: 16),
+            _card(NutritionPortionCard(data: data)),
             const SizedBox(height: 16),
             _card(
               ExpansionTile(

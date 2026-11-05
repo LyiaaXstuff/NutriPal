@@ -1,5 +1,9 @@
 # Nutrition-label extraction
 
+For Azure Document Intelligence Layout scanning and portion calculations, see
+[Azure setup](azure-layout-setup.md). The on-device adapter described below is
+used when online scanning is not configured or explicitly retried offline.
+
 `NutritionLabelParserService` adapts ML Kit bounding boxes and confidence to
 `NutritionTableParser`. The latter is pure Dart and can be tested without a camera.
 The ordered `NutritionLabelData.rows` and `columns` are the extraction result;
@@ -29,9 +33,11 @@ the older `perServing` / `per100` fields are conservative calculation projection
 Use the Flutter SDK compatible with `pubspec.yaml` and the committed lockfile.
 The changes were checked with Flutter 3.47.9 / Dart 3.13.7.
 
-Validation results: all 28 Flutter tests passed; `flutter analyze --no-pub`
-reported no issues. A standalone build of the review screen with sample parsed
-rows also compiled for web. This is a UI compile check, not web OCR support.
+Validation results: all 48 Flutter tests passed, including the opt-in local HTTP
+integration test with synthetic Azure responses; all 8 Python backend tests
+passed. `flutter analyze --no-pub` reported no issues. See the Azure setup guide
+for reproducing the HTTP integration check. Native OCR and Azure recognition
+accuracy still require validation with real label photos and resource credentials.
 
 ```sh
 flutter pub get --enforce-lockfile
