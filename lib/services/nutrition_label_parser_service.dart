@@ -6,15 +6,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import '../models/nutrition_label_data.dart';
 
 // =======================================================
-// COLUMN TYPE
-// =======================================================
-
-enum _NutritionColumnType {
-  perServing,
-  per100,
-}
-
-// =======================================================
 // OCR TOKEN
 // =======================================================
 
@@ -34,11 +25,17 @@ class _OcrToken {
     required this.bottom,
   });
 
-  double get centerX => (left + right) / 2;
+  double get centerX =>
+      (left + right) / 2;
 
-  double get centerY => (top + bottom) / 2;
+  double get centerY =>
+      (top + bottom) / 2;
 
-  double get height => bottom - top;
+  double get width =>
+      right - left;
+
+  double get height =>
+      bottom - top;
 }
 
 // =======================================================
@@ -56,17 +53,18 @@ class _OcrRow {
     final List<_OcrToken> result =
         List<_OcrToken>.from(
       tokens,
-    )
-          ..sort(
-            (
-              _OcrToken a,
-              _OcrToken b,
-            ) {
-              return a.left.compareTo(
-                b.left,
-              );
-            },
-          );
+    );
+
+    result.sort(
+      (
+        _OcrToken a,
+        _OcrToken b,
+      ) {
+        return a.left.compareTo(
+          b.left,
+        );
+      },
+    );
 
     return result;
   }
@@ -76,11 +74,13 @@ class _OcrRow {
       return 0;
     }
 
-    double total = 0;
+    double total =
+        0;
 
     for (final _OcrToken token
         in tokens) {
-      total += token.centerY;
+      total +=
+          token.centerY;
     }
 
     return total /
@@ -95,25 +95,48 @@ class _OcrRow {
           ) =>
               token.text,
         )
-        .join(' ')
+        .join(
+          ' ',
+        )
         .trim();
   }
 }
 
 // =======================================================
-// POSITIONED NUTRITION VALUE
+// DETECTED NUTRITION VALUE
 // =======================================================
 
-class _PositionedNutritionValue {
+class _DetectedValue {
   final double amount;
 
   final String unit;
 
+  final String rawText;
+
   final double x;
 
-  const _PositionedNutritionValue({
+  const _DetectedValue({
     required this.amount,
     required this.unit,
+    required this.rawText,
+    required this.x,
+  });
+}
+
+// =======================================================
+// TABLE HEADER
+// =======================================================
+
+class _HeaderCandidate {
+  final NutritionColumnBasis basis;
+
+  final String label;
+
+  final double x;
+
+  const _HeaderCandidate({
+    required this.basis,
+    required this.label,
     required this.x,
   });
 }
@@ -134,15 +157,15 @@ class _ServingSizeResult {
 }
 
 // =======================================================
-// SERVING UNIT
+// PHYSICAL SERVING
 // =======================================================
 
-class _ServingUnitResult {
+class _PhysicalServingResult {
   final double amount;
 
   final String name;
 
-  const _ServingUnitResult({
+  const _PhysicalServingResult({
     required this.amount,
     required this.name,
   });
@@ -167,255 +190,36 @@ class _PackageRelation {
 }
 
 // =======================================================
-// COLUMN LAYOUT
-// =======================================================
-
-class _ColumnLayout {
-  final double? perServingX;
-
-  final double? per100X;
-
-  final String? per100Unit;
-
-  const _ColumnLayout({
-    this.perServingX,
-    this.per100X,
-    this.per100Unit,
-  });
-
-  bool get hasPerServing =>
-      perServingX != null;
-
-  bool get hasPer100 =>
-      per100X != null;
-}
-
-// =======================================================
-// NUTRITION VALUES BUILDER
-// =======================================================
-
-class _NutritionValuesBuilder {
-  double? energyKcal;
-  double? energyKj;
-
-  double? proteinG;
-
-  double? totalFatG;
-  double? saturatedFatG;
-  double? transFatG;
-
-  double? carbohydrateG;
-  double? sugarsG;
-
-  double? fibreG;
-
-  double? sodiumMg;
-
-  double? cholesterolMg;
-
-  final Map<String, NutrientValue>
-      otherNutrients = {};
-
-  bool get hasAnyValue {
-    return energyKcal != null ||
-        energyKj != null ||
-        proteinG != null ||
-        totalFatG != null ||
-        saturatedFatG != null ||
-        transFatG != null ||
-        carbohydrateG != null ||
-        sugarsG != null ||
-        fibreG != null ||
-        sodiumMg != null ||
-        cholesterolMg != null ||
-        otherNutrients.isNotEmpty;
-  }
-
-  NutritionValues build() {
-    return NutritionValues(
-      energyKcal:
-          energyKcal,
-      energyKj:
-          energyKj,
-      proteinG:
-          proteinG,
-      totalFatG:
-          totalFatG,
-      saturatedFatG:
-          saturatedFatG,
-      transFatG:
-          transFatG,
-      carbohydrateG:
-          carbohydrateG,
-      sugarsG:
-          sugarsG,
-      fibreG:
-          fibreG,
-      sodiumMg:
-          sodiumMg,
-      cholesterolMg:
-          cholesterolMg,
-      otherNutrients:
-          Map.unmodifiable(
-        otherNutrients,
-      ),
-    );
-  }
-}
-
-// =======================================================
-// NUTRITION LABEL PARSER SERVICE
+// NUTRITION LABEL PARSER
 // =======================================================
 
 class NutritionLabelParserService {
   // =====================================================
-  // KNOWN / CORE NUTRIENTS
-  // =====================================================
-
-  static const Map<String, List<String>>
-      _nutrientKeywords = {
-    'energy': [
-      'energy',
-      'tenaga',
-      'calorie',
-      'calories',
-    ],
-
-    'protein': [
-      'protein',
-    ],
-
-    'saturatedFat': [
-      'saturated fat',
-      'saturated fatty acid',
-      'saturates',
-      'lemak tepu',
-    ],
-
-    'transFat': [
-      'trans fat',
-      'trans-fat',
-      'lemak trans',
-    ],
-
-    'carbohydrate': [
-      'total carbohydrate',
-      'carbohydrate',
-      'carbohydrates',
-      'karbohidrat',
-      'carbs',
-    ],
-
-    'sugars': [
-      'total sugars',
-      'total sugar',
-      'jumlah gula',
-      'sugars',
-      'sugar',
-      'gula',
-    ],
-
-    'fibre': [
-      'dietary fibre',
-      'dietary fiber',
-      'fibre',
-      'fiber',
-      'serat',
-      'serabut',
-    ],
-
-    'sodium': [
-      'sodium',
-      'natrium',
-    ],
-
-    'cholesterol': [
-      'cholesterol',
-      'kolesterol',
-    ],
-
-    'totalFat': [
-      'total fat',
-      'fat, total',
-      'jumlah lemak',
-      'lemak',
-      'fat',
-    ],
-  };
-
-  // =====================================================
-  // ADDITIONAL NUTRIENT HINTS
-  // =====================================================
-
-  static const List<String> _otherNutrientHints = [
-    'vitamin',
-    'calcium',
-    'iron',
-    'potassium',
-    'magnesium',
-    'phosphorus',
-    'zinc',
-    'copper',
-    'manganese',
-    'selenium',
-    'iodine',
-    'folate',
-    'folic acid',
-    'niacin',
-    'thiamin',
-    'thiamine',
-    'riboflavin',
-    'biotin',
-    'choline',
-    'chloride',
-    'chromium',
-    'molybdenum',
-    'omega',
-    'dha',
-    'epa',
-  ];
-
-  // =====================================================
-  // PER SERVING HEADERS
-  // =====================================================
-
-  static const List<String> _perServingKeywords = [
-    'per serving',
-    'per serve',
-    'per portion',
-    'setiap hidangan',
-  ];
-
-  // =====================================================
-  // PER 100G / 100ML HEADERS
-  // =====================================================
-
-  static const List<String> _per100Keywords = [
-    'per 100g',
-    'per 100 g',
-    'per 100ml',
-    'per 100 ml',
-    'setiap 100g',
-    'setiap 100 g',
-    'setiap 100ml',
-    'setiap 100 ml',
-  ];
-
-  // =====================================================
   // NUTRITION VALUE
+  // =====================================================
+  //
+  // Supports:
+  //
+  // 13.7 g
+  // 69 mg
+  // 55 kcal
+  // 230 kJ
+  // 0 mcg
+  // 10 IU
+  //
   // =====================================================
 
   static final RegExp _valuePattern =
       RegExp(
     r'(?:<|≤)?\s*'
     r'(\d+(?:[.,]\d+)?)\s*'
-    r'(kcal|kj|mcg|µg|ug|mg|g)\b',
+    r'(kcal|kj|mcg|µg|ug|mg|g|iu)\b',
     caseSensitive:
         false,
   );
 
   // =====================================================
-  // NUMBER ONLY
+  // NUMBER WITHOUT UNIT
   // =====================================================
 
   static final RegExp _numberOnlyPattern =
@@ -427,12 +231,12 @@ class NutritionLabelParserService {
   );
 
   // =====================================================
-  // UNIT ONLY
+  // UNIT WITHOUT NUMBER
   // =====================================================
 
   static final RegExp _unitOnlyPattern =
       RegExp(
-    r'^(kcal|kj|mcg|µg|ug|mg|g)$',
+    r'^(kcal|kj|mcg|µg|ug|mg|g|iu)$',
     caseSensitive:
         false,
   );
@@ -440,8 +244,13 @@ class NutritionLabelParserService {
   // =====================================================
   // EXPLICIT SERVING SIZE
   // =====================================================
+  //
+  // Serving Size: 250 ml
+  // Saiz Hidangan: 1 g
+  //
+  // =====================================================
 
-  static final RegExp _explicitServingSizePattern =
+  static final RegExp _servingSizePattern =
       RegExp(
     r'(?:serving\s*size|saiz\s*hidangan)'
     r'\s*[:\-]?\s*'
@@ -452,12 +261,17 @@ class NutritionLabelParserService {
   );
 
   // =====================================================
-  // SERVING SIZE FROM HEADER
+  // SERVING SIZE FROM COLUMN HEADER
+  // =====================================================
+  //
+  // Per Serving (250 ml)
+  // Setiap Hidangan (1 g)
+  //
   // =====================================================
 
-  static final RegExp _servingHeaderPattern =
+  static final RegExp _servingHeaderSizePattern =
       RegExp(
-    r'(?:per\s*serving|per\s*serve|setiap\s*hidangan)'
+    r'(?:per\s*(?:serving|serve)|setiap\s*hidangan)'
     r'\s*'
     r'[\(\[]?\s*'
     r'(\d+(?:[.,]\d+)?)\s*'
@@ -487,7 +301,11 @@ class NutritionLabelParserService {
   );
 
   // =====================================================
-  // FRACTION SERVING
+  // PHYSICAL FRACTION
+  // =====================================================
+  //
+  // 1/2 bottle
+  //
   // =====================================================
 
   static final RegExp _fractionServingPattern =
@@ -498,13 +316,18 @@ class NutritionLabelParserService {
     r'\s*'
     r'(bottle|bottles|pack|packs|piece|pieces|'
     r'tablet|tablets|capsule|capsules|sachet|sachets|'
-    r'cup|cups)',
+    r'cup|cups|bar|bars)',
     caseSensitive:
         false,
   );
 
   // =====================================================
-  // COUNT SERVING
+  // PHYSICAL COUNT
+  // =====================================================
+  //
+  // 15 chips
+  // 1 tablet
+  //
   // =====================================================
 
   static final RegExp _countServingPattern =
@@ -513,13 +336,18 @@ class NutritionLabelParserService {
     r'(\d+(?:[.,]\d+)?)\s*'
     r'(chip|chips|biscuit|biscuits|cracker|crackers|'
     r'tablet|tablets|capsule|capsules|piece|pieces|'
-    r'sachet|sachets|bottle|bottles|cup|cups)',
+    r'sachet|sachets|bottle|bottles|cup|cups|'
+    r'bar|bars)',
     caseSensitive:
         false,
   );
 
   // =====================================================
   // PACKAGE RELATION
+  // =====================================================
+  //
+  // 1 g x 30 tablets
+  //
   // =====================================================
 
   static final RegExp _packageRelationPattern =
@@ -529,24 +357,24 @@ class NutritionLabelParserService {
     r'\s*[x×]\s*'
     r'\d+(?:[.,]\d+)?\s*'
     r'(tablet|tablets|capsule|capsules|piece|pieces|'
-    r'sachet|sachets)',
+    r'sachet|sachets|bar|bars)',
     caseSensitive:
         false,
   );
 
   // =====================================================
-  // PUBLIC PARSE METHOD
+  // MAIN PARSER
   // =====================================================
 
   static Future<NutritionLabelData> parseImage(
     String imagePath,
   ) async {
-    final File file =
+    final File imageFile =
         File(
       imagePath,
     );
 
-    if (!await file.exists()) {
+    if (!await imageFile.exists()) {
       throw Exception(
         'Nutrition label image could not be found.',
       );
@@ -568,13 +396,13 @@ class NutritionLabelParserService {
         imagePath,
       );
 
-      final RecognizedText result =
+      final RecognizedText recognizedText =
           await recognizer.processImage(
         inputImage,
       );
 
       final String rawText =
-          result.text.trim();
+          recognizedText.text.trim();
 
       if (rawText.isEmpty) {
         return const NutritionLabelData(
@@ -584,14 +412,14 @@ class NutritionLabelParserService {
       }
 
       // =================================================
-      // GET OCR ELEMENTS
+      // READ EVERY OCR ELEMENT WITH ITS POSITION
       // =================================================
 
       final List<_OcrToken> tokens =
           [];
 
       for (final TextBlock block
-          in result.blocks) {
+          in recognizedText.blocks) {
         for (final TextLine line
             in block.lines) {
           for (final TextElement element
@@ -603,9 +431,6 @@ class NutritionLabelParserService {
               continue;
             }
 
-            // IMPORTANT:
-            // Do not explicitly declare Rect here.
-            // Dart infers the boundingBox type.
             final rect =
                 element.boundingBox;
 
@@ -628,7 +453,7 @@ class NutritionLabelParserService {
       }
 
       // =================================================
-      // RECONSTRUCT TABLE ROWS
+      // RECONSTRUCT HORIZONTAL TABLE ROWS
       // =================================================
 
       final List<_OcrRow> rows =
@@ -636,7 +461,7 @@ class NutritionLabelParserService {
         tokens,
       );
 
-      final String allText =
+      final String normalisedText =
           _normalise(
         rawText,
       );
@@ -648,32 +473,41 @@ class NutritionLabelParserService {
       final _ServingSizeResult?
           servingSize =
           _findServingSize(
-        allText,
+        normalisedText,
         rows,
       );
 
       final double? servingsPerPackage =
           _findServingsPerPackage(
-        allText,
+        normalisedText,
       );
 
-      _ServingUnitResult?
-          servingUnit =
-          _findPhysicalServingUnit(
+      _PhysicalServingResult?
+          physicalServing =
+          _findPhysicalServing(
         rows,
       );
 
       final _PackageRelation?
           packageRelation =
           _findPackageRelation(
-        allText,
+        normalisedText,
       );
 
       // =================================================
-      // PACKAGE RELATION
+      // INFER PHYSICAL UNIT
+      //
+      // Example:
+      //
+      // Serving size = 1 g
+      // Package relation = 1 g × 30 tablets
+      //
+      // Therefore:
+      //
+      // 1 serving = 1 tablet
       // =================================================
 
-      if (servingUnit == null &&
+      if (physicalServing == null &&
           servingSize != null &&
           packageRelation != null) {
         final bool sameUnit =
@@ -691,8 +525,8 @@ class NutritionLabelParserService {
 
         if (sameUnit &&
             sameAmount) {
-          servingUnit =
-              _ServingUnitResult(
+          physicalServing =
+              _PhysicalServingResult(
             amount:
                 1,
             name:
@@ -703,122 +537,55 @@ class NutritionLabelParserService {
       }
 
       // =================================================
-      // DETECT COLUMN LOCATIONS
+      // DETECT TABLE HEADERS
       // =================================================
 
-      final _ColumnLayout layout =
-          _detectColumnLayout(
+      final List<_HeaderCandidate>
+          headers =
+          _detectHeaders(
         rows,
       );
 
       // =================================================
-      // BUILDERS
+      // FIND NUMERICAL TABLE COLUMN POSITIONS
       // =================================================
 
-      final _NutritionValuesBuilder
-          perServingBuilder =
-          _NutritionValuesBuilder();
+      final double clusterTolerance =
+          _calculateColumnClusterTolerance(
+        tokens,
+      );
 
-      final _NutritionValuesBuilder
-          per100Builder =
-          _NutritionValuesBuilder();
+      final List<double> valueColumnCenters =
+          _detectValueColumnCenters(
+        rows:
+            rows,
+        tolerance:
+            clusterTolerance,
+      );
 
       // =================================================
-      // PARSE NUTRIENT ROWS
+      // BUILD FINAL COLUMN DEFINITIONS
       // =================================================
 
-      for (final _OcrRow row
-          in rows) {
-        final String rowText =
-            _normalise(
-          row.text,
-        );
+      final List<NutritionColumn> columns =
+          _buildColumns(
+        headers:
+            headers,
+        valueColumnCenters:
+            valueColumnCenters,
+      );
 
-        // =================================================
-        // REMOVE HEADERS / NON-NUTRIENT ROWS
-        // =================================================
+      // =================================================
+      // EXTRACT EVERY NUTRIENT ROW
+      // =================================================
 
-        if (_isNonNutrientRow(
-          rowText,
-        )) {
-          continue;
-        }
-
-        // =================================================
-        // VALUES + X POSITIONS
-        // =================================================
-
-        final List<_PositionedNutritionValue>
-            values =
-            _extractPositionedValues(
-          row,
-        );
-
-        if (values.isEmpty) {
-          continue;
-        }
-
-        // =================================================
-        // CORE NUTRIENT
-        // =================================================
-
-        final String? knownNutrient =
-            _identifyKnownNutrient(
-          rowText,
-        );
-
-        if (knownNutrient !=
-            null) {
-          _assignKnownNutrient(
-            nutrient:
-                knownNutrient,
-            values:
-                values,
-            layout:
-                layout,
-            perServing:
-                perServingBuilder,
-            per100:
-                per100Builder,
-          );
-
-          continue;
-        }
-
-        // =================================================
-        // OTHER NUTRIENT
-        // =================================================
-
-        final String? otherName =
-            _extractOtherNutrientName(
-          row,
-          values,
-        );
-
-        if (otherName ==
-            null) {
-          continue;
-        }
-
-        if (!_looksLikeAdditionalNutrient(
-          otherName,
-        )) {
-          continue;
-        }
-
-        _assignOtherNutrient(
-          nutrientName:
-              otherName,
-          values:
-              values,
-          layout:
-              layout,
-          perServing:
-              perServingBuilder,
-          per100:
-              per100Builder,
-        );
-      }
+      final List<NutrientRow> nutrients =
+          _extractNutrientRows(
+        rows:
+            rows,
+        columns:
+            columns,
+      );
 
       // =================================================
       // RETURN STRUCTURED DATA
@@ -835,25 +602,16 @@ class NutritionLabelParserService {
             servingsPerPackage,
 
         servingUnitAmount:
-            servingUnit?.amount,
+            physicalServing?.amount,
 
         servingUnitName:
-            servingUnit?.name,
+            physicalServing?.name,
 
-        perServing:
-            perServingBuilder.hasAnyValue
-                ? perServingBuilder
-                    .build()
-                : null,
+        columns:
+            columns,
 
-        per100:
-            per100Builder.hasAnyValue
-                ? per100Builder
-                    .build()
-                : null,
-
-        per100Unit:
-            layout.per100Unit,
+        nutrients:
+            nutrients,
 
         rawText:
             rawText,
@@ -864,7 +622,7 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // BUILD OCR ROWS
+  // BUILD ROWS
   // =====================================================
 
   static List<_OcrRow> _buildRows(
@@ -889,10 +647,6 @@ class NutritionLabelParserService {
             },
           );
 
-    // ===================================================
-    // FIND MEDIAN TEXT HEIGHT
-    // ===================================================
-
     final List<double> heights =
         sorted
             .map(
@@ -905,7 +659,8 @@ class NutritionLabelParserService {
               (
                 double height,
               ) =>
-                  height > 0,
+                  height >
+                  0,
             )
             .toList()
           ..sort();
@@ -914,67 +669,52 @@ class NutritionLabelParserService {
         14;
 
     if (heights.isNotEmpty) {
-      final int middle =
-          heights.length ~/
-              2;
-
-      if (heights.length.isOdd) {
-        medianHeight =
-            heights[middle];
-      } else {
-        medianHeight =
-            (
-                  heights[middle - 1] +
-                      heights[middle]
-                ) /
-                2;
-      }
+      medianHeight =
+          _median(
+        heights,
+      );
     }
 
-    // ===================================================
-    // STRICTER ROW GROUPING
-    // ===================================================
-
+    // Strict tolerance helps prevent one nutrient row
+    // from merging with the next.
     final double tolerance =
-        math
-            .max(
-              5.0,
-              medianHeight *
-                  0.55,
-            )
-            .toDouble();
+        math.max(
+      4.0,
+      medianHeight *
+          0.52,
+    );
 
     final List<_OcrRow> rows =
         [];
 
     for (final _OcrToken token
         in sorted) {
-      _OcrRow? bestRow;
+      _OcrRow? closestRow;
 
-      double bestDistance =
+      double closestDistance =
           double.infinity;
 
       for (final _OcrRow row
           in rows) {
         final double distance =
             (
-              row.centerY -
-                  token.centerY
+              token.centerY -
+                  row.centerY
             ).abs();
 
         if (distance <=
                 tolerance &&
             distance <
-                bestDistance) {
-          bestDistance =
+                closestDistance) {
+          closestDistance =
               distance;
 
-          bestRow =
+          closestRow =
               row;
         }
       }
 
-      if (bestRow ==
+      if (closestRow ==
           null) {
         rows.add(
           _OcrRow(
@@ -984,7 +724,7 @@ class NutritionLabelParserService {
           ),
         );
       } else {
-        bestRow.tokens.add(
+        closestRow.tokens.add(
           token,
         );
       }
@@ -1005,110 +745,250 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // DETECT COLUMN LAYOUT
+  // DETECT TABLE HEADERS
   // =====================================================
 
-  static _ColumnLayout _detectColumnLayout(
+  static List<_HeaderCandidate> _detectHeaders(
     List<_OcrRow> rows,
   ) {
-    double? perServingX;
-
-    double? per100X;
-
-    String? per100Unit;
+    final List<_HeaderCandidate> result =
+        [];
 
     for (final _OcrRow row
         in rows) {
-      final String rowText =
+      final String text =
           _normalise(
         row.text,
       );
 
       // =================================================
-      // PER 100 HEADER
+      // PER 100 G
       // =================================================
 
-      if (_containsAny(
-        rowText,
-        _per100Keywords,
+      if (_isPer100gHeader(
+        text,
       )) {
-        per100X ??=
-            _findPer100X(
-          row,
+        final double? x =
+            _find100UnitX(
+          row:
+              row,
+          wantedUnit:
+              'g',
         );
 
-        if (rowText.contains(
-              '100ml',
-            ) ||
-            rowText.contains(
-              '100 ml',
-            )) {
-          per100Unit =
-              'ml';
-        } else if (rowText.contains(
-              '100g',
-            ) ||
-            rowText.contains(
-              '100 g',
-            )) {
-          per100Unit =
-              'g';
+        if (x != null) {
+          _addHeaderIfMissing(
+            result,
+            _HeaderCandidate(
+              basis:
+                  NutritionColumnBasis
+                      .per100g,
+              label:
+                  'Per 100 g',
+              x:
+                  x,
+            ),
+          );
         }
       }
 
       // =================================================
-      // PER SERVING HEADER
+      // PER 100 ML
       // =================================================
 
-      if (_containsAny(
-        rowText,
-        _perServingKeywords,
+      if (_isPer100mlHeader(
+        text,
       )) {
-        perServingX ??=
-            _findPerServingX(
+        final double? x =
+            _find100UnitX(
+          row:
+              row,
+          wantedUnit:
+              'ml',
+        );
+
+        if (x != null) {
+          _addHeaderIfMissing(
+            result,
+            _HeaderCandidate(
+              basis:
+                  NutritionColumnBasis
+                      .per100ml,
+              label:
+                  'Per 100 ml',
+              x:
+                  x,
+            ),
+          );
+        }
+      }
+
+      // =================================================
+      // PER SERVING
+      // =================================================
+
+      if (_isPerServingHeader(
+        text,
+      )) {
+        final double? x =
+            _findServingHeaderX(
           row,
         );
+
+        if (x != null) {
+          _addHeaderIfMissing(
+            result,
+            _HeaderCandidate(
+              basis:
+                  NutritionColumnBasis
+                      .perServing,
+              label:
+                  'Per serving',
+              x:
+                  x,
+            ),
+          );
+        }
       }
     }
 
-    return _ColumnLayout(
-      perServingX:
-          perServingX,
-      per100X:
-          per100X,
-      per100Unit:
-          per100Unit,
+    result.sort(
+      (
+        _HeaderCandidate a,
+        _HeaderCandidate b,
+      ) {
+        return a.x.compareTo(
+          b.x,
+        );
+      },
+    );
+
+    return result;
+  }
+
+  // =====================================================
+  // ADD HEADER ONCE
+  // =====================================================
+
+  static void _addHeaderIfMissing(
+    List<_HeaderCandidate> headers,
+    _HeaderCandidate newHeader,
+  ) {
+    final bool alreadyExists =
+        headers.any(
+      (
+        _HeaderCandidate existing,
+      ) {
+        return existing.basis ==
+            newHeader.basis;
+      },
+    );
+
+    if (!alreadyExists) {
+      headers.add(
+        newHeader,
+      );
+    }
+  }
+
+  // =====================================================
+  // PER SERVING HEADER?
+  // =====================================================
+
+  static bool _isPerServingHeader(
+    String text,
+  ) {
+    final bool english =
+        RegExp(
+      r'\bper\s+(?:serving|serve|portion)\b',
+      caseSensitive:
+          false,
+    ).hasMatch(
+      text,
+    );
+
+    final bool malay =
+        RegExp(
+      r'\bsetiap\s+hidangan\b',
+      caseSensitive:
+          false,
+    ).hasMatch(
+      text,
+    );
+
+    return english ||
+        malay;
+  }
+
+  // =====================================================
+  // PER 100G HEADER?
+  // =====================================================
+
+  static bool _isPer100gHeader(
+    String text,
+  ) {
+    return RegExp(
+      r'\b(?:per|setiap)?\s*100\s*g\b',
+      caseSensitive:
+          false,
+    ).hasMatch(
+      text,
     );
   }
 
   // =====================================================
-  // FIND PER SERVING X
+  // PER 100ML HEADER?
   // =====================================================
 
-  static double? _findPerServingX(
+  static bool _isPer100mlHeader(
+    String text,
+  ) {
+    return RegExp(
+      r'\b(?:per|setiap)?\s*100\s*ml\b',
+      caseSensitive:
+          false,
+    ).hasMatch(
+      text,
+    );
+  }
+
+  // =====================================================
+  // FIND SERVING HEADER X
+  // =====================================================
+
+  static double? _findServingHeaderX(
     _OcrRow row,
   ) {
     final List<_OcrToken> tokens =
         row.sortedTokens;
 
     for (int i = 0;
-        i < tokens.length;
+        i <
+            tokens.length;
         i++) {
-      final String text =
+      final String value =
           _normalise(
         tokens[i].text,
       );
 
-      if (text.contains(
+      if (value.contains(
             'serving',
           ) ||
-          text.contains(
+          value.contains(
+            'serve',
+          ) ||
+          value.contains(
+            'portion',
+          ) ||
+          value.contains(
             'hidangan',
           )) {
-        if (i > 0) {
+        if (i >
+            0) {
           final String previous =
               _normalise(
-            tokens[i - 1].text,
+            tokens[i - 1]
+                .text,
           );
 
           if (previous ==
@@ -1134,43 +1014,52 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // FIND PER 100 X
+  // FIND 100G / 100ML HEADER X
   // =====================================================
 
-  static double? _findPer100X(
-    _OcrRow row,
-  ) {
+  static double? _find100UnitX({
+    required _OcrRow row,
+    required String wantedUnit,
+  }) {
     final List<_OcrToken> tokens =
         row.sortedTokens;
 
     for (int i = 0;
-        i < tokens.length;
+        i <
+            tokens.length;
         i++) {
-      final String text =
+      final String value =
           _normalise(
         tokens[i].text,
       );
 
-      if (text.contains(
-            '100g',
-          ) ||
-          text.contains(
-            '100ml',
+      final String compact =
+          value.replaceAll(
+        ' ',
+        '',
+      );
+
+      if (compact ==
+              '100$wantedUnit' ||
+          compact.contains(
+            '100$wantedUnit',
           )) {
         return tokens[i]
             .centerX;
       }
 
-      if (text == '100' &&
+      if (value ==
+              '100' &&
           i + 1 <
               tokens.length) {
         final String next =
             _normalise(
-          tokens[i + 1].text,
+          tokens[i + 1]
+              .text,
         );
 
-        if (next == 'g' ||
-            next == 'ml') {
+        if (next ==
+            wantedUnit) {
           return (
                 tokens[i].centerX +
                     tokens[i + 1]
@@ -1185,38 +1074,601 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // EXTRACT VALUES + X POSITIONS
+  // VALUE COLUMN CLUSTER TOLERANCE
   // =====================================================
 
-  static List<_PositionedNutritionValue>
-      _extractPositionedValues(
+  static double _calculateColumnClusterTolerance(
+    List<_OcrToken> tokens,
+  ) {
+    final List<double> heights =
+        tokens
+            .map(
+              (
+                _OcrToken token,
+              ) =>
+                  token.height,
+            )
+            .where(
+              (
+                double value,
+              ) =>
+                  value >
+                  0,
+            )
+            .toList()
+          ..sort();
+
+    if (heights.isEmpty) {
+      return 40;
+    }
+
+    return math.max(
+      20,
+      _median(
+            heights,
+          ) *
+          2.2,
+    );
+  }
+
+  // =====================================================
+  // DETECT ACTUAL VALUE COLUMN CENTRES
+  // =====================================================
+
+  static List<double> _detectValueColumnCenters({
+    required List<_OcrRow> rows,
+    required double tolerance,
+  }) {
+    final List<double> xValues =
+        [];
+
+    for (final _OcrRow row
+        in rows) {
+      final String text =
+          _normalise(
+        row.text,
+      );
+
+      if (_isNonNutrientRow(
+        text,
+      )) {
+        continue;
+      }
+
+      final List<_DetectedValue> values =
+          _extractValuesFromRow(
+        row,
+      );
+
+      for (final _DetectedValue value
+          in values) {
+        xValues.add(
+          value.x,
+        );
+      }
+    }
+
+    if (xValues.isEmpty) {
+      return [];
+    }
+
+    xValues.sort();
+
+    final List<List<double>> clusters =
+        [];
+
+    for (final double x
+        in xValues) {
+      if (clusters.isEmpty) {
+        clusters.add(
+          [
+            x,
+          ],
+        );
+
+        continue;
+      }
+
+      final List<double> currentCluster =
+          clusters.last;
+
+      final double currentCenter =
+          currentCluster.reduce(
+                (
+                  double a,
+                  double b,
+                ) =>
+                    a + b,
+              ) /
+              currentCluster.length;
+
+      if ((x - currentCenter).abs() <=
+          tolerance) {
+        currentCluster.add(
+          x,
+        );
+      } else {
+        clusters.add(
+          [
+            x,
+          ],
+        );
+      }
+    }
+
+    // Prefer columns appearing on multiple nutrient rows.
+    final List<double> reliableCenters =
+        clusters
+            .where(
+              (
+                List<double> cluster,
+              ) =>
+                  cluster.length >=
+                  2,
+            )
+            .map(
+              (
+                List<double> cluster,
+              ) =>
+                  cluster.reduce(
+                        (
+                          double a,
+                          double b,
+                        ) =>
+                            a + b,
+                      ) /
+                      cluster.length,
+            )
+            .toList();
+
+    if (reliableCenters.isNotEmpty) {
+      return reliableCenters;
+    }
+
+    // Fallback if OCR only found a small number of rows.
+    return clusters
+        .map(
+          (
+            List<double> cluster,
+          ) =>
+              cluster.reduce(
+                    (
+                      double a,
+                      double b,
+                    ) =>
+                        a + b,
+                  ) /
+                  cluster.length,
+        )
+        .toList();
+  }
+
+  // =====================================================
+  // BUILD FINAL TABLE COLUMNS
+  // =====================================================
+
+  static List<NutritionColumn> _buildColumns({
+    required List<_HeaderCandidate> headers,
+    required List<double> valueColumnCenters,
+  }) {
+    final List<NutritionColumn> result =
+        [];
+
+    final Set<int> usedCenters =
+        {};
+
+    // ===================================================
+    // MATCH EACH HEADER TO THE NEAREST VALUE COLUMN
+    // ===================================================
+
+    for (final _HeaderCandidate header
+        in headers) {
+      double finalX =
+          header.x;
+
+      if (valueColumnCenters.isNotEmpty) {
+        int? closestIndex;
+
+        double closestDistance =
+            double.infinity;
+
+        for (int i = 0;
+            i <
+                valueColumnCenters.length;
+            i++) {
+          if (usedCenters.contains(
+            i,
+          )) {
+            continue;
+          }
+
+          final double distance =
+              (
+                header.x -
+                    valueColumnCenters[i]
+              ).abs();
+
+          if (distance <
+              closestDistance) {
+            closestDistance =
+                distance;
+
+            closestIndex =
+                i;
+          }
+        }
+
+        if (closestIndex !=
+            null) {
+          finalX =
+              valueColumnCenters[
+                closestIndex
+              ];
+
+          usedCenters.add(
+            closestIndex,
+          );
+        }
+      }
+
+      result.add(
+        NutritionColumn(
+          id:
+              _basisId(
+            header.basis,
+          ),
+          label:
+              header.label,
+          basis:
+              header.basis,
+          xCenter:
+              finalX,
+        ),
+      );
+    }
+
+    // ===================================================
+    // PRESERVE UNKNOWN COLUMNS
+    //
+    // Do not silently discard a column just because
+    // OCR failed to recognise its header.
+    // ===================================================
+
+    for (int i = 0;
+        i <
+            valueColumnCenters.length;
+        i++) {
+      if (usedCenters.contains(
+        i,
+      )) {
+        continue;
+      }
+
+      result.add(
+        NutritionColumn(
+          id:
+              'unknown_$i',
+          label:
+              'Detected column ${i + 1}',
+          basis:
+              NutritionColumnBasis
+                  .unknown,
+          xCenter:
+              valueColumnCenters[i],
+        ),
+      );
+    }
+
+    result.sort(
+      (
+        NutritionColumn a,
+        NutritionColumn b,
+      ) {
+        return a.xCenter.compareTo(
+          b.xCenter,
+        );
+      },
+    );
+
+    return result;
+  }
+
+  // =====================================================
+  // EXTRACT EVERY NUTRIENT ROW
+  // =====================================================
+
+  static List<NutrientRow> _extractNutrientRows({
+    required List<_OcrRow> rows,
+    required List<NutritionColumn> columns,
+  }) {
+    final List<NutrientRow> result =
+        [];
+
+    int order =
+        0;
+
+    for (final _OcrRow row
+        in rows) {
+      final String rowText =
+          _normalise(
+        row.text,
+      );
+
+      // Ignore table headers / serving information.
+      if (_isNonNutrientRow(
+        rowText,
+      )) {
+        continue;
+      }
+
+      final List<_DetectedValue> detectedValues =
+          _extractValuesFromRow(
+        row,
+      );
+
+      if (detectedValues.isEmpty) {
+        continue;
+      }
+
+      if (columns.isEmpty) {
+        continue;
+      }
+
+      // =================================================
+      // CREATE EMPTY CELLS
+      // =================================================
+
+      final List<List<NutritionValue>>
+          valuesByColumn =
+          List<List<NutritionValue>>.generate(
+        columns.length,
+        (
+          int index,
+        ) =>
+            <NutritionValue>[],
+      );
+
+      // =================================================
+      // ASSIGN EACH VALUE TO NEAREST COLUMN
+      // =================================================
+
+      for (final _DetectedValue detected
+          in detectedValues) {
+        final int columnIndex =
+            _nearestColumnIndex(
+          x:
+              detected.x,
+          columns:
+              columns,
+        );
+
+        if (columnIndex <
+            0) {
+          continue;
+        }
+
+        valuesByColumn[
+          columnIndex
+        ].add(
+          NutritionValue(
+            amount:
+                detected.amount,
+            unit:
+                detected.unit,
+            rawText:
+                detected.rawText,
+          ),
+        );
+      }
+
+      final bool hasAssignedValue =
+          valuesByColumn.any(
+        (
+          List<NutritionValue> values,
+        ) =>
+            values.isNotEmpty,
+      );
+
+      if (!hasAssignedValue) {
+        continue;
+      }
+
+      // =================================================
+      // EXTRACT NUTRIENT NAME
+      // =================================================
+
+      final String? nutrientName =
+          _extractNutrientName(
+        row:
+            row,
+        detectedValues:
+            detectedValues,
+      );
+
+      if (nutrientName ==
+          null) {
+        continue;
+      }
+
+      result.add(
+        NutrientRow(
+          name:
+              nutrientName,
+          order:
+              order,
+          valuesByColumn:
+              valuesByColumn,
+        ),
+      );
+
+      order++;
+    }
+
+    return result;
+  }
+
+  // =====================================================
+  // EXTRACT DYNAMIC NUTRIENT NAME
+  // =====================================================
+
+  static String? _extractNutrientName({
+    required _OcrRow row,
+    required List<_DetectedValue> detectedValues,
+  }) {
+    if (detectedValues.isEmpty) {
+      return null;
+    }
+
+    double firstValueX =
+        detectedValues.first.x;
+
+    for (final _DetectedValue value
+        in detectedValues) {
+      if (value.x <
+          firstValueX) {
+        firstValueX =
+            value.x;
+      }
+    }
+
+    final List<String> nutrientNameTokens =
+        [];
+
+    for (final _OcrToken token
+        in row.sortedTokens) {
+      // Nutrient name should appear before first
+      // numerical nutrition column.
+      if (token.centerX >=
+          firstValueX) {
+        continue;
+      }
+
+      final String cleaned =
+          _cleanNameToken(
+        token.text,
+      );
+
+      if (cleaned.isEmpty) {
+        continue;
+      }
+
+      if (_isHeaderWord(
+        cleaned,
+      )) {
+        continue;
+      }
+
+      nutrientNameTokens.add(
+        token.text,
+      );
+    }
+
+    String name =
+        nutrientNameTokens
+            .join(
+              ' ',
+            )
+            .trim();
+
+    // ===================================================
+    // FALLBACK
+    //
+    // Sometimes OCR detects:
+    //
+    // "Sodium 69mg"
+    //
+    // as one element.
+    // ===================================================
+
+    if (name.isEmpty) {
+      final RegExpMatch? firstValueMatch =
+          _valuePattern
+              .firstMatch(
+        row.text,
+      );
+
+      if (firstValueMatch !=
+          null) {
+        name =
+            row.text
+                .substring(
+                  0,
+                  firstValueMatch.start,
+                )
+                .trim();
+      }
+    }
+
+    name =
+        name
+            .replaceAll(
+              RegExp(
+                r'^[•·\-\–\—:\s]+',
+              ),
+              '',
+            )
+            .replaceAll(
+              RegExp(
+                r'[•·\-\–\—:\s]+$',
+              ),
+              '',
+            )
+            .trim();
+
+    if (name.length <
+        2) {
+      return null;
+    }
+
+    if (_isInvalidNutrientName(
+      name,
+    )) {
+      return null;
+    }
+
+    return _normaliseDisplayName(
+      name,
+    );
+  }
+
+  // =====================================================
+  // EXTRACT VALUES FROM ROW
+  // =====================================================
+
+  static List<_DetectedValue> _extractValuesFromRow(
     _OcrRow row,
   ) {
-    final List<_PositionedNutritionValue>
-        result =
+    final List<_DetectedValue> result =
         [];
 
     final List<_OcrToken> tokens =
         row.sortedTokens;
 
-    int i = 0;
+    int i =
+        0;
 
     while (i <
         tokens.length) {
       final _OcrToken token =
           tokens[i];
 
-      final String text =
+      final String tokenText =
           token.text.trim();
 
       // =================================================
-      // VALUE AND UNIT IN SAME ELEMENT
+      // CASE 1
+      //
+      // Number + unit in same OCR element.
+      //
+      // 13.7g
+      // 69mg
+      // 55kcal
       // =================================================
 
       final List<RegExpMatch> matches =
           _valuePattern
               .allMatches(
-                text,
+                tokenText,
               )
               .toList();
 
@@ -1235,19 +1687,26 @@ class NutritionLabelParserService {
             2,
           );
 
-          if (amount == null ||
-              unit == null) {
+          if (amount ==
+                  null ||
+              unit ==
+                  null) {
             continue;
           }
 
           result.add(
-            _PositionedNutritionValue(
+            _DetectedValue(
               amount:
                   amount,
               unit:
                   _normaliseUnit(
                 unit,
               ),
+              rawText:
+                  match.group(
+                        0,
+                      ) ??
+                      tokenText,
               x:
                   token.centerX,
             ),
@@ -1260,16 +1719,21 @@ class NutritionLabelParserService {
       }
 
       // =================================================
-      // NUMBER AND UNIT SPLIT INTO TWO ELEMENTS
+      // CASE 2
+      //
+      // Number and unit separated by OCR.
+      //
+      // "13.7" "g"
       // =================================================
 
       final RegExpMatch? numberMatch =
           _numberOnlyPattern
               .firstMatch(
-        text,
+        tokenText,
       );
 
-      if (numberMatch != null &&
+      if (numberMatch !=
+              null &&
           i + 1 <
               tokens.length) {
         final _OcrToken nextToken =
@@ -1286,7 +1750,8 @@ class NutritionLabelParserService {
           nextText,
         );
 
-        if (unitMatch != null) {
+        if (unitMatch !=
+            null) {
           final double? amount =
               _parseNumber(
             numberMatch.group(
@@ -1299,16 +1764,20 @@ class NutritionLabelParserService {
             1,
           );
 
-          if (amount != null &&
-              unit != null) {
+          if (amount !=
+                  null &&
+              unit !=
+                  null) {
             result.add(
-              _PositionedNutritionValue(
+              _DetectedValue(
                 amount:
                     amount,
                 unit:
                     _normaliseUnit(
                   unit,
                 ),
+                rawText:
+                    '${token.text} ${nextToken.text}',
                 x:
                     (
                           token.centerX +
@@ -1318,7 +1787,8 @@ class NutritionLabelParserService {
               ),
             );
 
-            i += 2;
+            i +=
+                2;
 
             continue;
           }
@@ -1332,439 +1802,52 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // ASSIGN KNOWN NUTRIENT
-  // =====================================================
-
-  static void _assignKnownNutrient({
-    required String nutrient,
-    required List<_PositionedNutritionValue> values,
-    required _ColumnLayout layout,
-    required _NutritionValuesBuilder perServing,
-    required _NutritionValuesBuilder per100,
-  }) {
-    for (final _PositionedNutritionValue value
-        in values) {
-      final _NutritionColumnType? column =
-          _nearestColumn(
-        value.x,
-        layout,
-      );
-
-      if (column == null) {
-        continue;
-      }
-
-      final _NutritionValuesBuilder builder =
-          column ==
-                  _NutritionColumnType
-                      .perServing
-              ? perServing
-              : per100;
-
-      _applyKnownValue(
-        builder:
-            builder,
-        nutrient:
-            nutrient,
-        value:
-            value,
-      );
-    }
-  }
-
-  // =====================================================
-  // ASSIGN OTHER NUTRIENT
-  // =====================================================
-
-  static void _assignOtherNutrient({
-    required String nutrientName,
-    required List<_PositionedNutritionValue> values,
-    required _ColumnLayout layout,
-    required _NutritionValuesBuilder perServing,
-    required _NutritionValuesBuilder per100,
-  }) {
-    final String key =
-        _normalise(
-      nutrientName,
-    );
-
-    for (final _PositionedNutritionValue value
-        in values) {
-      final _NutritionColumnType? column =
-          _nearestColumn(
-        value.x,
-        layout,
-      );
-
-      if (column == null) {
-        continue;
-      }
-
-      final _NutritionValuesBuilder builder =
-          column ==
-                  _NutritionColumnType
-                      .perServing
-              ? perServing
-              : per100;
-
-      builder.otherNutrients[
-        key
-      ] =
-          NutrientValue(
-        name:
-            nutrientName,
-        amount:
-            value.amount,
-        unit:
-            value.unit,
-      );
-    }
-  }
-
-  // =====================================================
   // FIND NEAREST COLUMN
   // =====================================================
 
-  static _NutritionColumnType? _nearestColumn(
-    double x,
-    _ColumnLayout layout,
-  ) {
-    // Only per serving.
-    if (layout.hasPerServing &&
-        !layout.hasPer100) {
-      return _NutritionColumnType
-          .perServing;
-    }
-
-    // Only per 100.
-    if (!layout.hasPerServing &&
-        layout.hasPer100) {
-      return _NutritionColumnType
-          .per100;
-    }
-
-    // No valid columns detected.
-    if (!layout.hasPerServing &&
-        !layout.hasPer100) {
-      return null;
-    }
-
-    // Two columns.
-    final double servingDistance =
-        (
-          x -
-              layout.perServingX!
-        ).abs();
-
-    final double per100Distance =
-        (
-          x -
-              layout.per100X!
-        ).abs();
-
-    if (servingDistance <
-        per100Distance) {
-      return _NutritionColumnType
-          .perServing;
-    }
-
-    return _NutritionColumnType
-        .per100;
-  }
-
-  // =====================================================
-  // APPLY KNOWN VALUE
-  // =====================================================
-
-  static void _applyKnownValue({
-    required _NutritionValuesBuilder builder,
-    required String nutrient,
-    required _PositionedNutritionValue value,
+  static int _nearestColumnIndex({
+    required double x,
+    required List<NutritionColumn> columns,
   }) {
-    switch (nutrient) {
-      // =================================================
-      // ENERGY
-      // =================================================
-
-      case 'energy':
-        if (value.unit ==
-            'kcal') {
-          builder.energyKcal =
-              value.amount;
-        } else if (value.unit ==
-            'kj') {
-          builder.energyKj =
-              value.amount;
-        }
-
-        break;
-
-      // =================================================
-      // PROTEIN
-      // =================================================
-
-      case 'protein':
-        builder.proteinG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // TOTAL FAT
-      // =================================================
-
-      case 'totalFat':
-        builder.totalFatG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // SATURATED FAT
-      // =================================================
-
-      case 'saturatedFat':
-        builder.saturatedFatG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // TRANS FAT
-      // =================================================
-
-      case 'transFat':
-        builder.transFatG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // CARBOHYDRATE
-      // =================================================
-
-      case 'carbohydrate':
-        builder.carbohydrateG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // SUGAR
-      // =================================================
-
-      case 'sugars':
-        builder.sugarsG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // FIBRE
-      // =================================================
-
-      case 'fibre':
-        builder.fibreG =
-            _toGrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // SODIUM
-      // =================================================
-
-      case 'sodium':
-        builder.sodiumMg =
-            _toMilligrams(
-          value,
-        );
-
-        break;
-
-      // =================================================
-      // CHOLESTEROL
-      // =================================================
-
-      case 'cholesterol':
-        builder.cholesterolMg =
-            _toMilligrams(
-          value,
-        );
-
-        break;
+    if (columns.isEmpty) {
+      return -1;
     }
+
+    int bestIndex =
+        0;
+
+    double bestDistance =
+        (
+          x -
+              columns.first.xCenter
+        ).abs();
+
+    for (int i = 1;
+        i <
+            columns.length;
+        i++) {
+      final double distance =
+          (
+            x -
+                columns[i]
+                    .xCenter
+          ).abs();
+
+      if (distance <
+          bestDistance) {
+        bestDistance =
+            distance;
+
+        bestIndex =
+            i;
+      }
+    }
+
+    return bestIndex;
   }
 
   // =====================================================
-  // IDENTIFY CORE NUTRIENT
-  // =====================================================
-
-  static String? _identifyKnownNutrient(
-    String text,
-  ) {
-    // More specific nutrients before generic fat.
-    const List<String> priority = [
-      'saturatedFat',
-      'transFat',
-      'carbohydrate',
-      'sugars',
-      'fibre',
-      'sodium',
-      'cholesterol',
-      'energy',
-      'protein',
-      'totalFat',
-    ];
-
-    for (final String nutrient
-        in priority) {
-      final List<String>? keywords =
-          _nutrientKeywords[
-        nutrient
-      ];
-
-      if (keywords == null) {
-        continue;
-      }
-
-      if (_containsAny(
-        text,
-        keywords,
-      )) {
-        return nutrient;
-      }
-    }
-
-    return null;
-  }
-
-  // =====================================================
-  // EXTRACT OTHER NUTRIENT NAME
-  // =====================================================
-
-  static String? _extractOtherNutrientName(
-    _OcrRow row,
-    List<_PositionedNutritionValue> values,
-  ) {
-    if (values.isEmpty) {
-      return null;
-    }
-
-    // ===================================================
-    // FIRST VALUE COLUMN
-    // ===================================================
-
-    final double firstValueX =
-        values
-            .map(
-              (
-                _PositionedNutritionValue value,
-              ) =>
-                  value.x,
-            )
-            .reduce(
-              math.min,
-            );
-
-    final List<String> nameParts =
-        [];
-
-    for (final _OcrToken token
-        in row.sortedTokens) {
-      // Nutrient name must be left of the first value.
-      if (token.centerX >=
-          firstValueX) {
-        continue;
-      }
-
-      final String cleaned =
-          _normalise(
-        token.text,
-      );
-
-      if (cleaned.isEmpty) {
-        continue;
-      }
-
-      // Remove column header words.
-      if (_isHeaderWord(
-        cleaned,
-      )) {
-        continue;
-      }
-
-      nameParts.add(
-        token.text,
-      );
-    }
-
-    if (nameParts.isEmpty) {
-      return null;
-    }
-
-    String name =
-        nameParts
-            .join(' ')
-            .trim();
-
-    name = name
-        .replaceAll(
-          RegExp(
-            r'[:\-]+$',
-          ),
-          '',
-        )
-        .trim();
-
-    if (name.length < 2) {
-      return null;
-    }
-
-    return _titleCase(
-      name,
-    );
-  }
-
-  // =====================================================
-  // CHECK ADDITIONAL NUTRIENT
-  // =====================================================
-
-  static bool _looksLikeAdditionalNutrient(
-    String name,
-  ) {
-    final String text =
-        _normalise(
-      name,
-    );
-
-    for (final String hint
-        in _otherNutrientHints) {
-      if (text.contains(
-        hint,
-      )) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  // =====================================================
-  // FILTER NON-NUTRIENT ROWS
+  // NON-NUTRIENT ROW
   // =====================================================
 
   static bool _isNonNutrientRow(
@@ -1775,26 +1858,41 @@ class NutritionLabelParserService {
       text,
     );
 
-    // Per serving header.
-    if (_containsAny(
+    if (value.isEmpty) {
+      return true;
+    }
+
+    if (_isPerServingHeader(
       value,
-      _perServingKeywords,
     )) {
       return true;
     }
 
-    // Per 100 header.
-    if (_containsAny(
+    if (_isPer100gHeader(
       value,
-      _per100Keywords,
     )) {
       return true;
     }
 
-    const List<String> blocked = [
+    if (_isPer100mlHeader(
+      value,
+    )) {
+      return true;
+    }
+
+    const List<String> blockedPhrases = [
+      'nutrition information',
+      'nutritional information',
+      'nutrition facts',
+      'nutrition fact',
+      'maklumat pemakanan',
+      'fakta pemakanan',
       'serving size',
       'saiz hidangan',
-      'servings per',
+      'servings per package',
+      'servings per pack',
+      'servings per container',
+      'servings per bottle',
       'hidangan setiap bungkusan',
       'hidangan setiap pek',
       'net weight',
@@ -1802,20 +1900,15 @@ class NutritionLabelParserService {
       'daily value',
       '% daily value',
       'nilai harian',
-      '% dv',
-      'rni',
       'recommended nutrient intake',
-      'nutrition information',
-      'nutritional information',
-      'nutrition facts',
-      'maklumat pemakanan',
-      'fakta pemakanan',
+      '% rni',
+      '% dv',
     ];
 
-    for (final String blockedText
-        in blocked) {
+    for (final String phrase
+        in blockedPhrases) {
       if (value.contains(
-        blockedText,
+        phrase,
       )) {
         return true;
       }
@@ -1825,33 +1918,81 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // HEADER WORD CHECK
+  // INVALID NUTRIENT NAME
+  // =====================================================
+
+  static bool _isInvalidNutrientName(
+    String name,
+  ) {
+    final String value =
+        _normalise(
+      name,
+    );
+
+    const Set<String> invalid = {
+      'setiap',
+      'per',
+      'hidangan',
+      'serving',
+      'serve',
+      'portion',
+      '100g',
+      '100 g',
+      '100ml',
+      '100 ml',
+      'daily value',
+      'nilai harian',
+      'rni',
+      'dv',
+    };
+
+    if (invalid.contains(
+      value,
+    )) {
+      return true;
+    }
+
+    // Purely numeric text is not a nutrient name.
+    if (RegExp(
+      r'^[\d.,%]+$',
+    ).hasMatch(
+      value,
+    )) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // =====================================================
+  // HEADER WORD
   // =====================================================
 
   static bool _isHeaderWord(
-    String text,
+    String value,
   ) {
-    const Set<String> words = {
+    final String text =
+        _normalise(
+      value,
+    );
+
+    const Set<String> headerWords = {
       'setiap',
       'per',
       'serving',
       'serve',
       'portion',
       'hidangan',
-      '100g',
-      '100ml',
-      '100',
-      'g',
-      'ml',
-      '%',
       'daily',
       'value',
       'nilai',
       'harian',
       'rni',
+      'dv',
+      '%',
     };
 
-    return words.contains(
+    return headerWords.contains(
       text,
     );
   }
@@ -1860,25 +2001,22 @@ class NutritionLabelParserService {
   // FIND SERVING SIZE
   // =====================================================
 
-  static _ServingSizeResult?
-      _findServingSize(
+  static _ServingSizeResult? _findServingSize(
     String allText,
     List<_OcrRow> rows,
   ) {
     // ===================================================
-    // EXPLICIT
-    //
-    // Saiz Hidangan: 1g
-    // Serving Size: 250ml
+    // EXPLICIT SERVING SIZE
     // ===================================================
 
     final RegExpMatch? explicit =
-        _explicitServingSizePattern
+        _servingSizePattern
             .firstMatch(
       allText,
     );
 
-    if (explicit != null) {
+    if (explicit !=
+        null) {
       final double? amount =
           _parseNumber(
         explicit.group(
@@ -1891,8 +2029,10 @@ class NutritionLabelParserService {
         2,
       );
 
-      if (amount != null &&
-          unit != null) {
+      if (amount !=
+              null &&
+          unit !=
+              null) {
         return _ServingSizeResult(
           amount:
               amount,
@@ -1903,18 +2043,17 @@ class NutritionLabelParserService {
     }
 
     // ===================================================
-    // HEADER
-    //
-    // Setiap Hidangan (1g)
+    // SERVING SIZE FROM TABLE HEADER
     // ===================================================
 
     final RegExpMatch? header =
-        _servingHeaderPattern
+        _servingHeaderSizePattern
             .firstMatch(
       allText,
     );
 
-    if (header != null) {
+    if (header !=
+        null) {
       final double? amount =
           _parseNumber(
         header.group(
@@ -1927,8 +2066,10 @@ class NutritionLabelParserService {
         2,
       );
 
-      if (amount != null &&
-          unit != null) {
+      if (amount !=
+              null &&
+          unit !=
+              null) {
         return _ServingSizeResult(
           amount:
               amount,
@@ -1939,74 +2080,53 @@ class NutritionLabelParserService {
     }
 
     // ===================================================
-    // CHECK INDIVIDUAL ROWS
+    // CHECK EACH OCR ROW TOO
     // ===================================================
 
     for (final _OcrRow row
         in rows) {
-      final String text =
+      final String rowText =
           _normalise(
         row.text,
       );
 
-      final RegExpMatch? explicitRow =
-          _explicitServingSizePattern
-              .firstMatch(
-        text,
-      );
+      final RegExpMatch? match =
+          _servingSizePattern
+                  .firstMatch(
+                rowText,
+              ) ??
+              _servingHeaderSizePattern
+                  .firstMatch(
+                rowText,
+              );
 
-      if (explicitRow != null) {
-        final double? amount =
-            _parseNumber(
-          explicitRow.group(
-            1,
-          ),
-        );
-
-        final String? unit =
-            explicitRow.group(
-          2,
-        );
-
-        if (amount != null &&
-            unit != null) {
-          return _ServingSizeResult(
-            amount:
-                amount,
-            unit:
-                unit.toLowerCase(),
-          );
-        }
+      if (match ==
+          null) {
+        continue;
       }
 
-      final RegExpMatch? headerRow =
-          _servingHeaderPattern
-              .firstMatch(
-        text,
+      final double? amount =
+          _parseNumber(
+        match.group(
+          1,
+        ),
       );
 
-      if (headerRow != null) {
-        final double? amount =
-            _parseNumber(
-          headerRow.group(
-            1,
-          ),
-        );
+      final String? unit =
+          match.group(
+        2,
+      );
 
-        final String? unit =
-            headerRow.group(
-          2,
+      if (amount !=
+              null &&
+          unit !=
+              null) {
+        return _ServingSizeResult(
+          amount:
+              amount,
+          unit:
+              unit.toLowerCase(),
         );
-
-        if (amount != null &&
-            unit != null) {
-          return _ServingSizeResult(
-            amount:
-                amount,
-            unit:
-                unit.toLowerCase(),
-          );
-        }
       }
     }
 
@@ -2026,7 +2146,8 @@ class NutritionLabelParserService {
       text,
     );
 
-    if (match == null) {
+    if (match ==
+        null) {
       return null;
     }
 
@@ -2041,8 +2162,7 @@ class NutritionLabelParserService {
   // FIND PHYSICAL SERVING
   // =====================================================
 
-  static _ServingUnitResult?
-      _findPhysicalServingUnit(
+  static _PhysicalServingResult? _findPhysicalServing(
     List<_OcrRow> rows,
   ) {
     for (final _OcrRow row
@@ -2073,7 +2193,8 @@ class NutritionLabelParserService {
         text,
       );
 
-      if (fraction != null) {
+      if (fraction !=
+          null) {
         final double? numerator =
             _parseNumber(
           fraction.group(
@@ -2088,22 +2209,26 @@ class NutritionLabelParserService {
           ),
         );
 
-        final String? name =
+        final String? item =
             fraction.group(
           3,
         );
 
-        if (numerator != null &&
-            denominator != null &&
-            denominator != 0 &&
-            name != null) {
-          return _ServingUnitResult(
+        if (numerator !=
+                null &&
+            denominator !=
+                null &&
+            denominator !=
+                0 &&
+            item !=
+                null) {
+          return _PhysicalServingResult(
             amount:
                 numerator /
                     denominator,
             name:
                 _singularise(
-              name,
+              item,
             ),
           );
         }
@@ -2122,7 +2247,8 @@ class NutritionLabelParserService {
         text,
       );
 
-      if (count != null) {
+      if (count !=
+          null) {
         final double? amount =
             _parseNumber(
           count.group(
@@ -2130,19 +2256,21 @@ class NutritionLabelParserService {
           ),
         );
 
-        final String? name =
+        final String? item =
             count.group(
           2,
         );
 
-        if (amount != null &&
-            name != null) {
-          return _ServingUnitResult(
+        if (amount !=
+                null &&
+            item !=
+                null) {
+          return _PhysicalServingResult(
             amount:
                 amount,
             name:
                 _singularise(
-              name,
+              item,
             ),
           );
         }
@@ -2156,8 +2284,7 @@ class NutritionLabelParserService {
   // FIND PACKAGE RELATION
   // =====================================================
 
-  static _PackageRelation?
-      _findPackageRelation(
+  static _PackageRelation? _findPackageRelation(
     String text,
   ) {
     final RegExpMatch? match =
@@ -2166,7 +2293,8 @@ class NutritionLabelParserService {
       text,
     );
 
-    if (match == null) {
+    if (match ==
+        null) {
       return null;
     }
 
@@ -2177,7 +2305,7 @@ class NutritionLabelParserService {
       ),
     );
 
-    final String? measurementUnit =
+    final String? unit =
         match.group(
       2,
     );
@@ -2187,9 +2315,12 @@ class NutritionLabelParserService {
       3,
     );
 
-    if (amount == null ||
-        measurementUnit == null ||
-        item == null) {
+    if (amount ==
+            null ||
+        unit ==
+            null ||
+        item ==
+            null) {
       return null;
     }
 
@@ -2197,8 +2328,7 @@ class NutritionLabelParserService {
       amountPerUnit:
           amount,
       measurementUnit:
-          measurementUnit
-              .toLowerCase(),
+          unit.toLowerCase(),
       itemName:
           _singularise(
         item,
@@ -2207,51 +2337,42 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // CONVERT TO GRAMS
+  // COLUMN BASIS ID
   // =====================================================
 
-  static double? _toGrams(
-    _PositionedNutritionValue value,
+  static String _basisId(
+    NutritionColumnBasis basis,
   ) {
-    switch (value.unit) {
-      case 'g':
-        return value.amount;
+    switch (basis) {
+      case NutritionColumnBasis.perServing:
+        return 'per_serving';
 
-      case 'mg':
-        return value.amount /
-            1000;
+      case NutritionColumnBasis.per100g:
+        return 'per_100g';
 
-      case 'mcg':
-        return value.amount /
-            1000000;
+      case NutritionColumnBasis.per100ml:
+        return 'per_100ml';
 
-      default:
-        return null;
+      case NutritionColumnBasis.unknown:
+        return 'unknown';
     }
   }
 
   // =====================================================
-  // CONVERT TO MILLIGRAMS
+  // DISPLAY NAME
   // =====================================================
 
-  static double? _toMilligrams(
-    _PositionedNutritionValue value,
+  static String _normaliseDisplayName(
+    String text,
   ) {
-    switch (value.unit) {
-      case 'mg':
-        return value.amount;
-
-      case 'g':
-        return value.amount *
-            1000;
-
-      case 'mcg':
-        return value.amount /
-            1000;
-
-      default:
-        return null;
-    }
+    return text
+        .replaceAll(
+          RegExp(
+            r'\s+',
+          ),
+          ' ',
+        )
+        .trim();
   }
 
   // =====================================================
@@ -2264,16 +2385,52 @@ class NutritionLabelParserService {
     final String value =
         unit.toLowerCase();
 
-    if (value == 'µg' ||
-        value == 'ug') {
+    if (value ==
+            'µg' ||
+        value ==
+            'ug') {
       return 'mcg';
+    }
+
+    if (value ==
+        'kj') {
+      return 'kJ';
+    }
+
+    if (value ==
+        'iu') {
+      return 'IU';
     }
 
     return value;
   }
 
   // =====================================================
-  // SINGULARISE
+  // CLEAN NUTRIENT NAME TOKEN
+  // =====================================================
+
+  static String _cleanNameToken(
+    String text,
+  ) {
+    return _normalise(
+      text
+          .replaceAll(
+            RegExp(
+              r'^[•·:\-\–\—]+',
+            ),
+            '',
+          )
+          .replaceAll(
+            RegExp(
+              r'[•·:\-\–\—]+$',
+            ),
+            '',
+          ),
+    );
+  }
+
+  // =====================================================
+  // SINGULARISE PHYSICAL UNIT
   // =====================================================
 
   static String _singularise(
@@ -2300,6 +2457,8 @@ class NutritionLabelParserService {
           'biscuit',
       'crackers':
           'cracker',
+      'bars':
+          'bar',
     };
 
     final String text =
@@ -2310,34 +2469,31 @@ class NutritionLabelParserService {
   }
 
   // =====================================================
-  // TITLE CASE
+  // MEDIAN
   // =====================================================
 
-  static String _titleCase(
-    String value,
+  static double _median(
+    List<double> sortedValues,
   ) {
-    return value
-        .split(' ')
-        .where(
-          (
-            String part,
-          ) =>
-              part.isNotEmpty,
-        )
-        .map(
-          (
-            String part,
-          ) {
-            if (part.length == 1) {
-              return part
-                  .toUpperCase();
-            }
+    if (sortedValues.isEmpty) {
+      return 0;
+    }
 
-            return '${part[0].toUpperCase()}'
-                '${part.substring(1)}';
-          },
-        )
-        .join(' ');
+    final int middle =
+        sortedValues.length ~/
+            2;
+
+    if (sortedValues.length.isOdd) {
+      return sortedValues[
+        middle
+      ];
+    }
+
+    return (
+          sortedValues[middle - 1] +
+              sortedValues[middle]
+        ) /
+        2;
   }
 
   // =====================================================
@@ -2347,7 +2503,8 @@ class NutritionLabelParserService {
   static double? _parseNumber(
     String? value,
   ) {
-    if (value == null) {
+    if (value ==
+        null) {
       return null;
     }
 
@@ -2357,26 +2514,6 @@ class NutritionLabelParserService {
         '.',
       ),
     );
-  }
-
-  // =====================================================
-  // CONTAINS ANY KEYWORD
-  // =====================================================
-
-  static bool _containsAny(
-    String text,
-    List<String> keywords,
-  ) {
-    for (final String keyword
-        in keywords) {
-      if (text.contains(
-        keyword,
-      )) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   // =====================================================

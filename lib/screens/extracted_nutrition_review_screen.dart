@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../models/nutrition_label_data.dart';
 
-class ExtractedNutritionReviewScreen extends StatelessWidget {
+class ExtractedNutritionReviewScreen
+    extends StatelessWidget {
   final NutritionLabelData data;
 
   const ExtractedNutritionReviewScreen({
     super.key,
     required this.data,
   });
+
+  // =====================================================
+  // COLOURS
+  // =====================================================
 
   static const Color primaryPurple =
       Color(0xFF4B2E83);
@@ -92,7 +97,7 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
   // PHYSICAL SERVING
   // =====================================================
 
-  String? get _physicalServingText {
+  String? get _servingEquivalentText {
     if (data.servingUnitAmount ==
             null ||
         data.servingUnitName ==
@@ -124,18 +129,18 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
       );
     }
 
-    String name =
+    String unitName =
         data.servingUnitName!;
 
     if (amount > 1 &&
-        !name.endsWith(
+        !unitName.endsWith(
           's',
         )) {
-      name =
-          '${name}s';
+      unitName =
+          '${unitName}s';
     }
 
-    return '$amountText $name';
+    return '$amountText $unitName';
   }
 
   // =====================================================
@@ -181,8 +186,7 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                           48,
                       child:
                           IconButton(
-                        onPressed:
-                            () {
+                        onPressed: () {
                           Navigator.pop(
                             context,
                           );
@@ -227,7 +231,7 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
             ),
 
             // =================================================
-            // CONTENT
+            // BODY
             // =================================================
 
             Expanded(
@@ -238,13 +242,17 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                   22,
                   14,
                   22,
-                  30,
+                  32,
                 ),
                 child:
                     Column(
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
                   children: [
+                    // ===========================================
+                    // HEADING
+                    // ===========================================
+
                     const Text(
                       'Check the extracted information',
                       style:
@@ -264,7 +272,7 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                     ),
 
                     const Text(
-                      'Make sure the serving information and nutrient values match the product label.',
+                      'Make sure each nutrient and value matches the original nutrition label.',
                       style:
                           TextStyle(
                         color:
@@ -281,9 +289,9 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                           22,
                     ),
 
-                    // =================================================
+                    // ===========================================
                     // SERVING INFORMATION
-                    // =================================================
+                    // ===========================================
 
                     const _SectionTitle(
                       title:
@@ -301,7 +309,7 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                       servingsPerPackage:
                           _servingsPerPackageText,
                       servingEquivalent:
-                          _physicalServingText,
+                          _servingEquivalentText,
                     ),
 
                     const SizedBox(
@@ -309,46 +317,31 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                           26,
                     ),
 
-                    // =================================================
-                    // PER SERVING
-                    // =================================================
+                    // ===========================================
+                    // NO COLUMNS
+                    // ===========================================
 
-                    if (data.hasPerServingValues) ...[
-                      const _SectionTitle(
-                        title:
-                            'Per serving',
+                    if (data.columns.isEmpty)
+                      const _WarningCard(
+                        text:
+                            'NutriPal detected nutrition text but could not determine the nutrition value columns.',
                       ),
 
-                      const SizedBox(
-                        height:
-                            10,
-                      ),
+                    // ===========================================
+                    // EACH DETECTED COLUMN
+                    // ===========================================
 
-                      _NutritionCard(
-                        values:
-                            data.perServing!,
-                      ),
-
-                      const SizedBox(
-                        height:
-                            26,
-                      ),
-                    ],
-
-                    // =================================================
-                    // PER 100
-                    // =================================================
-
-                    if (data.hasPer100Values) ...[
+                    for (int columnIndex = 0;
+                        columnIndex <
+                            data.columns.length;
+                        columnIndex++) ...[
                       _SectionTitle(
                         title:
-                            data.per100Unit ==
-                                    'ml'
-                                ? 'Per 100 ml'
-                                : data.per100Unit ==
-                                        'g'
-                                    ? 'Per 100 g'
-                                    : 'Per 100',
+                            data
+                                .columns[
+                                  columnIndex
+                                ]
+                                .label,
                       ),
 
                       const SizedBox(
@@ -356,9 +349,11 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                             10,
                       ),
 
-                      _NutritionCard(
-                        values:
-                            data.per100!,
+                      _DynamicNutritionCard(
+                        data:
+                            data,
+                        columnIndex:
+                            columnIndex,
                       ),
 
                       const SizedBox(
@@ -367,121 +362,61 @@ class ExtractedNutritionReviewScreen extends StatelessWidget {
                       ),
                     ],
 
-                    // =================================================
-                    // CALCULATION STATUS
-                    // =================================================
+                    // ===========================================
+                    // PORTION CALCULATION STATUS
+                    // ===========================================
 
                     if (data.canCalculatePortion)
-                      Container(
-                        width:
-                            double.infinity,
-                        padding:
-                            const EdgeInsets.all(
-                          16,
-                        ),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
-                            0xFFE8FAF8,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(
-                            18,
-                          ),
-                        ),
-                        child:
-                            const Row(
-                          children: [
-                            Icon(
-                              Icons
-                                  .check_circle_outline_rounded,
-                              color:
-                                  selectedTeal,
-                              size:
-                                  28,
-                            ),
-
-                            SizedBox(
-                              width:
-                                  12,
-                            ),
-
-                            Expanded(
-                              child:
-                                  Text(
-                                'Enough information is available to calculate an intended portion.',
-                                style:
-                                    TextStyle(
-                                  color:
-                                      darkPurple,
-                                  fontSize:
-                                      14,
-                                  height:
-                                      1.35,
-                                  fontWeight:
-                                      FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
+                      const _ReadyCard()
                     else
-                      Container(
-                        width:
-                            double.infinity,
-                        padding:
-                            const EdgeInsets.all(
-                          16,
-                        ),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
-                            0xFFFFF5DF,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(
-                            18,
-                          ),
-                        ),
-                        child:
-                            const Row(
-                          children: [
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color:
-                                  Color(
-                                0xFFE69A17,
-                              ),
-                            ),
+                      const _WarningCard(
+                        text:
+                            'Some serving or nutrition-column information is missing. NutriPal should not calculate the intended portion until the missing information is confirmed.',
+                      ),
 
-                            SizedBox(
-                              width:
-                                  12,
-                            ),
+                    const SizedBox(
+                      height:
+                          18,
+                    ),
 
-                            Expanded(
-                              child:
-                                  Text(
-                                'Some serving information may be missing, so portion calculation may not be available.',
-                                style:
-                                    TextStyle(
-                                  color:
-                                      darkPurple,
-                                  fontSize:
-                                      14,
-                                  height:
-                                      1.35,
-                                  fontWeight:
-                                      FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
+                    // ===========================================
+                    // DEVELOPMENT INFO
+                    // ===========================================
+
+                    Container(
+                      width:
+                          double.infinity,
+                      padding:
+                          const EdgeInsets.all(
+                        16,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xFFF2EDFA,
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(
+                          18,
                         ),
                       ),
+                      child:
+                          Text(
+                        '${data.nutrients.length} nutrient rows extracted from this label.',
+                        style:
+                            const TextStyle(
+                          color:
+                              secondaryText,
+                          fontSize:
+                              13.5,
+                          height:
+                              1.4,
+                          fontWeight:
+                              FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -574,6 +509,169 @@ class _ServingCard extends StatelessWidget {
               value:
                   servingEquivalent!,
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// =======================================================
+// DYNAMIC NUTRITION CARD
+// =======================================================
+
+class _DynamicNutritionCard
+    extends StatelessWidget {
+  final NutritionLabelData data;
+
+  final int columnIndex;
+
+  const _DynamicNutritionCard({
+    required this.data,
+    required this.columnIndex,
+  });
+
+  // =====================================================
+  // FORMAT NUMBER
+  // =====================================================
+
+  static String _formatNumber(
+    double value,
+  ) {
+    if (value ==
+        value.roundToDouble()) {
+      return value
+          .toInt()
+          .toString();
+    }
+
+    return value
+        .toStringAsFixed(
+          3,
+        )
+        .replaceFirst(
+          RegExp(
+            r'0+$',
+          ),
+          '',
+        )
+        .replaceFirst(
+          RegExp(
+            r'\.$',
+          ),
+          '',
+        );
+  }
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    // =====================================================
+    // KEEP ORIGINAL TOP-TO-BOTTOM ORDER
+    // =====================================================
+
+    final List<NutrientRow> nutrientRows =
+        data.nutrients
+            .where(
+              (
+                NutrientRow row,
+              ) {
+                if (columnIndex >=
+                    row
+                        .valuesByColumn
+                        .length) {
+                  return false;
+                }
+
+                return row
+                    .valuesByColumn[
+                      columnIndex
+                    ]
+                    .isNotEmpty;
+              },
+            )
+            .toList()
+          ..sort(
+            (
+              NutrientRow a,
+              NutrientRow b,
+            ) {
+              return a.order.compareTo(
+                b.order,
+              );
+            },
+          );
+
+    if (nutrientRows.isEmpty) {
+      return const _WarningCard(
+        text:
+            'No nutrient values were extracted for this column.',
+      );
+    }
+
+    return Container(
+      decoration:
+          BoxDecoration(
+        color:
+            Colors.white,
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
+        border:
+            Border.all(
+          color:
+              const Color(
+            0xFFE4D9F7,
+          ),
+        ),
+      ),
+      child:
+          Column(
+        children: [
+          for (int i = 0;
+              i <
+                  nutrientRows.length;
+              i++) ...[
+            _NutrientRowWidget(
+              name:
+                  nutrientRows[i]
+                      .name,
+
+              value:
+                  nutrientRows[i]
+                      .valuesByColumn[
+                        columnIndex
+                      ]
+                      .map(
+                        (
+                          NutritionValue value,
+                        ) {
+                          return '${_formatNumber(value.amount)} '
+                              '${value.unit}';
+                        },
+                      )
+                      .join(
+                        ' / ',
+                      ),
+            ),
+
+            if (i !=
+                nutrientRows.length -
+                    1)
+              const Divider(
+                height:
+                    1,
+                indent:
+                    16,
+                endIndent:
+                    16,
+                color:
+                    Color(
+                  0xFFEDE7F6,
+                ),
+              ),
           ],
         ],
       ),
@@ -693,293 +791,16 @@ class _InfoRow extends StatelessWidget {
 }
 
 // =======================================================
-// NUTRITION CARD
-// =======================================================
-
-class _NutritionCard extends StatelessWidget {
-  final NutritionValues values;
-
-  const _NutritionCard({
-    required this.values,
-  });
-
-  static String _format(
-    double value,
-  ) {
-    if (value ==
-        value.roundToDouble()) {
-      return value
-          .toInt()
-          .toString();
-    }
-
-    return value
-        .toStringAsFixed(
-          3,
-        )
-        .replaceFirst(
-          RegExp(
-            r'0+$',
-          ),
-          '',
-        )
-        .replaceFirst(
-          RegExp(
-            r'\.$',
-          ),
-          '',
-        );
-  }
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final List<_NutrientDisplayItem> items =
-        [];
-
-    // =====================================================
-    // CORE NUTRIENTS
-    // =====================================================
-
-    if (values.energyKcal !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Energy',
-          value:
-              '${_format(values.energyKcal!)} kcal',
-        ),
-      );
-    }
-
-    if (values.energyKj !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Energy',
-          value:
-              '${_format(values.energyKj!)} kJ',
-        ),
-      );
-    }
-
-    if (values.proteinG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Protein',
-          value:
-              '${_format(values.proteinG!)} g',
-        ),
-      );
-    }
-
-    if (values.totalFatG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Total fat',
-          value:
-              '${_format(values.totalFatG!)} g',
-        ),
-      );
-    }
-
-    if (values.saturatedFatG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Saturated fat',
-          value:
-              '${_format(values.saturatedFatG!)} g',
-        ),
-      );
-    }
-
-    if (values.transFatG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Trans fat',
-          value:
-              '${_format(values.transFatG!)} g',
-        ),
-      );
-    }
-
-    if (values.carbohydrateG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Carbohydrate',
-          value:
-              '${_format(values.carbohydrateG!)} g',
-        ),
-      );
-    }
-
-    if (values.sugarsG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Sugars',
-          value:
-              '${_format(values.sugarsG!)} g',
-        ),
-      );
-    }
-
-    if (values.fibreG !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Fibre',
-          value:
-              '${_format(values.fibreG!)} g',
-        ),
-      );
-    }
-
-    if (values.sodiumMg !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Sodium',
-          value:
-              '${_format(values.sodiumMg!)} mg',
-        ),
-      );
-    }
-
-    if (values.cholesterolMg !=
-        null) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              'Cholesterol',
-          value:
-              '${_format(values.cholesterolMg!)} mg',
-        ),
-      );
-    }
-
-    // =====================================================
-    // OTHER AVAILABLE NUTRIENTS
-    // =====================================================
-
-    final List<NutrientValue> other =
-        values.otherNutrients.values
-            .toList()
-          ..sort(
-            (
-              NutrientValue a,
-              NutrientValue b,
-            ) =>
-                a.name.compareTo(
-              b.name,
-            ),
-          );
-
-    for (final NutrientValue nutrient
-        in other) {
-      items.add(
-        _NutrientDisplayItem(
-          name:
-              nutrient.name,
-          value:
-              '${_format(nutrient.amount)} ${nutrient.unit}',
-        ),
-      );
-    }
-
-    return Container(
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
-        border:
-            Border.all(
-          color:
-              const Color(
-            0xFFE4D9F7,
-          ),
-        ),
-      ),
-      child:
-          Column(
-        children: [
-          for (int i = 0;
-              i < items.length;
-              i++) ...[
-            _NutrientRow(
-              name:
-                  items[i].name,
-              value:
-                  items[i].value,
-            ),
-
-            if (i !=
-                items.length -
-                    1)
-              const Divider(
-                height:
-                    1,
-                indent:
-                    16,
-                endIndent:
-                    16,
-                color:
-                    Color(
-                  0xFFEDE7F6,
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// =======================================================
-// DISPLAY ITEM
-// =======================================================
-
-class _NutrientDisplayItem {
-  final String name;
-
-  final String value;
-
-  const _NutrientDisplayItem({
-    required this.name,
-    required this.value,
-  });
-}
-
-// =======================================================
 // NUTRIENT ROW
 // =======================================================
 
-class _NutrientRow extends StatelessWidget {
+class _NutrientRowWidget
+    extends StatelessWidget {
   final String name;
 
   final String value;
 
-  const _NutrientRow({
+  const _NutrientRowWidget({
     required this.name,
     required this.value,
   });
@@ -998,6 +819,8 @@ class _NutrientRow extends StatelessWidget {
       ),
       child:
           Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Expanded(
             child:
@@ -1011,6 +834,8 @@ class _NutrientRow extends StatelessWidget {
                 ),
                 fontSize:
                     14.5,
+                height:
+                    1.25,
                 fontWeight:
                     FontWeight.w700,
               ),
@@ -1022,18 +847,174 @@ class _NutrientRow extends StatelessWidget {
                 12,
           ),
 
-          Text(
-            value,
-            style:
-                const TextStyle(
-              color:
-                  Color(
-                0xFF67558E,
+          Flexible(
+            child:
+                Text(
+              value,
+              textAlign:
+                  TextAlign.right,
+              style:
+                  const TextStyle(
+                color:
+                    Color(
+                  0xFF67558E,
+                ),
+                fontSize:
+                    14.5,
+                height:
+                    1.25,
+                fontWeight:
+                    FontWeight.w600,
               ),
-              fontSize:
-                  14.5,
-              fontWeight:
-                  FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =======================================================
+// READY CARD
+// =======================================================
+
+class _ReadyCard extends StatelessWidget {
+  const _ReadyCard();
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Container(
+      width:
+          double.infinity,
+      padding:
+          const EdgeInsets.all(
+        16,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(
+          0xFFE8FAF8,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
+      ),
+      child:
+          const Row(
+        children: [
+          Icon(
+            Icons
+                .check_circle_outline_rounded,
+            color:
+                Color(
+              0xFF17B6B1,
+            ),
+            size:
+                28,
+          ),
+
+          SizedBox(
+            width:
+                12,
+          ),
+
+          Expanded(
+            child:
+                Text(
+              'Enough information is available to calculate an intended portion.',
+              style:
+                  TextStyle(
+                color:
+                    Color(
+                  0xFF25104F,
+                ),
+                fontSize:
+                    14,
+                height:
+                    1.35,
+                fontWeight:
+                    FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =======================================================
+// WARNING CARD
+// =======================================================
+
+class _WarningCard extends StatelessWidget {
+  final String text;
+
+  const _WarningCard({
+    required this.text,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Container(
+      width:
+          double.infinity,
+      padding:
+          const EdgeInsets.all(
+        16,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(
+          0xFFFFF5DF,
+        ),
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
+      ),
+      child:
+          Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color:
+                Color(
+              0xFFE69A17,
+            ),
+          ),
+
+          const SizedBox(
+            width:
+                12,
+          ),
+
+          Expanded(
+            child:
+                Text(
+              text,
+              style:
+                  const TextStyle(
+                color:
+                    Color(
+                  0xFF25104F,
+                ),
+                fontSize:
+                    14,
+                height:
+                    1.35,
+                fontWeight:
+                    FontWeight.w700,
+              ),
             ),
           ),
         ],
