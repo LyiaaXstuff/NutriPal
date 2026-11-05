@@ -71,8 +71,7 @@ class NutritionValues {
     this.fibreG,
     this.sodiumMg,
     this.cholesterolMg,
-    this.otherNutrients =
-        const {},
+    this.otherNutrients = const {},
   });
 
   // =====================================================
@@ -113,42 +112,18 @@ class NutritionValues {
     Map<String, NutrientValue>? otherNutrients,
   }) {
     return NutritionValues(
-      energyKcal:
-          energyKcal ??
-              this.energyKcal,
-      energyKj:
-          energyKj ??
-              this.energyKj,
-      proteinG:
-          proteinG ??
-              this.proteinG,
-      totalFatG:
-          totalFatG ??
-              this.totalFatG,
-      saturatedFatG:
-          saturatedFatG ??
-              this.saturatedFatG,
-      transFatG:
-          transFatG ??
-              this.transFatG,
-      carbohydrateG:
-          carbohydrateG ??
-              this.carbohydrateG,
-      sugarsG:
-          sugarsG ??
-              this.sugarsG,
-      fibreG:
-          fibreG ??
-              this.fibreG,
-      sodiumMg:
-          sodiumMg ??
-              this.sodiumMg,
-      cholesterolMg:
-          cholesterolMg ??
-              this.cholesterolMg,
-      otherNutrients:
-          otherNutrients ??
-              this.otherNutrients,
+      energyKcal: energyKcal ?? this.energyKcal,
+      energyKj: energyKj ?? this.energyKj,
+      proteinG: proteinG ?? this.proteinG,
+      totalFatG: totalFatG ?? this.totalFatG,
+      saturatedFatG: saturatedFatG ?? this.saturatedFatG,
+      transFatG: transFatG ?? this.transFatG,
+      carbohydrateG: carbohydrateG ?? this.carbohydrateG,
+      sugarsG: sugarsG ?? this.sugarsG,
+      fibreG: fibreG ?? this.fibreG,
+      sodiumMg: sodiumMg ?? this.sodiumMg,
+      cholesterolMg: cholesterolMg ?? this.cholesterolMg,
+      otherNutrients: otherNutrients ?? this.otherNutrients,
     );
   }
 
@@ -221,6 +196,12 @@ class NutritionLabelData {
 
   final String rawText;
 
+  /// The photographed table, in reading order. This is the source of truth;
+  /// the legacy perServing/per100 fields are only projections for calculations.
+  final List<NutritionColumn> columns;
+  final List<NutritionRow> rows;
+  final List<String> extractionWarnings;
+
   const NutritionLabelData({
     this.servingSizeAmount,
     this.servingSizeUnit,
@@ -231,21 +212,21 @@ class NutritionLabelData {
     this.per100,
     this.per100Unit,
     required this.rawText,
+    this.columns = const [],
+    this.rows = const [],
+    this.extractionWarnings = const [],
   });
 
   bool get hasServingSize {
-    return servingSizeAmount != null &&
-        servingSizeUnit != null;
+    return servingSizeAmount != null && servingSizeUnit != null;
   }
 
   bool get hasPerServingValues {
-    return perServing != null &&
-        perServing!.hasAnyValue;
+    return perServing != null && perServing!.hasAnyValue;
   }
 
   bool get hasPer100Values {
-    return per100 != null &&
-        per100!.hasAnyValue;
+    return per100 != null && per100!.hasAnyValue;
   }
 
   // =====================================================
@@ -257,8 +238,7 @@ class NutritionLabelData {
       return true;
     }
 
-    if (hasPer100Values &&
-        hasServingSize) {
+    if (hasPer100Values && hasServingSize && per100Unit == servingSizeUnit) {
       return true;
     }
 
@@ -291,4 +271,72 @@ NutritionLabelData(
 )
 ''';
   }
+}
+
+enum NutritionColumnBasis { perServing, per100g, per100ml, dailyValue, unknown }
+
+class NutritionColumn {
+  final String id;
+  final String label;
+  final NutritionColumnBasis basis;
+
+  const NutritionColumn({
+    required this.id,
+    required this.label,
+    required this.basis,
+  });
+}
+
+/// A quantity as printed, including inequalities and its original precision.
+/// Empty units are retained for review, never silently assumed to be grams.
+class NutritionQuantity {
+  final double amount;
+  final String numberText;
+  final String unit;
+  final String comparator;
+  final String rawText;
+
+  const NutritionQuantity({
+    required this.amount,
+    required this.numberText,
+    required this.unit,
+    this.comparator = '',
+    required this.rawText,
+  });
+
+  String get displayText =>
+      '$comparator$numberText${unit.isEmpty ? '' : ' $unit'}';
+}
+
+class NutritionCell {
+  /// A cell can contain both kJ and kcal. Neither overwrites the other.
+  final List<NutritionQuantity> quantities;
+  final bool needsReview;
+  final String rawText;
+
+  const NutritionCell({
+    this.quantities = const [],
+    this.needsReview = false,
+    this.rawText = '',
+  });
+
+  String get displayText => quantities.isEmpty
+      ? (rawText.isEmpty ? 'Not read' : rawText)
+      : quantities.map((q) => q.displayText).join(' / ');
+}
+
+class NutritionRow {
+  final String id;
+  final String name;
+  final Map<String, NutritionCell> cells;
+  final String sourceText;
+  final bool needsReview;
+
+  const NutritionRow({
+    required this.id,
+    required this.name,
+    required this.cells,
+    required this.sourceText,
+    this.needsReview = false,
+  });
 }

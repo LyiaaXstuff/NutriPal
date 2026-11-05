@@ -279,6 +279,7 @@ class _ScanPreviewScreenState
             return ExtractedNutritionReviewScreen(
               data:
                   nutritionData,
+              sourceImagePath: _currentImagePath,
             );
           },
         ),
@@ -766,38 +767,14 @@ class _ScanPreviewScreenState
       // ---------------------------------------------------
 
       case LabelDetectionStatus.unclear:
-        return Row(
-          children: [
-            Expanded(
-              child:
-                  _SecondaryButton(
-                text:
-                    'Retake',
-                onPressed:
-                    _retake,
-              ),
-            ),
-
-            const SizedBox(
-              width:
-                  12,
-            ),
-
-            Expanded(
-              child:
-                  _PrimaryButton(
-                text:
-                    'Choose photo',
-                icon:
-                    Icons.photo_library_outlined,
-                onPressed:
-                    _isChoosingPhoto
-                        ? null
-                        : _choosePhoto,
-              ),
-            ),
-          ],
-        );
+        return Row(children: [
+          Expanded(child: _SecondaryButton(text: 'Retake',
+            onPressed: _isAnalysing ? null : _retake)),
+          const SizedBox(width: 12),
+          Expanded(child: _isAnalysing ? const _LoadingButton() : _PrimaryButton(
+            text: 'Review readable values', icon: Icons.fact_check_outlined,
+            onPressed: _analyseLabel)),
+        ]);
 
       // ---------------------------------------------------
       // NOT DETECTED
@@ -1204,6 +1181,9 @@ class _ScanPreviewScreenState
                         crossAxisAlignment:
                             CrossAxisAlignment.start,
                         children: [
+                          Expanded(child: SingleChildScrollView(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                           // =====================================
                           // HANDLE
                           // =====================================
@@ -1308,7 +1288,10 @@ class _ScanPreviewScreenState
                           else
                             _buildInformationCard(),
 
-                          const Spacer(),
+                              ],
+                            ),
+                          )),
+                          const SizedBox(height: 12),
 
                           // =====================================
                           // BUTTONS
