@@ -177,7 +177,8 @@ class _ScanScreenState extends State<ScanScreen>
       final CameraController controller =
           CameraController(
         camera,
-        ResolutionPreset.high,
+        // Keep small label text readable in the captured still image.
+        ResolutionPreset.max,
         enableAudio:
             false,
         imageFormatGroup:

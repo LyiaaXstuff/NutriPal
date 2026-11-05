@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/label_detection_status.dart';
+import '../models/nutrition_label_data.dart';
+import '../services/azure_layout_client.dart';
+import '../services/nutrition_scan_service.dart';
 import '../services/nutrition_label_parser_service.dart';
 import 'extracted_nutrition_review_screen.dart';
 
@@ -12,6 +15,9 @@ class ScanPreviewScreen extends StatefulWidget {
   final String imagePath;
 
   final LabelDetectionStatus initialStatus;
+  final Future<NutritionLabelData> Function(String)? onAnalyze;
+  final bool? onlineScanning;
+
 
   final Future<LabelDetectionStatus> Function(
     String imagePath,
@@ -22,6 +28,8 @@ class ScanPreviewScreen extends StatefulWidget {
     required this.imagePath,
     this.initialStatus = LabelDetectionStatus.unverified,
     this.onValidate,
+    this.onAnalyze,
+    this.onlineScanning,
   });
 
   @override
@@ -66,6 +74,8 @@ class _ScanPreviewScreenState
 
   bool _isChoosingPhoto =
       false;
+
+  bool get _online => widget.onlineScanning ?? AzureLayoutClient.isConfigured;
 
   bool _isAnalysing =
       false;
@@ -237,7 +247,7 @@ class _ScanPreviewScreenState
   // ANALYSE LABEL
   // =====================================================
 
-  Future<void> _analyseLabel() async {
+  Future<void> _analyseLabel({bool forceOffline = false}) async {
     if (_isAnalysing) {
       return;
     }
@@ -253,9 +263,8 @@ class _ScanPreviewScreenState
       // =================================================
 
       final nutritionData =
-          await NutritionLabelParserService.parseImage(
-        _currentImagePath,
-      );
+          await (forceOffline ? NutritionLabelParserService.parseImage
+            : widget.onAnalyze ?? NutritionScanService.analyze)(_currentImagePath);
 
       if (!mounted) {
         return;
@@ -279,23 +288,20 @@ class _ScanPreviewScreenState
             return ExtractedNutritionReviewScreen(
               data:
                   nutritionData,
+              sourceImagePath: _currentImagePath,
             );
           },
         ),
       );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isAnalysing =
-            false;
-      });
-
-      _showMessage(
-        'NutriPal could not extract the nutrition values. Please try another photo.',
-      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { _isAnalysing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error is NutritionScanException ? error.message
+            : 'NutriPal could not read this label. Retake the photo and try again.'),
+        action: _online && !forceOffline ? SnackBarAction(label: 'Use on-device',
+          onPressed: () => _analyseLabel(forceOffline: true)) : null,
+      ));
     }
   }
 
@@ -655,6 +661,17 @@ class _ScanPreviewScreenState
   // =====================================================
 
   Widget _buildButtons() {
+    // Local label detection is only a preview hint. It must not block Azure
+    // from reading a label that ML Kit could not recognise.
+    if (_online && _status != LabelDetectionStatus.checking) {
+      return Row(children: [
+        Expanded(child: _SecondaryButton(text: 'Retake',
+          onPressed: _isAnalysing ? null : _retake)),
+        const SizedBox(width: 12),
+        Expanded(child: _isAnalysing ? const _LoadingButton() : _PrimaryButton(
+          text: 'Analyse label', icon: Icons.cloud_outlined, onPressed: _analyseLabel)),
+      ]);
+    }
     switch (_status) {
       // ---------------------------------------------------
       // UNVERIFIED
@@ -766,38 +783,14 @@ class _ScanPreviewScreenState
       // ---------------------------------------------------
 
       case LabelDetectionStatus.unclear:
-        return Row(
-          children: [
-            Expanded(
-              child:
-                  _SecondaryButton(
-                text:
-                    'Retake',
-                onPressed:
-                    _retake,
-              ),
-            ),
-
-            const SizedBox(
-              width:
-                  12,
-            ),
-
-            Expanded(
-              child:
-                  _PrimaryButton(
-                text:
-                    'Choose photo',
-                icon:
-                    Icons.photo_library_outlined,
-                onPressed:
-                    _isChoosingPhoto
-                        ? null
-                        : _choosePhoto,
-              ),
-            ),
-          ],
-        );
+        return Row(children: [
+          Expanded(child: _SecondaryButton(text: 'Retake',
+            onPressed: _isAnalysing ? null : _retake)),
+          const SizedBox(width: 12),
+          Expanded(child: _isAnalysing ? const _LoadingButton() : _PrimaryButton(
+            text: 'Review readable values', icon: Icons.fact_check_outlined,
+            onPressed: _analyseLabel)),
+        ]);
 
       // ---------------------------------------------------
       // NOT DETECTED
@@ -1204,6 +1197,9 @@ class _ScanPreviewScreenState
                         crossAxisAlignment:
                             CrossAxisAlignment.start,
                         children: [
+                          Expanded(child: SingleChildScrollView(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                           // =====================================
                           // HANDLE
                           // =====================================
@@ -1292,6 +1288,10 @@ class _ScanPreviewScreenState
                           // INFORMATION CARD
                           // =====================================
 
+                          if (_online)
+                            const Padding(padding: EdgeInsets.only(bottom: 12),
+                              child: Text('Online table scan sends this label photo to Azure for text and table analysis.',
+                                style: TextStyle(color: Color(0xFF67558E), fontSize: 13))),
                           if (_isAnalysing)
                             const _InformationCard(
                               icon:
@@ -1308,7 +1308,10 @@ class _ScanPreviewScreenState
                           else
                             _buildInformationCard(),
 
-                          const Spacer(),
+                              ],
+                            ),
+                          )),
+                          const SizedBox(height: 12),
 
                           // =====================================
                           // BUTTONS

@@ -1,127 +1,150 @@
-// =======================================================
-// NUTRITION COLUMN BASIS
-// =======================================================
-
-enum NutritionColumnBasis {
-  perServing,
-  per100g,
-  per100ml,
-  unknown,
-}
-
-// =======================================================
-// ONE NUTRITION VALUE
-// =======================================================
-//
-// Examples:
-//
-// 13.7 g
-// 69 mg
-// 55 kcal
-// 230 kJ
-//
-// =======================================================
-
-class NutritionValue {
+class NutrientValue {
+  final String name;
   final double amount;
-
   final String unit;
 
-  // Original OCR value.
-  //
-  // Useful for debugging later.
-  final String rawText;
-
-  const NutritionValue({
+  const NutrientValue({
+    required this.name,
     required this.amount,
     required this.unit,
-    required this.rawText,
   });
+
+  @override
+  String toString() {
+    return '$name: $amount $unit';
+  }
 }
 
 // =======================================================
-// NUTRITION TABLE COLUMN
-// =======================================================
-//
-// Examples:
-//
-// Per serving
-// Per 100 g
-// Per 100 ml
-//
+// NUTRITION VALUES
 // =======================================================
 
-class NutritionColumn {
-  final String id;
+class NutritionValues {
+  // =====================================================
+  // CORE NUTRIPAL NUTRIENTS
+  // =====================================================
 
-  final String label;
+  final double? energyKcal;
+  final double? energyKj;
 
-  final NutritionColumnBasis basis;
+  final double? proteinG;
 
-  // Horizontal centre of the column in the source image.
-  final double xCenter;
+  final double? totalFatG;
+  final double? saturatedFatG;
+  final double? transFatG;
 
-  const NutritionColumn({
-    required this.id,
-    required this.label,
-    required this.basis,
-    required this.xCenter,
+  final double? carbohydrateG;
+  final double? sugarsG;
+
+  final double? fibreG;
+
+  final double? sodiumMg;
+
+  final double? cholesterolMg;
+
+  // =====================================================
+  // OTHER NUTRIENTS
+  //
+  // Examples:
+  //
+  // Vitamin D
+  // Calcium
+  // Iron
+  // Potassium
+  // Vitamin C
+  //
+  // These are preserved even though NutriPal may not
+  // currently use them for personalised interpretation.
+  // =====================================================
+
+  final Map<String, NutrientValue> otherNutrients;
+
+  const NutritionValues({
+    this.energyKcal,
+    this.energyKj,
+    this.proteinG,
+    this.totalFatG,
+    this.saturatedFatG,
+    this.transFatG,
+    this.carbohydrateG,
+    this.sugarsG,
+    this.fibreG,
+    this.sodiumMg,
+    this.cholesterolMg,
+    this.otherNutrients = const {},
   });
-}
 
-// =======================================================
-// DYNAMIC NUTRIENT ROW
-// =======================================================
-//
-// NutriPal does NOT depend on a fixed nutrient list.
-//
-// Examples:
-//
-// Energy
-// Protein
-// Total Fat
-// Vitamin D
-// Potassium
-// Calcium
-// Iron
-// Omega-3
-//
-// Any readable nutrient can be preserved.
-//
-// =======================================================
-
-class NutrientRow {
-  final String name;
-
-  // Original top-to-bottom row order.
-  final int order;
-
-  // One entry for each NutritionColumn.
-  //
-  // A cell contains a List because some nutrients,
-  // especially Energy, may contain:
-  //
-  // 230 kJ
-  // 55 kcal
-  //
-  // in the same table cell.
-  final List<List<NutritionValue>> valuesByColumn;
-
-  const NutrientRow({
-    required this.name,
-    required this.order,
-    required this.valuesByColumn,
-  });
+  // =====================================================
+  // HAS ANY VALUE
+  // =====================================================
 
   bool get hasAnyValue {
-    for (final List<NutritionValue> values
-        in valuesByColumn) {
-      if (values.isNotEmpty) {
-        return true;
-      }
-    }
+    return energyKcal != null ||
+        energyKj != null ||
+        proteinG != null ||
+        totalFatG != null ||
+        saturatedFatG != null ||
+        transFatG != null ||
+        carbohydrateG != null ||
+        sugarsG != null ||
+        fibreG != null ||
+        sodiumMg != null ||
+        cholesterolMg != null ||
+        otherNutrients.isNotEmpty;
+  }
 
-    return false;
+  // =====================================================
+  // COPY WITH
+  // =====================================================
+
+  NutritionValues copyWith({
+    double? energyKcal,
+    double? energyKj,
+    double? proteinG,
+    double? totalFatG,
+    double? saturatedFatG,
+    double? transFatG,
+    double? carbohydrateG,
+    double? sugarsG,
+    double? fibreG,
+    double? sodiumMg,
+    double? cholesterolMg,
+    Map<String, NutrientValue>? otherNutrients,
+  }) {
+    return NutritionValues(
+      energyKcal: energyKcal ?? this.energyKcal,
+      energyKj: energyKj ?? this.energyKj,
+      proteinG: proteinG ?? this.proteinG,
+      totalFatG: totalFatG ?? this.totalFatG,
+      saturatedFatG: saturatedFatG ?? this.saturatedFatG,
+      transFatG: transFatG ?? this.transFatG,
+      carbohydrateG: carbohydrateG ?? this.carbohydrateG,
+      sugarsG: sugarsG ?? this.sugarsG,
+      fibreG: fibreG ?? this.fibreG,
+      sodiumMg: sodiumMg ?? this.sodiumMg,
+      cholesterolMg: cholesterolMg ?? this.cholesterolMg,
+      otherNutrients: otherNutrients ?? this.otherNutrients,
+    );
+  }
+
+  @override
+  String toString() {
+    return '''
+NutritionValues(
+  energyKcal: $energyKcal,
+  energyKj: $energyKj,
+  proteinG: $proteinG,
+  totalFatG: $totalFatG,
+  saturatedFatG: $saturatedFatG,
+  transFatG: $transFatG,
+  carbohydrateG: $carbohydrateG,
+  sugarsG: $sugarsG,
+  fibreG: $fibreG,
+  sodiumMg: $sodiumMg,
+  cholesterolMg: $cholesterolMg,
+  otherNutrients: $otherNutrients
+)
+''';
   }
 }
 
@@ -136,29 +159,19 @@ class NutritionLabelData {
 
   final double? servingSizeAmount;
 
-  // Usually:
-  //
-  // g
-  // ml
+  // g / ml
   final String? servingSizeUnit;
 
-  // Examples:
-  //
-  // 2
-  // 5
-  // 30
   final double? servingsPerPackage;
 
   // =====================================================
-  // PHYSICAL SERVING
-  // =====================================================
+  // PHYSICAL SERVING RELATION
   //
   // Examples:
   //
   // 1 tablet
   // 0.5 bottle
   // 15 chips
-  //
   // =====================================================
 
   final double? servingUnitAmount;
@@ -166,18 +179,29 @@ class NutritionLabelData {
   final String? servingUnitName;
 
   // =====================================================
-  // TABLE
+  // NUTRITION COLUMNS
   // =====================================================
 
-  final List<NutritionColumn> columns;
+  final NutritionValues? perServing;
 
-  final List<NutrientRow> nutrients;
+  final NutritionValues? per100;
+
+  // g = per 100 g
+  // ml = per 100 ml
+  final String? per100Unit;
 
   // =====================================================
-  // RAW OCR TEXT
+  // ORIGINAL OCR TEXT
   // =====================================================
 
   final String rawText;
+
+  /// The photographed table, in reading order. This is the source of truth;
+  /// the legacy perServing/per100 fields are only projections for calculations.
+  final List<NutritionColumn> columns;
+  final List<NutritionRow> rows;
+  final List<String> extractionWarnings;
+  final String extractionMethod;
 
   const NutritionLabelData({
     this.servingSizeAmount,
@@ -185,98 +209,38 @@ class NutritionLabelData {
     this.servingsPerPackage,
     this.servingUnitAmount,
     this.servingUnitName,
-    this.columns = const [],
-    this.nutrients = const [],
+    this.perServing,
+    this.per100,
+    this.per100Unit,
     required this.rawText,
+    this.columns = const [],
+    this.rows = const [],
+    this.extractionWarnings = const [],
+    this.extractionMethod = 'On-device text recognition',
   });
 
-  // =====================================================
-  // SERVING SIZE AVAILABLE?
-  // =====================================================
-
   bool get hasServingSize {
-    return servingSizeAmount != null &&
-        servingSizeUnit != null;
+    return servingSizeAmount != null && servingSizeUnit != null;
+  }
+
+  bool get hasPerServingValues {
+    return perServing != null && perServing!.hasAnyValue;
+  }
+
+  bool get hasPer100Values {
+    return per100 != null && per100!.hasAnyValue;
   }
 
   // =====================================================
-  // ANY NUTRIENTS?
-  // =====================================================
-
-  bool get hasNutrients {
-    return nutrients.any(
-      (
-        NutrientRow nutrient,
-      ) =>
-          nutrient.hasAnyValue,
-    );
-  }
-
-  // =====================================================
-  // COLUMN CHECKS
-  // =====================================================
-
-  bool get hasPerServingColumn {
-    return columns.any(
-      (
-        NutritionColumn column,
-      ) =>
-          column.basis ==
-          NutritionColumnBasis.perServing,
-    );
-  }
-
-  bool get hasPer100gColumn {
-    return columns.any(
-      (
-        NutritionColumn column,
-      ) =>
-          column.basis ==
-          NutritionColumnBasis.per100g,
-    );
-  }
-
-  bool get hasPer100mlColumn {
-    return columns.any(
-      (
-        NutritionColumn column,
-      ) =>
-          column.basis ==
-          NutritionColumnBasis.per100ml,
-    );
-  }
-
-  // =====================================================
-  // CAN CALCULATE PORTION?
+  // CAN CALCULATE PORTION
   // =====================================================
 
   bool get canCalculatePortion {
-    if (!hasNutrients) {
-      return false;
-    }
-
-    // Best case:
-    //
-    // Label already provides values per serving.
-    if (hasPerServingColumn) {
+    if (hasPerServingValues) {
       return true;
     }
 
-    if (!hasServingSize) {
-      return false;
-    }
-
-    // Per 100 g requires a serving size in grams.
-    if (hasPer100gColumn &&
-        servingSizeUnit?.toLowerCase() ==
-            'g') {
-      return true;
-    }
-
-    // Per 100 ml requires a serving size in ml.
-    if (hasPer100mlColumn &&
-        servingSizeUnit?.toLowerCase() ==
-            'ml') {
+    if (hasPer100Values && hasServingSize && per100Unit == servingSizeUnit) {
       return true;
     }
 
@@ -284,18 +248,97 @@ class NutritionLabelData {
   }
 
   // =====================================================
-  // FIND COLUMN INDEX
+  // CAN CALCULATE PHYSICAL UNIT
   // =====================================================
 
-  int columnIndexFor(
-    NutritionColumnBasis basis,
-  ) {
-    return columns.indexWhere(
-      (
-        NutritionColumn column,
-      ) =>
-          column.basis ==
-          basis,
-    );
+  bool get hasServingUnitRelationship {
+    return servingUnitAmount != null &&
+        servingUnitName != null &&
+        servingSizeAmount != null;
   }
+
+  @override
+  String toString() {
+    return '''
+NutritionLabelData(
+  servingSizeAmount: $servingSizeAmount,
+  servingSizeUnit: $servingSizeUnit,
+  servingsPerPackage: $servingsPerPackage,
+  servingUnitAmount: $servingUnitAmount,
+  servingUnitName: $servingUnitName,
+  per100Unit: $per100Unit,
+  perServing: $perServing,
+  per100: $per100,
+  canCalculatePortion: $canCalculatePortion
+)
+''';
+  }
+}
+
+enum NutritionColumnBasis { perServing, per100g, per100ml, dailyValue, unknown }
+
+class NutritionColumn {
+  final String id;
+  final String label;
+  final NutritionColumnBasis basis;
+
+  const NutritionColumn({
+    required this.id,
+    required this.label,
+    required this.basis,
+  });
+}
+
+/// A quantity as printed, including inequalities and its original precision.
+/// Empty units are retained for review, never silently assumed to be grams.
+class NutritionQuantity {
+  final double amount;
+  final String numberText;
+  final String unit;
+  final String comparator;
+  final String rawText;
+
+  const NutritionQuantity({
+    required this.amount,
+    required this.numberText,
+    required this.unit,
+    this.comparator = '',
+    required this.rawText,
+  });
+
+  String get displayText =>
+      '$comparator$numberText${unit.isEmpty ? '' : ' $unit'}';
+}
+
+class NutritionCell {
+  /// A cell can contain both kJ and kcal. Neither overwrites the other.
+  final List<NutritionQuantity> quantities;
+  final bool needsReview;
+  final String rawText;
+
+  const NutritionCell({
+    this.quantities = const [],
+    this.needsReview = false,
+    this.rawText = '',
+  });
+
+  String get displayText => quantities.isEmpty
+      ? (rawText.isEmpty ? 'Not read' : rawText)
+      : quantities.map((q) => q.displayText).join(' / ');
+}
+
+class NutritionRow {
+  final String id;
+  final String name;
+  final Map<String, NutritionCell> cells;
+  final String sourceText;
+  final bool needsReview;
+
+  const NutritionRow({
+    required this.id,
+    required this.name,
+    required this.cells,
+    required this.sourceText,
+    this.needsReview = false,
+  });
 }
