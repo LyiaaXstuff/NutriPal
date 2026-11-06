@@ -10,6 +10,19 @@ enum NutritionColumnBasis {
 }
 
 // =======================================================
+// HOW THE TABLE WAS READ
+// =======================================================
+
+enum NutritionExtractionMethod {
+  // On-device ML Kit OCR + NutriPal table parser.
+  onDevice,
+
+  // Claude vision via the extractNutritionLabel Cloud
+  // Function, cross-checked against on-device OCR.
+  ai,
+}
+
+// =======================================================
 // ONE NUTRITION VALUE
 // =======================================================
 //
@@ -179,6 +192,17 @@ class NutritionLabelData {
 
   final String rawText;
 
+  // =====================================================
+  // HOW IT WAS READ
+  // =====================================================
+
+  final NutritionExtractionMethod extractionMethod;
+
+  // Corrections and checks made while reading, e.g.
+  // "0.59 read as 0.5 g" or "Vitamin B12 per serving
+  // could not be confirmed by on-device OCR".
+  final List<String> notes;
+
   const NutritionLabelData({
     this.servingSizeAmount,
     this.servingSizeUnit,
@@ -188,7 +212,39 @@ class NutritionLabelData {
     this.columns = const [],
     this.nutrients = const [],
     required this.rawText,
+    this.extractionMethod = NutritionExtractionMethod.onDevice,
+    this.notes = const [],
   });
+
+  // =====================================================
+  // COPY
+  // =====================================================
+
+  NutritionLabelData copyWith({
+    double? servingSizeAmount,
+    String? servingSizeUnit,
+    double? servingsPerPackage,
+    double? servingUnitAmount,
+    String? servingUnitName,
+    List<NutritionColumn>? columns,
+    List<NutrientRow>? nutrients,
+    String? rawText,
+    NutritionExtractionMethod? extractionMethod,
+    List<String>? notes,
+  }) {
+    return NutritionLabelData(
+      servingSizeAmount: servingSizeAmount ?? this.servingSizeAmount,
+      servingSizeUnit: servingSizeUnit ?? this.servingSizeUnit,
+      servingsPerPackage: servingsPerPackage ?? this.servingsPerPackage,
+      servingUnitAmount: servingUnitAmount ?? this.servingUnitAmount,
+      servingUnitName: servingUnitName ?? this.servingUnitName,
+      columns: columns ?? this.columns,
+      nutrients: nutrients ?? this.nutrients,
+      rawText: rawText ?? this.rawText,
+      extractionMethod: extractionMethod ?? this.extractionMethod,
+      notes: notes ?? this.notes,
+    );
+  }
 
   // =====================================================
   // SERVING SIZE AVAILABLE?

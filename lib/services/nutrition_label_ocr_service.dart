@@ -1,9 +1,15 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image/image.dart' as img;
 
 import '../models/label_detection_status.dart';
+import '../models/nutrition_label_data.dart';
+import 'nutrition_table_parser.dart';
+import 'ocr_geometry.dart';
 
 // =======================================================
 // VALIDATION RESULT
@@ -59,6 +65,10 @@ class NutritionLabelValidationResult {
   // "packageRelation"
   final String? servingSizeSource;
 
+  // Why the label is not complete, in plain words for the
+  // user, most important first. Empty when complete.
+  final List<String> issues;
+
   const NutritionLabelValidationResult({
     required this.status,
     required this.rawText,
@@ -76,7 +86,33 @@ class NutritionLabelValidationResult {
     required this.servingSizeAmount,
     required this.servingSizeUnit,
     required this.servingSizeSource,
+    this.issues = const [],
   });
+
+  NutritionLabelValidationResult withStatus(
+    LabelDetectionStatus newStatus,
+    List<String> newIssues,
+  ) {
+    return NutritionLabelValidationResult(
+      status: newStatus,
+      rawText: rawText,
+      score: score,
+      nutrientMatches: nutrientMatches,
+      pairedNutrientMatches: pairedNutrientMatches,
+      coreNutrientPairMatches: coreNutrientPairMatches,
+      unitMatches: unitMatches,
+      hasNutritionHeading: hasNutritionHeading,
+      hasServingInformation: hasServingInformation,
+      hasServingSizeValue: hasServingSizeValue,
+      hasReferenceBasis: hasReferenceBasis,
+      hasPerServingReference: hasPerServingReference,
+      hasPer100Reference: hasPer100Reference,
+      servingSizeAmount: servingSizeAmount,
+      servingSizeUnit: servingSizeUnit,
+      servingSizeSource: servingSizeSource,
+      issues: newIssues,
+    );
+  }
 }
 
 // =======================================================
@@ -230,7 +266,37 @@ class NutritionLabelOcrService {
     'per serve',
     'per portion',
     'setiap hidangan',
+    'setiap sajian',
+    'per sachet',
+    'per bar',
+    'per bottle',
+    'per piece',
+    'per packet',
+    'setiap uncang',
+    'setiap paket',
+    'setiap biji',
+    'setiap keping',
+    'setiap botol',
   ];
+
+  // "Per 30 g" column (serving expressed in grams).
+  static final RegExp _perGramServingPattern = RegExp(
+    r'\b(?:per|setiap)\s*(?!1[0o]{2}\s*(?:g|ml)\b)\d+(?:[.,]\d+)?\s*(?:g|ml)\b',
+    caseSensitive: false,
+  );
+
+  // "per 100g", "setiap 100 g", OCR "1OOg", "100 m1".
+  static final RegExp _per100Pattern = RegExp(
+    r'\b(?:per|setiap)\s*1[0o]{2}\s*(?:g|ml|m1|mi)\b',
+    caseSensitive: false,
+  );
+
+  // Unit printed in the nutrient name:
+  // "Protein (g)   3.2   12.8"
+  static final RegExp _unitHintPattern = RegExp(
+    r'\(\s*(?:g|mg|kcal|kj|mcg|µg)\s*\)|\b(?:kcal|kj)\b',
+    caseSensitive: false,
+  );
 
   // =====================================================
   // PER 100G / 100ML REFERENCE
@@ -344,7 +410,7 @@ class NutritionLabelOcrService {
 
   static final RegExp _nutritionValuePattern =
       RegExp(
-    r'(?:<|≤)?\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kcal|kj)\b',
+    r'(?:<|≤)?\s*\d+(?:[.,]\d+)?\s*(?:mg|rng|g|kcal|kj|mcg|µg|ug)\b',
     caseSensitive: false,
   );
 
@@ -359,8 +425,12 @@ class NutritionLabelOcrService {
 
   static final RegExp _explicitServingSizePattern =
       RegExp(
-    r'(?:serving\s*size|saiz\s*hidangan)'
-    r'\s*[:\-]?\s*'
+    // Also handles "Saiz hidangan / Serving size: 2 keping (30 g)"
+    // and "Serving size 1 cup (240 ml)".
+    r'(?:serving\s*size|saiz\s*hidangan|saiz\s*sajian)'
+    r'[^0-9]{0,30}?'
+    r'(?:\d+(?:[.,]\d+)?\s*(?!(?:mg|g|ml|l)\b)[a-z]+(?:\s+(?:besar|teh))?\s*)?'
+    r'[\(\[]?\s*'
     r'(\d+(?:[.,]\d+)?)\s*'
     r'(mg|g|ml|l)\b',
     caseSensitive: false,
@@ -426,6 +496,16 @@ class NutritionLabelOcrService {
     return result.status;
   }
 
+  // Last result per image, so the preview screen can tell
+  // the user WHY a photo is incomplete.
+  static final Map<String, List<String>> _issuesByImage = {};
+
+  static List<String> issuesFor(
+    String imagePath,
+  ) {
+    return _issuesByImage[imagePath] ?? const [];
+  }
+
   // =====================================================
   // OCR + VALIDATION
   // =====================================================
@@ -470,6 +550,19 @@ class NutritionLabelOcrService {
       final List<_OcrFragment> fragments =
           [];
 
+      // Tilted photos: rotate positions back so a nutrient
+      // name and its values end up on the same row.
+      final double skew =
+          OcrGeometry.estimateSkew(
+        recognizedText,
+      );
+
+      final double cosSkew =
+          math.cos(skew);
+
+      final double sinSkew =
+          math.sin(skew);
+
       for (final TextBlock block
           in recognizedText.blocks) {
         for (final TextLine line
@@ -484,16 +577,44 @@ class NutritionLabelOcrService {
           final rect =
               line.boundingBox;
 
+          final double centerX =
+              rect.center.dx;
+
+          final double centerY =
+              rect.center.dy;
+
+          final double rotatedX =
+              centerX * cosSkew +
+                  centerY * sinSkew;
+
+          final double rotatedY =
+              -centerX * sinSkew +
+                  centerY * cosSkew;
+
+          final double trueHeight =
+              math.max(
+            rect.height * 0.5,
+            (
+                  rect.height -
+                      rect.width *
+                          sinSkew.abs()
+                ) /
+                cosSkew,
+          );
+
           fragments.add(
             _OcrFragment(
               text:
                   text,
               left:
-                  rect.left,
+                  rotatedX -
+                      rect.width / 2,
               top:
-                  rect.top,
+                  rotatedY -
+                      trueHeight / 2,
               bottom:
-                  rect.bottom,
+                  rotatedY +
+                      trueHeight / 2,
             ),
           );
         }
@@ -504,14 +625,247 @@ class NutritionLabelOcrService {
         fragments,
       );
 
-      return _classify(
+      final NutritionLabelValidationResult keywordCheck =
+          _classify(
         rawText:
             rawText,
         rows:
             rows,
       );
+
+      // =================================================
+      // COMPLETENESS CHECK
+      //
+      // Read the table the same way the analysis does and
+      // make sure the WHOLE table is inside the photo:
+      // every value row has a name, nothing touches the
+      // photo edge, and the serving basis is readable.
+      // =================================================
+
+      final List<NutritionTableDiagnostics> diagnostics =
+          [];
+
+      final NutritionLabelData table =
+          NutritionTableParser.parse(
+        OcrGeometry.linesFrom(
+          recognizedText,
+        ),
+        rawText:
+            rawText,
+        skewRadians:
+            skew,
+        diagnosticsOut:
+            diagnostics,
+      );
+
+      final math.Point<double>? imageSize =
+          await _uprightImageSize(
+        imagePath,
+      );
+
+      final List<String> issues =
+          completenessIssues(
+        table:
+            table,
+        diagnostics:
+            diagnostics.isEmpty
+                ? null
+                : diagnostics.first,
+        imageWidth:
+            imageSize?.x,
+        imageHeight:
+            imageSize?.y,
+      );
+
+      late final LabelDetectionStatus status;
+
+      if (issues.isEmpty) {
+        status =
+            LabelDetectionStatus.detected;
+      } else if (keywordCheck.status ==
+              LabelDetectionStatus.notDetected &&
+          table.nutrients.isEmpty) {
+        status =
+            LabelDetectionStatus.notDetected;
+      } else {
+        status =
+            LabelDetectionStatus.unclear;
+      }
+
+      _issuesByImage[imagePath] =
+          issues;
+
+      return keywordCheck.withStatus(
+        status,
+        issues,
+      );
     } finally {
       await recognizer.close();
+    }
+  }
+
+  // =====================================================
+  // COMPLETENESS RULES
+  // =====================================================
+  //
+  // Public and pure so it can be unit-tested.
+  // =====================================================
+
+  static List<String> completenessIssues({
+    required NutritionLabelData table,
+    required NutritionTableDiagnostics? diagnostics,
+    required double? imageWidth,
+    required double? imageHeight,
+  }) {
+    final List<String> issues = [];
+
+    // ---------------------------------------------------
+    // 1. Table touching the photo edge = cut off
+    // ---------------------------------------------------
+
+    if (diagnostics != null &&
+        imageWidth != null &&
+        imageHeight != null) {
+      final OcrBounds b =
+          diagnostics.contentBounds;
+
+      final double margin =
+          math.max(
+        4,
+        diagnostics.textHeight * 0.5,
+      );
+
+      final List<String> sides = [
+        if (b.left < margin) 'left',
+        if (b.right > imageWidth - margin) 'right',
+        if (b.top < margin) 'top',
+        if (b.bottom > imageHeight - margin) 'bottom',
+      ];
+
+      if (sides.isNotEmpty) {
+        final String where = sides.length == 1
+            ? 'the ${sides.first} edge'
+            : 'the ${sides.sublist(0, sides.length - 1).join(', ')} and ${sides.last} edges';
+
+        issues.add(
+          'The nutrition table is cut off at $where of the photo. '
+          'Move back so the whole table border fits inside the frame.',
+        );
+      }
+    }
+
+    // ---------------------------------------------------
+    // 2. Values without names = names cut off / unreadable
+    // ---------------------------------------------------
+
+    if (diagnostics != null &&
+        diagnostics.unnamedValueRows > 0) {
+      issues.add(
+        diagnostics.unnamedValueRows == 1
+            ? 'One nutrient name is cut off or unreadable.'
+            : '${diagnostics.unnamedValueRows} nutrient names are cut off or unreadable.',
+      );
+    }
+
+    // ---------------------------------------------------
+    // 3. Enough of the table to analyse
+    // ---------------------------------------------------
+
+    if (table.nutrients.length < 4) {
+      issues.add(
+        table.nutrients.isEmpty
+            ? 'No nutrient rows could be read.'
+            : 'Only ${table.nutrients.length} nutrient rows could be read.',
+      );
+    }
+
+    final bool hasEnergy =
+        table.nutrients.any(
+      (NutrientRow row) =>
+          RegExp(
+            r'energy|tenaga|calorie|kalori',
+            caseSensitive: false,
+          ).hasMatch(
+            row.name,
+          ),
+    );
+
+    if (table.nutrients.isNotEmpty &&
+        !hasEnergy) {
+      issues.add(
+        'The energy (Tenaga) row could not be read.',
+      );
+    }
+
+    if (table.nutrients.isNotEmpty &&
+        !table.canCalculatePortion) {
+      issues.add(
+        'The serving size or the per serving / per 100 g headings could not be read.',
+      );
+    }
+
+    return issues;
+  }
+
+  // =====================================================
+  // PHOTO SIZE (as ML Kit sees it: EXIF rotation applied)
+  // =====================================================
+
+  static Future<math.Point<double>?> _uprightImageSize(
+    String imagePath,
+  ) async {
+    try {
+      return await Isolate.run<math.Point<double>?>(
+        () {
+          final Uint8List bytes =
+              File(
+            imagePath,
+          ).readAsBytesSync();
+
+          final img.DecodeInfo? info =
+              img.findDecoderForData(
+            bytes,
+          )?.startDecode(
+            bytes,
+          );
+
+          if (info == null) {
+            return null;
+          }
+
+          double width =
+              info.width.toDouble();
+
+          double height =
+              info.height.toDouble();
+
+          final int orientation =
+              img.decodeJpgExif(
+                    bytes,
+                  )?.imageIfd.orientation ??
+                  1;
+
+          // EXIF orientations 5-8 are rotated 90 degrees.
+          if (orientation >= 5 &&
+              orientation <= 8) {
+            final double swap =
+                width;
+
+            width =
+                height;
+
+            height =
+                swap;
+          }
+
+          return math.Point<double>(
+            width,
+            height,
+          );
+        },
+      );
+    } catch (_) {
+      return null;
     }
   }
 
@@ -739,15 +1093,21 @@ class NutritionLabelOcrService {
 
     final bool hasPerServingReference =
         _containsAny(
-      allText,
-      _perServingKeywords,
-    );
+              allText,
+              _perServingKeywords,
+            ) ||
+            _perGramServingPattern.hasMatch(
+              allText,
+            );
 
     final bool hasPer100Reference =
         _containsAny(
-      allText,
-      _per100Keywords,
-    );
+              allText,
+              _per100Keywords,
+            ) ||
+            _per100Pattern.hasMatch(
+              allText,
+            );
 
     final bool hasReferenceBasis =
         hasPerServingReference ||
@@ -1323,6 +1683,29 @@ class NutritionLabelOcrService {
       if (_nutritionValuePattern.hasMatch(
         rowText,
       )) {
+        paired.add(
+          nutrient,
+        );
+
+        continue;
+      }
+
+      // Unit printed in the name, numbers without units:
+      // "Protein (g)   3.2   12.8"
+      final String withoutHint =
+          rowText.replaceAll(
+        _unitHintPattern,
+        ' ',
+      );
+
+      if (_unitHintPattern.hasMatch(
+            rowText,
+          ) &&
+          RegExp(
+            r'(?<![a-z])\d+(?:[.,]\d+)?(?![a-z%])',
+          ).hasMatch(
+            withoutHint,
+          )) {
         paired.add(
           nutrient,
         );

@@ -402,19 +402,50 @@ class ExtractedNutritionReviewScreen
                         ),
                       ),
                       child:
+                          Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
                           Text(
-                        '${data.nutrients.length} nutrient rows extracted from this label.',
-                        style:
-                            const TextStyle(
-                          color:
-                              secondaryText,
-                          fontSize:
-                              13.5,
-                          height:
-                              1.4,
-                          fontWeight:
-                              FontWeight.w600,
-                        ),
+                            '${data.nutrients.length} nutrient rows extracted from this label '
+                            '${data.extractionMethod == NutritionExtractionMethod.ai ? 'by NutriPal AI (checked against on-device reading).' : 'on your phone.'}',
+                            style:
+                                const TextStyle(
+                              color:
+                                  secondaryText,
+                              fontSize:
+                                  13.5,
+                              height:
+                                  1.4,
+                              fontWeight:
+                                  FontWeight.w600,
+                            ),
+                          ),
+
+                          // Corrections and values to double-check.
+                          for (final String note
+                              in data.notes)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(
+                                top:
+                                    8,
+                              ),
+                              child:
+                                  Text(
+                                '• $note',
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      secondaryText,
+                                  fontSize:
+                                      12.5,
+                                  height:
+                                      1.4,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],

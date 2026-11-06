@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/label_detection_status.dart';
-import '../services/nutrition_label_parser_service.dart';
+import '../services/nutrition_extraction_service.dart';
+import '../services/nutrition_label_ocr_service.dart';
 import 'extracted_nutrition_review_screen.dart';
 
 class ScanPreviewScreen extends StatefulWidget {
@@ -253,7 +254,7 @@ class _ScanPreviewScreenState
       // =================================================
 
       final nutritionData =
-          await NutritionLabelParserService.parseImage(
+          await NutritionExtractionService.extract(
         _currentImagePath,
       );
 
@@ -617,17 +618,26 @@ class _ScanPreviewScreenState
       // ---------------------------------------------------
 
       case LabelDetectionStatus.unclear:
-        return const _InformationCard(
+        // Tell the user exactly what is missing, e.g.
+        // "The nutrition table is cut off at the left edge".
+        final List<String> issues =
+            NutritionLabelOcrService.issuesFor(
+          _currentImagePath,
+        );
+
+        return _InformationCard(
           icon:
               Icons.warning_amber_rounded,
           iconColor:
               warningOrange,
           backgroundColor:
-              Color(
+              const Color(
             0xFFFFF5DF,
           ),
           text:
-              'Retake the photo so the serving size and readable nutrient values are visible.',
+              issues.isEmpty
+                  ? 'Retake the photo so the whole nutrition table, including its border, fits inside the frame.'
+                  : issues.join('\n'),
         );
 
       // ---------------------------------------------------
@@ -974,6 +984,63 @@ class _ScanPreviewScreenState
                       _PreviewOverlayPainter(
                     frameRect:
                         frameRect,
+                  ),
+                ),
+              ),
+
+              // =================================================
+              // THE WHOLE PHOTO, AS NUTRIPAL READS IT
+              // =================================================
+              //
+              // The background above fills the screen and crops
+              // the photo's sides, which made gallery photos
+              // look too close. Inside the frame the complete
+              // photo is shown (nothing cropped), and the user
+              // can pinch to zoom in on small text.
+              // =================================================
+
+              Positioned.fromRect(
+                rect:
+                    frameRect.deflate(
+                  6,
+                ),
+                child:
+                    ClipRRect(
+                  borderRadius:
+                      BorderRadius.circular(
+                    14,
+                  ),
+                  child:
+                      ColoredBox(
+                    color:
+                        const Color(
+                      0xFF17131D,
+                    ),
+                    child:
+                        InteractiveViewer(
+                      minScale:
+                          1,
+                      maxScale:
+                          5,
+                      child:
+                          SizedBox.expand(
+                        child:
+                            Image.file(
+                          File(
+                            _currentImagePath,
+                          ),
+                          fit:
+                              BoxFit.contain,
+                          errorBuilder: (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
