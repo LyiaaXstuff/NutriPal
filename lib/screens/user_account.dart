@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/name_rules.dart';
 
 class UserAccount extends StatefulWidget {
   final ProfileSetupData data;
@@ -100,18 +101,6 @@ class _UserAccountState extends State<UserAccount> {
   }
 
   // =====================================================
-  // FULL NAME
-  // =====================================================
-
-  String get _fullName {
-    if (widget.data.fullName.trim().isEmpty) {
-      return 'Not available';
-    }
-
-    return widget.data.fullName.trim();
-  }
-
-  // =====================================================
   // DATE OF BIRTH
   // =====================================================
 
@@ -197,14 +186,18 @@ class _UserAccountState extends State<UserAccount> {
     FocusScope.of(context).unfocus();
 
     final String nickname =
-        _nicknameController.text.trim();
+        NameRules.normalize(_nicknameController.text);
 
-    if (nickname.isEmpty) {
+    // Letters, spaces, ' and - only (no numbers or other symbols).
+    final String? nicknameProblem =
+        NameRules.validate(nickname);
+
+    if (nicknameProblem != null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Nickname cannot be empty.',
+            nicknameProblem,
           ),
           backgroundColor:
               primaryPurple,
@@ -398,6 +391,8 @@ class _UserAccountState extends State<UserAccount> {
                       TextField(
                         controller:
                             _nicknameController,
+                        inputFormatters:
+                            NameRules.inputFormatters,
                         textCapitalization:
                             TextCapitalization
                                 .words,
@@ -476,34 +471,6 @@ class _UserAccountState extends State<UserAccount> {
                           fontSize: 13,
                           height: 1.3,
                         ),
-                      ),
-
-                      const SizedBox(
-                        height: 24,
-                      ),
-
-                      // ===========================================
-                      // FULL NAME
-                      // ===========================================
-                      const Text(
-                        'Full name',
-                        style:
-                            TextStyle(
-                          color:
-                              darkPurple,
-                          fontSize: 16,
-                          fontWeight:
-                              FontWeight.w800,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 8,
-                      ),
-
-                      _LockedField(
-                        value:
-                            _fullName,
                       ),
 
                       const SizedBox(

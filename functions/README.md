@@ -10,6 +10,11 @@ checks every number against the phone's own OCR before using it.
 Until the steps below are done, the app keeps working with on-device reading
 only.
 
+The AI check is also used for labels printed partly in a script the phone's
+OCR cannot read, such as Arabic, Thai or Tamil (ML Kit only reads Latin,
+Chinese, Devanagari, Japanese and Korean). Claude reads those names in their
+own script, and gives the English name for rows printed only in that script.
+
 ---
 
 ## 1. Accounts (one-off)
@@ -44,7 +49,7 @@ firebase use --add            # pick your Firebase project, alias "default"
 
 cd functions
 npm install
-npm test                      # 5 tests, no API key needed
+npm test                      # 7 tests, no API key needed
 
 firebase functions:secrets:set ANTHROPIC_API_KEY   # paste the key when asked
 firebase deploy --only functions

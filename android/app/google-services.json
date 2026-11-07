@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1071932117427",
+    "project_id": "nutripal-fyp",
+    "storage_bucket": "nutripal-fyp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1071932117427:android:c57628eefd08161f1afbc6",
+        "android_client_info": {
+          "package_name": "com.audrylyia.nutripal"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1071932117427-hlahup6fvaarmnha23q9g499f1vbqsv9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.audrylyia.nutripal",
+            "certificate_hash": "a3c14544f5f3ff654ca564f87e56a883b268d5f4"
+          }
+        },
+        {
+          "client_id": "1071932117427-1aionfnrru1ag02eflt8bdnl6ahvvvqe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWd_NDpWuhyRtblGGfgdhbfL__4hz8AnM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1071932117427-1aionfnrru1ag02eflt8bdnl6ahvvvqe.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1071932117427-k5d4k26jij6bkmaec6vsm63anfu377oa.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.audrylyia.nutripal"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

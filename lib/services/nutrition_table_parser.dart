@@ -37,6 +37,7 @@
 import 'dart:math' as math;
 
 import '../models/nutrition_label_data.dart';
+import 'nutrient_name_normalizer.dart';
 
 // =======================================================
 // PUBLIC OCR INPUT TYPES
@@ -158,11 +159,11 @@ class _Parsed {
 class _Value {
   double amount;
   String unit; // '?' when OCR did not show a unit.
-  final String raw;
+  String raw;
   final double left;
   final double right;
   final double cy;
-  final bool explicitUnit;
+  bool explicitUnit;
 
   _Value({
     required this.amount,
@@ -373,7 +374,10 @@ class NutritionTableParser {
     double dataTop;
 
     if (firstNutrientY != null) {
-      dataTop = firstNutrientY - 0.6 * h;
+      // A full line height above the first row: values of a
+      // curved or tilted label can sit higher than their
+      // names. Heading lines in this band are skipped below.
+      dataTop = firstNutrientY - 1.0 * h;
     } else {
       dataTop = double.negativeInfinity;
 
@@ -454,17 +458,58 @@ class NutritionTableParser {
     // VALUES INSIDE THE TABLE
     // ---------------------------------------------------
 
+    // Values may start right under the column headings:
+    // on curved or tilted labels the value columns can sit
+    // higher than the first nutrient name.
+    double valueTop = dataTop;
+
+    if (firstNutrientY != null) {
+      double headerBottom = double.negativeInfinity;
+
+      for (final OcrTextLine line in lines) {
+        if (line.centerY >= firstNutrientY) continue;
+
+        if (line == title ||
+            isMeta(line) ||
+            _headersInLine(line).isNotEmpty ||
+            _isHeadingAmount(line)) {
+          headerBottom = math.max(headerBottom, line.bottom);
+        }
+      }
+
+      if (headerBottom > double.negativeInfinity) {
+        valueTop = math.min(dataTop, headerBottom);
+      }
+    }
+
+    // The table body starts under the headings (names and
+    // values alike).
+    dataTop = valueTop;
+
     final List<_Value> values = <_Value>[];
 
     for (final OcrTextLine line in lines) {
       if (!inRegion(line) || isMeta(line)) continue;
 
-      if (firstNutrientY == null && _headersInLine(line).isNotEmpty) {
+      if ((firstNutrientY == null || line.centerY < firstNutrientY) &&
+          (_headersInLine(line).isNotEmpty || _isHeadingAmount(line))) {
         continue;
       }
 
       values.addAll(valuesByLine[line]!);
     }
+
+    // Units printed in their own column ("5.5      g"):
+    // join each to the number on its left.
+    _attachLooseUnits(
+      values,
+      <_Tok>[
+        for (final OcrTextLine line in lines)
+          if (inRegion(line) && !isMeta(line)) ..._looseUnitsInLine(line),
+      ],
+      h,
+      debug,
+    );
 
     // ---------------------------------------------------
     // COLUMNS
@@ -495,9 +540,9 @@ class NutritionTableParser {
     // ---------------------------------------------------
     // VALUE ROWS WITHOUT A NAME
     //
-    // Values between the column headings and the first
-    // named row (names cut off by the photo edge) or far
-    // from every name (orphans, counted further down).
+    // Values in the value columns that cannot be matched to
+    // any nutrient name (names cut off by the photo edge,
+    // or unreadable). Collected while assigning values.
     // ---------------------------------------------------
 
     final List<double> unnamedYs = <double>[];
@@ -508,28 +553,6 @@ class NutritionTableParser {
       }
 
       return false;
-    }
-
-    if (firstNutrientY != null) {
-      double headerBottom = double.negativeInfinity;
-
-      for (final OcrTextLine line in lines) {
-        if (line.centerY >= firstNutrientY) continue;
-
-        if (line == title || isMeta(line) || _headersInLine(line).isNotEmpty) {
-          headerBottom = math.max(headerBottom, line.bottom);
-        }
-      }
-
-      for (final OcrTextLine line in lines) {
-        if (line.centerY <= headerBottom || line.centerY > dataTop) continue;
-
-        if (isMeta(line)) continue;
-
-        for (final _Value v in valuesByLine[line]!) {
-          if (insideColumns(v)) unnamedYs.add(v.cy);
-        }
-      }
     }
 
     // ---------------------------------------------------
@@ -595,17 +618,60 @@ class NutritionTableParser {
 
     final double maxColumnDistance = columns.length >= 2 ? 1.5 * h : 3.0 * h;
 
+    // ---------------------------------------------------
+    // RESIDUAL TILT (curved cans, uneven skew estimate)
+    //
+    // Even after deskewing, columns far from the names can
+    // sit a little higher or lower than their rows. Try
+    // small shears and keep the one that lines the values
+    // up with the names best (smallest shear on ties).
+    // ---------------------------------------------------
+
+    final double pivotX = _median(
+      anchors.map((_Anchor a) => (a.left + a.right) / 2).toList(),
+    );
+
+    final List<double> shears = <double>[
+      for (int step = -20; step <= 20; step++) step * 0.005,
+    ];
+
+    final List<double> costs = <double>[
+      for (final double shear in shears)
+        _alignmentCost(values, anchors, columns, shear, pivotX, h),
+    ];
+
+    final double minCost = costs.reduce(math.min);
+
+    // Among the (near-)best shears, the one closest to zero.
+    double shear = 0;
+    double shearSize = double.infinity;
+
+    for (int k = 0; k < shears.length; k++) {
+      if (costs[k] <= minCost + 0.1 * h && shears[k].abs() < shearSize) {
+        shear = shears[k];
+        shearSize = shears[k].abs();
+      }
+    }
+
+    if (shear != 0) {
+      debug?.writeln('[parser] residual shear ${shear.toStringAsFixed(3)}');
+    }
+
+    double rowY(_Value v) => v.cy - shear * (v.cx - pivotX);
+
     for (final _Value v in values) {
       int row = -1;
       double rowDistance = double.infinity;
 
+      final double vy = rowY(v);
+
       for (int i = 0; i < anchors.length; i++) {
-        final double d = anchors[i].distanceTo(v.cy);
+        final double d = anchors[i].distanceTo(vy);
 
         final bool better = d < rowDistance - 0.01 ||
             ((d - rowDistance).abs() <= 0.01 &&
                 row >= 0 &&
-                (v.cy - anchors[i].cy).abs() < (v.cy - anchors[row].cy).abs());
+                (vy - anchors[i].cy).abs() < (vy - anchors[row].cy).abs());
 
         if (better) {
           row = i;
@@ -622,7 +688,7 @@ class NutritionTableParser {
         for (int i = 0; i < anchors.length; i++) {
           if (anchors[i].key != 'energy') continue;
 
-          final double d = anchors[i].distanceTo(v.cy);
+          final double d = anchors[i].distanceTo(vy);
 
           if (d <= 2.2 * h && (!energyOverride || d < rowDistance)) {
             row = i;
@@ -685,8 +751,23 @@ class NutritionTableParser {
     bool rowHasValues(int i) =>
         cells[i].any((List<_Value> cell) => cell.isNotEmpty);
 
+    int firstValuedRow = anchors.length;
+    int lastValuedRow = -1;
+
+    for (int i = 0; i < anchors.length; i++) {
+      if (!rowHasValues(i)) continue;
+
+      firstValuedRow = math.min(firstValuedRow, i);
+      lastValuedRow = i;
+    }
+
     for (int i = 0; i < anchors.length; i++) {
       if (rowHasValues(i)) continue;
+
+      // Text under the last row is a footnote or claim
+      // ("CAMPURAN PEMANIS"), and text above the first row
+      // is heading material: neither is part of a name.
+      if (i > lastValuedRow || i < firstValuedRow) continue;
 
       final _Anchor a = anchors[i];
 
@@ -739,12 +820,13 @@ class NutritionTableParser {
       _repairRowColumns(cells[i], columns, anchors[i]);
     }
 
-    _fixGramsReadAsNine(cells, removed, columns.length, debug, notes);
+    _fixGramsReadAsNine(cells, removed, anchors, columns.length, debug, notes);
 
     for (int i = 0; i < anchors.length; i++) {
       if (removed[i] || !rowHasValues(i)) continue;
 
-      _reconcileUnits(cells[i], anchors[i]);
+      _reconcileUnits(cells[i], anchors[i], notes);
+      _dropStrayValues(cells[i], columns, anchors[i], debug, notes);
     }
 
     _crossCheck(
@@ -793,13 +875,22 @@ class NutritionTableParser {
     final List<NutrientRow> nutrients = <NutrientRow>[];
 
     int order = 0;
+    int unreadableScriptRows = 0;
 
     for (int i = 0; i < anchors.length; i++) {
       if (removed[i] || !rowHasValues(i)) continue;
 
+      // Raw label name -> canonical name ("Natrium" ->
+      // "Sodium"); unknown nutrients keep their own name.
+      final NormalizedNutrientName normalized =
+          NutrientNameNormalizer.normalizeDetailed(anchors[i].name);
+
+      if (normalized.droppedUnreadableText) unreadableScriptRows++;
+
       nutrients.add(
         NutrientRow(
-          name: anchors[i].name,
+          name: normalized.canonicalName,
+          rawName: formatNutrientName(normalized.cleanedName),
           order: order++,
           valuesByColumn: <List<NutritionValue>>[
             for (final int j in keptColumns)
@@ -913,6 +1004,7 @@ class NutritionTableParser {
       nutrients: nutrients,
       rawText: rawText,
       notes: notes,
+      unreadableScriptRows: unreadableScriptRows,
     );
   }
 
@@ -1223,9 +1315,62 @@ class NutritionTableParser {
     r'serving\s*size|saiz\s*hidangan|saiz\s*sajian|takaran\s*saji',
   );
 
+  // "mI" / "m1" are OCR misreads of "ml".
   static final RegExp _massRe = RegExp(
-    r'(?<![a-z0-9.,])(\d+(?:[.,]\d+)?)\s*(g|gm|grams?|ml|mg|l)(?![a-z0-9])',
+    r'(?<![a-z0-9.,])(\d+(?:[.,]\d+)?)\s*(g|gm|grams?|ml|mi|m1|mg|l)(?![a-z0-9])',
   );
+
+  // Words of the serving lines. OCR in condensed fonts
+  // misreads them ("SAIZ HIDANGAH", "SAlZ"), which made the
+  // serving size go missing.
+  static const Set<String> _servingLineWords = <String>{
+    'saiz', 'hidangan', 'serving', 'servings', 'size', 'setiap',
+    'package', 'bungkusan', 'sajian', 'bilangan', 'takaran',
+  };
+
+  static String _fixServingWords(String text) {
+    return text.replaceAllMapped(RegExp(r'[a-z0-9|]{4,}'), (Match m) {
+      final String word = m.group(0)!;
+
+      if (_servingLineWords.contains(word) || RegExp(r'^\d+$').hasMatch(word)) {
+        return word;
+      }
+
+      String fold(String w) => w
+          .replaceAll('rn', 'm')
+          .replaceAll(RegExp('[l1|]'), 'i')
+          .replaceAll('0', 'o');
+
+      final String folded = fold(word);
+
+      for (final String candidate in _servingLineWords) {
+        if (fold(candidate) == folded) return candidate;
+      }
+
+      // One wrong letter in a long word, same first letter.
+      if (word.length >= 6) {
+        String? best;
+        int matches = 0;
+
+        for (final String candidate in _servingLineWords) {
+          if (candidate.length < 6 ||
+              candidate[0] != folded[0] ||
+              (candidate.length - folded.length).abs() > 1) {
+            continue;
+          }
+
+          if (_editDistance(folded, candidate) <= 1) {
+            best = candidate;
+            matches++;
+          }
+        }
+
+        if (matches == 1) return best!;
+      }
+
+      return word;
+    });
+  }
 
   static final RegExp _servingHeaderRe = RegExp(
     r'(?:per|setiap)\s*'
@@ -1240,7 +1385,8 @@ class NutritionTableParser {
     r'(?:package|pack|packet|container|bottle|box|can|tin|bag)'
     r'|number\s*of\s*servings'
     r'|(?:bilangan\s*)?hidangan\s*(?:setiap|per|dalam|bagi)\s*'
-    r'(?:bungkusan|pek|paket|pakej|botol|kotak|tin|bekas|beg))'
+    r'(?:bungkusan|pek|paket|pakej|botol|kotak|tin|bekas|beg)'
+    r'|hidangan\s*se(?:kotak|bungkus|botol|tin|pek|paket|bekas|beg))'
     r'[^0-9]{0,45}?(\d+(?:[.,]\d+)?)',
   );
 
@@ -1272,8 +1418,12 @@ class NutritionTableParser {
     r'(tablets?|capsules?|pieces?|sachets?|bars?|biji|keping|uncang)',
   );
 
-  static _Serving _readServing(List<_Row> rows) {
+  static _Serving _readServing(List<_Row> input) {
     final _Serving result = _Serving();
+
+    final List<_Row> rows = <_Row>[
+      for (final _Row row in input) _Row(_fixServingWords(row.text), row.cy),
+    ];
 
     // 1. "Serving size: 2 keping (30 g)"
     for (final _Row row in rows) {
@@ -1399,6 +1549,8 @@ class NutritionTableParser {
       case 'mg':
         return _Parsed(amount / 1000, 'g');
       case 'ml':
+      case 'mi':
+      case 'm1':
         return _Parsed(amount, 'ml');
       case 'l':
         return _Parsed(amount * 1000, 'ml');
@@ -1646,8 +1798,31 @@ class NutritionTableParser {
       final double? number = _parseNumberText(compact);
 
       if (number != null) {
+        // "4.9 g" read as two words, "4.9" and "9": in
+        // condensed fonts the "g" is often read as a 9.
+        if (i > lastAlpha &&
+            i + 1 < toks.length &&
+            _isGramReadAsNine(tok, toks[i + 1]) &&
+            (i + 2 >= toks.length || _parseUnitText(toks[i + 2].text) == null)) {
+          result.add(
+            _Value(
+              amount: number,
+              unit: 'g',
+              raw: '${tok.text} ${toks[i + 1].text}',
+              left: tok.left,
+              right: toks[i + 1].right,
+              cy: (tok.cy + toks[i + 1].cy) / 2,
+              explicitUnit: true,
+            ),
+          );
+
+          i += 2;
+          continue;
+        }
+
         if (i + 1 < toks.length) {
-          final String? unit = _parseUnitText(toks[i + 1].text);
+          final String? unit = _parseUnitText(toks[i + 1].text) ??
+              (_microgramWordRe.hasMatch(toks[i + 1].text) ? 'µg' : null);
 
           if (unit != null) {
             result.add(
@@ -1686,6 +1861,107 @@ class NutritionTableParser {
     }
 
     return result;
+  }
+
+  // Unit words with no number right before them.
+  static final RegExp _microgramWordRe = RegExp(r'^[jyhHJY]g$');
+
+  static String? _unitWord(String text) =>
+      _parseUnitText(text) ?? (_microgramWordRe.hasMatch(text) ? 'µg' : null);
+
+  static List<_Tok> _looseUnitsInLine(OcrTextLine line) {
+    final List<_Tok> toks = <_Tok>[
+      for (final OcrWord w in line.words) ..._splitWord(w),
+    ];
+
+    final List<_Tok> result = <_Tok>[];
+
+    for (int i = 0; i < toks.length; i++) {
+      if (_unitWord(toks[i].text) == null) continue;
+
+      final bool afterNumber = i > 0 &&
+          _parseNumberText(toks[i - 1].text.replaceAll(' ', '')) != null;
+
+      if (!afterNumber) result.add(toks[i]);
+    }
+
+    return result;
+  }
+
+  static void _attachLooseUnits(
+    List<_Value> values,
+    List<_Tok> units,
+    double h,
+    StringBuffer? debug,
+  ) {
+    if (units.isEmpty) return;
+
+    final Set<_Tok> used = <_Tok>{};
+
+    final List<_Value> unitless = values
+        .where((_Value v) => v.unit == '?')
+        .toList()
+      ..sort((_Value a, _Value b) => a.right.compareTo(b.right));
+
+    for (final _Value v in unitless) {
+      _Tok? best;
+      double bestGap = 8 * h;
+
+      for (final _Tok u in units) {
+        if (used.contains(u)) continue;
+
+        if ((u.cy - v.cy).abs() > 0.7 * h) continue;
+
+        final double gap = u.left - v.right;
+
+        if (gap < -0.2 * h || gap >= bestGap) continue;
+
+        // Another value in between owns that unit.
+        final bool blocked = values.any(
+          (_Value o) =>
+              o != v &&
+              (o.cy - v.cy).abs() < 0.7 * h &&
+              o.cx > v.right &&
+              o.cx < u.left,
+        );
+
+        if (blocked) continue;
+
+        best = u;
+        bestGap = gap;
+      }
+
+      if (best == null) continue;
+
+      used.add(best);
+
+      v
+        ..unit = _unitWord(best.text)!
+        ..explicitUnit = true
+        ..raw = '${v.raw} ${best.text}';
+
+      debug?.writeln('[parser] unit column: "${v.raw}"');
+    }
+  }
+
+  // A one-character "9" or "q" just after a number (no
+  // wider than a character, at most about a space away)
+  // is its unit "g", not a value of the next column.
+  static bool _isGramReadAsNine(_Tok number, _Tok next) {
+    final String t = next.text.trim();
+
+    if (t != '9' && t != 'q') return false;
+
+    final double charWidth = (number.right - number.left) /
+        math.max(1, number.text.replaceAll(' ', '').length);
+
+    if (charWidth <= 0) return false;
+
+    final double gap = next.left - number.right;
+
+    return gap <= 1.5 * charWidth &&
+        gap >= -charWidth &&
+        next.right - next.left <= 2 * charWidth;
   }
 
   // Splits "230kJ/55kcal" or "(55kcal)" into parts and
@@ -2129,13 +2405,87 @@ class NutritionTableParser {
   // NUTRIENT NAME FROM ONE LINE
   // =====================================================
 
+  // "(g)", and OCR look-alikes "(O)", "(0)", "(q)", "(9)",
+  // "(rng)" for "(mg)".
   static final RegExp _parenUnitRe = RegExp(
-    r'\(\s*(kcal|kj|g|mg|mcg|µg|μg|ug|ml)\s*\)',
+    r'[\(\[]\s*(kcal|kj|g|mg|rng|mcg|µg|μg|ug|ml|o|0|q|9)\s*[\)\]]',
     caseSensitive: false,
   );
 
+  // Unit glued to the name with a misread bracket:
+  // "LENAKIg)" = "LEMAK(g)".
+  static final RegExp _gluedUnitRe = RegExp(
+    r'([A-Za-z])[\(\[|Il1]\s*(kcal|kj|mg|rng|g|o|0|q|9)\s*[\)\]]',
+  );
+
+  static String? _nameUnit(String text) {
+    switch (text.toLowerCase()) {
+      case 'o':
+      case '0':
+      case 'q':
+      case '9':
+        return 'g';
+      case 'rng':
+        return 'mg';
+    }
+
+    return _parseUnitText(text);
+  }
+
+  // Words that appear in nutrient names (Malay + English).
+  // OCR misreads one or two letters of them in condensed
+  // fonts: KARBOHIORAT, MATRIUM, LENAK.
+  static const Set<String> _nutrientWords = <String>{
+    'tenaga', 'energy', 'calories', 'kalori', 'protein', 'lemak',
+    'jumlah', 'total', 'karbohidrat', 'carbohydrate', 'carbohydrates',
+    'gula', 'sugar', 'sugars', 'natrium', 'sodium', 'kolesterol',
+    'cholesterol', 'tepu', 'saturated', 'unsaturated', 'trans', 'asid',
+    'serat', 'dietary', 'fibre', 'fiber', 'kalsium', 'calcium', 'besi',
+    'iron', 'vitamin', 'kalium', 'potassium', 'monotidaktepu',
+    'politidaktepu', 'monounsaturated', 'polyunsaturated', 'omega',
+    'garam', 'salt', 'tambahan', 'added', 'polyol', 'polyols',
+    'laktosa', 'lactose', 'kafein', 'caffeine', 'magnesium', 'zink',
+    'zinc', 'folat', 'folate', 'riboflavin', 'tiamin', 'thiamine',
+    'niasin', 'niacin', 'fosforus', 'phosphorus', 'iodin', 'iodine',
+    'glukosa', 'glucose', 'fruktosa', 'fructose', 'sukrosa', 'sucrose',
+    'kanji', 'starch', 'acids', 'fatty', 'tidak', 'saturates', 'fats',
+    'energi', 'proteins', 'minerals', 'mineral',
+  };
+
+  static String _correctNutrientWords(String name) {
+    return name.replaceAllMapped(RegExp(r'[A-Za-z]{4,}'), (Match m) {
+      final String word = m.group(0)!;
+      final String lower = word.toLowerCase();
+
+      if (_nutrientWords.contains(lower)) return word;
+
+      final int allowed = lower.length <= 6 ? 1 : 2;
+
+      String? best;
+      int bestDistance = allowed + 1;
+      bool tie = false;
+
+      for (final String candidate in _nutrientWords) {
+        if ((candidate.length - lower.length).abs() > allowed) continue;
+
+        final int d = _editDistance(lower, candidate);
+
+        if (d < bestDistance) {
+          best = candidate;
+          bestDistance = d;
+          tie = false;
+        } else if (d == bestDistance) {
+          tie = true;
+        }
+      }
+
+      return (best != null && !tie) ? best : word;
+    });
+  }
+
   static final RegExp _descriptorRe = RegExp(
     r'\b(?:of\s+which|yang\s+terdiri\s+daripada|daripada\s+jumlah|'
+    r'comprising(?:\s+of)?|consisting\s+of|terdiri\s+daripada|antaranya|'
     r'including|termasuk|di\s+mana)\b[:\s]*',
     caseSensitive: false,
   );
@@ -2231,11 +2581,20 @@ class NutritionTableParser {
     final RegExpMatch? parenUnit = _parenUnitRe.firstMatch(name);
 
     if (parenUnit != null) {
-      unit ??= _parseUnitText(parenUnit.group(1)!);
+      unit ??= _nameUnit(parenUnit.group(1)!);
       name = name.replaceRange(parenUnit.start, parenUnit.end, ' ');
+    } else {
+      final RegExpMatch? glued = _gluedUnitRe.firstMatch(name);
+
+      if (glued != null) {
+        unit ??= _nameUnit(glued.group(2)!);
+        name = name.replaceRange(glued.start, glued.end, glued.group(1)!);
+      }
     }
 
     name = name.replaceAll(_descriptorRe, ' ');
+
+    name = _correctNutrientWords(name);
 
     name = _cleanName(name);
 
@@ -2252,14 +2611,12 @@ class NutritionTableParser {
     );
   }
 
+  // Bullets, stray brackets ("(Natrium"), colons, extra
+  // spaces: same cleaning as the name normalizer.
   static String _cleanName(String text) {
-    return text
-        .replaceAll(RegExp(r'\s*/\s*'), ' / ')
-        .replaceAll(RegExp(r'^[\s•·\-–—*:.,/]+'), '')
-        .replaceAll(RegExp(r'[\s•·\-–—*:,/]+$'), '')
-        .replaceAll(RegExp(r'\(\s*\)'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    return NutrientNameNormalizer.clean(
+      text.replaceAll(RegExp(r'\(\s*\)'), ' '),
+    );
   }
 
   static bool _isInvalidName(String name) {
@@ -2287,6 +2644,77 @@ class NutritionTableParser {
     }
 
     return false;
+  }
+
+  // =====================================================
+  // HOW WELL DO VALUES LINE UP WITH NAMES?
+  // =====================================================
+
+  static double _alignmentCost(
+    List<_Value> values,
+    List<_Anchor> anchors,
+    List<_Column> columns,
+    double shear,
+    double pivotX,
+    double h,
+  ) {
+    double cost = 0;
+
+    // Units already placed in each cell.
+    final Map<int, Set<String>> usedCells = <int, Set<String>>{};
+
+    for (final _Value v in values) {
+      // kJ / kcal are often printed on two lines in one
+      // cell, so they say little about row alignment.
+      if (v.unit == 'kJ' || v.unit == 'kcal') continue;
+
+      int column = -1;
+      double columnDistance = double.infinity;
+
+      for (int j = 0; j < columns.length; j++) {
+        final double d = columns[j].distanceTo(v.cx);
+
+        if (d < columnDistance) {
+          column = j;
+          columnDistance = d;
+        }
+      }
+
+      if (column < 0 || columnDistance > 1.0 * h) continue;
+
+      final double y = v.cy - shear * (v.cx - pivotX);
+
+      int row = -1;
+      double rowDistance = double.infinity;
+
+      for (int i = 0; i < anchors.length; i++) {
+        final double d = anchors[i].distanceTo(y);
+
+        if (d < rowDistance) {
+          row = i;
+          rowDistance = d;
+        }
+      }
+
+      cost += math.min(rowDistance, 1.2 * h);
+
+      // Two values with the same unit in one cell suggest
+      // the wrong shear. Different units are a normal pair:
+      // "5 µg (200 IU)" (kJ + kcal are skipped above).
+      if (rowDistance <= 1.2 * h) {
+        final Set<String> units =
+            usedCells.putIfAbsent(row * 1000 + column, () => <String>{});
+
+        if (units.isNotEmpty &&
+            (units.contains(v.unit) || v.unit == '?' || units.contains('?'))) {
+          cost += 0.6 * h;
+        }
+
+        units.add(v.unit);
+      }
+    }
+
+    return cost;
   }
 
   // =====================================================
@@ -2458,6 +2886,77 @@ class NutritionTableParser {
     }
   }
 
+  // "(23g)" or "(250 ml)" on its own line under "Per
+  // serving / Setiap hidangan": the column's portion, not
+  // a value of the first nutrient row.
+  static final RegExp _headingAmountRe = RegExp(
+    r'^[\(\[]\s*\d+(?:[.,]\d+)?\s*(?:g|9|q|ml|mi|m1)\s*[\)\]]?$',
+    caseSensitive: false,
+  );
+
+  static bool _isHeadingAmount(OcrTextLine line) =>
+      _headingAmountRe.hasMatch(line.text.replaceAll(' ', '').trim());
+
+  // A cell holds one amount per unit ("5 µg (200 IU)" and
+  // "230 kJ / 55 kcal" are fine). Anything else is a stray
+  // OCR fragment:
+  //   - a mass in the energy row ("(23g)" from a heading)
+  //   - a second value with the same unit: keep the one
+  //     centred in the column.
+  static void _dropStrayValues(
+    List<List<_Value>> row,
+    List<_Column> columns,
+    _Anchor anchor,
+    StringBuffer? debug,
+    List<String> notes,
+  ) {
+    bool isEnergyUnit(_Value v) => v.unit == 'kJ' || v.unit == 'kcal';
+
+    for (int j = 0; j < row.length && j < columns.length; j++) {
+      final List<_Value> cell = row[j];
+
+      if (cell.length < 2) continue;
+
+      final List<_Value> drop = <_Value>[];
+
+      if (anchor.key == 'energy' && cell.any(isEnergyUnit)) {
+        drop.addAll(cell.where((_Value v) => !isEnergyUnit(v)));
+      }
+
+      final Map<String, List<_Value>> byUnit = <String, List<_Value>>{};
+
+      for (final _Value v in cell) {
+        if (drop.contains(v)) continue;
+
+        byUnit.putIfAbsent(v.unit, () => <_Value>[]).add(v);
+      }
+
+      for (final List<_Value> same in byUnit.values) {
+        if (same.length < 2) continue;
+
+        _Value keep = same.first;
+
+        for (final _Value v in same) {
+          if ((v.cx - columns[j].center).abs() <
+              (keep.cx - columns[j].center).abs()) {
+            keep = v;
+          }
+        }
+
+        drop.addAll(same.where((_Value v) => v != keep));
+      }
+
+      if (drop.isEmpty) continue;
+
+      for (final _Value v in drop) {
+        debug?.writeln('[parser] dropped stray "${v.raw}" from ${anchor.name}');
+        notes.add('Ignored an extra reading "${v.raw}" for ${anchor.name}');
+      }
+
+      cell.removeWhere(drop.contains);
+    }
+  }
+
   // =====================================================
   // "g" READ AS "9"
   // =====================================================
@@ -2473,8 +2972,8 @@ class NutritionTableParser {
   static final RegExp _trailingNineRe = RegExp(r'^(\d+)[.,](\d*)9$');
 
   static int _decimals(String raw) {
-    final RegExpMatch? m =
-        RegExp(r'[.,](\d+)').firstMatch(raw.replaceAll(' ', ''));
+    // Decimals of the number only: "4.9 9" (4.9 g) has one.
+    final RegExpMatch? m = RegExp(r'[0-9oOlIi]\s*[.,]([0-9oOlIi]+)').firstMatch(raw);
 
     return m == null ? 0 : m.group(1)!.length;
   }
@@ -2482,6 +2981,7 @@ class NutritionTableParser {
   static void _fixGramsReadAsNine(
     List<List<List<_Value>>> cells,
     List<bool> removed,
+    List<_Anchor> anchors,
     int columnCount,
     StringBuffer? debug,
     List<String> notes,
@@ -2559,7 +3059,14 @@ class NutritionTableParser {
           ),
         );
 
-        if (rowHasOtherUnit || !(rowIsGrams || columnIsGrams)) continue;
+        // Fat, sugars, protein... are written in grams even
+        // when every value of the row lost its "g".
+        final bool keyIsGrams = anchors[i].unit == 'g' ||
+            (anchors[i].unit == null && _defaultUnits[anchors[i].key] == 'g');
+
+        if (rowHasOtherUnit || !(rowIsGrams || columnIsGrams || keyIsGrams)) {
+          continue;
+        }
 
         for (final _Value v in cells[i][j]) {
           if (v.explicitUnit) continue;
@@ -2614,7 +3121,35 @@ class NutritionTableParser {
     'iron': 'mg',
   };
 
-  static void _reconcileUnits(List<List<_Value>> row, _Anchor anchor) {
+  // Vitamins and minerals: the unit regulations require,
+  // used only when no unit could be read anywhere in the
+  // row. Shown with a note because it is not from OCR.
+  static const Map<String, String> _usualUnits = <String, String>{
+    'vitamin_a': 'µg',
+    'vitamin_d': 'µg',
+    'vitamin_k': 'µg',
+    'vitamin_b7': 'µg',
+    'vitamin_b9': 'µg',
+    'vitamin_b12': 'µg',
+    'vitamin_c': 'mg',
+    'vitamin_e': 'mg',
+    'vitamin_b1': 'mg',
+    'vitamin_b2': 'mg',
+    'vitamin_b3': 'mg',
+    'vitamin_b5': 'mg',
+    'vitamin_b6': 'mg',
+    'magnesium': 'mg',
+    'zinc': 'mg',
+    'phosphorus': 'mg',
+    'iodine': 'µg',
+    'selenium': 'µg',
+  };
+
+  static void _reconcileUnits(
+    List<List<_Value>> row,
+    _Anchor anchor,
+    List<String> notes,
+  ) {
     final List<_Value> all = <_Value>[
       for (final List<_Value> cell in row) ...cell,
     ];
@@ -2636,8 +3171,21 @@ class NutritionTableParser {
           .key;
     }
 
+    final String? usual = _usualUnits[anchor.key];
+
     final String? rowUnit =
-        anchor.unit ?? majority ?? _defaultUnits[anchor.key];
+        anchor.unit ?? majority ?? _defaultUnits[anchor.key] ?? usual;
+
+    if (anchor.unit == null &&
+        majority == null &&
+        _defaultUnits[anchor.key] == null &&
+        usual != null &&
+        all.any((_Value v) => v.unit == '?')) {
+      notes.add(
+        'Unit for ${NutrientNameNormalizer.normalize(anchor.name)} not '
+        'readable: shown in its usual unit ($usual)',
+      );
+    }
 
     final bool microgram = _normallyMicrogram(anchor.name) ||
         all.any((_Value v) => v.unit == 'µg');
@@ -2772,19 +3320,32 @@ class NutritionTableParser {
     // ---------------------------------------------------
 
     if (serving.amount == null) {
-      final List<double> ratios = pairs
+      final List<List<_Value>> usable = pairs
           .where((List<_Value> p) => p[0].amount > 0 && p[1].amount >= 1)
+          .toList();
+
+      final List<double> ratios = usable
           .map((List<_Value> p) => p[0].amount / p[1].amount)
           .toList();
 
       if (ratios.length >= 3) {
-        final double m = _median(ratios);
+        // Big numbers are rounded less than small ones
+        // ("61 / 19" is more precise than "6 / 2"), so they
+        // count more.
+        final double m = _weightedMedian(
+          ratios,
+          usable
+              .map((List<_Value> p) => math.min(p[0].amount, p[1].amount))
+              .toList(),
+        );
 
         final int close =
             ratios.where((double x) => (x / m - 1).abs() < 0.1).length;
 
         if (m > 0 && close >= 0.6 * ratios.length) {
-          serving.amount = _round(m * 100, places: 1);
+          final double size = m * 100;
+
+          serving.amount = size >= 20 ? size.roundToDouble() : _round(size, places: 1);
           serving.unit =
               columns[per100Index].basis == NutritionColumnBasis.per100ml
                   ? 'ml'
@@ -2963,6 +3524,17 @@ class NutritionTableParser {
     MapEntry<String, RegExp>('potassium', RegExp(r'potassium|kalium')),
     MapEntry<String, RegExp>('calcium', RegExp(r'calcium|kalsium')),
     MapEntry<String, RegExp>('iron', RegExp(r'\biron\b|\bbesi\b')),
+    MapEntry<String, RegExp>('magnesium', RegExp(r'magnesium')),
+    MapEntry<String, RegExp>('zinc', RegExp(r'\bzin[ck]\b')),
+    MapEntry<String, RegExp>('phosphorus', RegExp(r'phosphorus|fosforus')),
+    MapEntry<String, RegExp>('iodine', RegExp(r'\biodin|yodium')),
+    MapEntry<String, RegExp>('selenium', RegExp(r'selenium')),
+    MapEntry<String, RegExp>('vitamin_b1', RegExp(r'\bthiamin|\btiamin')),
+    MapEntry<String, RegExp>('vitamin_b2', RegExp(r'riboflavin')),
+    MapEntry<String, RegExp>('vitamin_b3', RegExp(r'\bniacin|\bniasin')),
+    MapEntry<String, RegExp>('vitamin_b5', RegExp(r'pantothen|pantoten')),
+    MapEntry<String, RegExp>('vitamin_b7', RegExp(r'\bbiotin')),
+    MapEntry<String, RegExp>('vitamin_b9', RegExp(r'\bfol(?:ic|ate|at|ik)\b')),
   ];
 
   static String? _canonical(String normalizedText) {
@@ -3003,10 +3575,13 @@ class NutritionTableParser {
     r'serving\s*size|saiz\s*hidangan|saiz\s*sajian|servings?\s*per\s|'
     r'hidangan\s*(?:setiap|per|dalam|bagi)\s*'
     r'(?:bungkusan|pek|paket|pakej|botol|kotak|tin|bekas|beg)|'
+    r'hidangan\s*se(?:kotak|bungkus|botol|tin|pek|paket|bekas|beg)|'
     r'bilangan\s*hidangan|number\s*of\s*servings',
   );
 
-  static bool _isServingInfo(String t) => _servingInfoRe.hasMatch(t);
+  static bool _isServingInfo(String t) =>
+      _servingInfoRe.hasMatch(t) ||
+      _servingInfoRe.hasMatch(_fixServingWords(t));
 
   static final RegExp _netWeightRe = RegExp(
     r'\bnett?\b|berat\s*bersih|isi\s*padu|kandungan\s*bersih|\bnet\s*(?:wt|weight|vol)',
@@ -3019,6 +3594,13 @@ class NutritionTableParser {
     'bebas kolesterol',
     'ingredient',
     'ramuan',
+    'campuran',
+    'pemanis',
+    'lihat ',
+    'kurang gula',
+    'berbanding',
+    'sweetener',
+    'see ingredients',
     'kandungan:',
     'cara penggunaan',
     'cara penyimpanan',
@@ -3173,6 +3755,23 @@ class NutritionTableParser {
     };
 
     return replacements[text] ?? text;
+  }
+
+  static double _weightedMedian(List<double> values, List<double> weights) {
+    final List<int> order = List<int>.generate(values.length, (int i) => i)
+      ..sort((int a, int b) => values[a].compareTo(values[b]));
+
+    final double total = weights.fold<double>(0, (double s, double w) => s + w);
+
+    double running = 0;
+
+    for (final int i in order) {
+      running += weights[i];
+
+      if (running >= total / 2) return values[i];
+    }
+
+    return _median(values);
   }
 
   static double _median(List<double> values) {

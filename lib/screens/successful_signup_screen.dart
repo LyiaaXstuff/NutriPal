@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
 import 'user_profile_form.dart';
 
 class SuccessfulSignupScreen extends StatefulWidget {
@@ -604,8 +603,9 @@ class _SuccessfulSignupScreenState
                 ),
               ),
 
+              // Space above the button (moved a little lower).
               const SizedBox(
-                height: 30,
+                height: 56,
               ),
 
               // =========================
@@ -651,38 +651,6 @@ class _SuccessfulSignupScreenState
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(
-                height: 14,
-              ),
-
-              // =========================
-              // DO THIS LATER
-              // =========================
-              FadeTransition(
-                opacity: _buttonFade,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            const HomeScreen(),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'I’ll do this later',
-                    style: TextStyle(
-                      color: Color(
-                        0xFF17B6B1,
-                      ),
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),

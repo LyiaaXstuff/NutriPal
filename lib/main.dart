@@ -1,16 +1,19 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase powers the AI label check. If it is not set
-  // up yet (no `flutterfire configure`), the app still
-  // works with on-device reading only.
+  // Firebase powers the AI label check (project
+  // nutripal-fyp). If it cannot start, the app still works
+  // with on-device reading only.
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (error) {
     debugPrint('Firebase not configured; AI label check disabled. $error');
   }

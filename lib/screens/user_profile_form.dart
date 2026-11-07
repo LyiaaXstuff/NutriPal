@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/auth_service.dart';
+import '../services/name_rules.dart';
 import 'health_conditions_form.dart';
 
 class UserProfileForm extends StatefulWidget {
@@ -35,6 +37,11 @@ class _UserProfileFormState
     _data =
         widget.data ??
         ProfileSetupData();
+
+    // Email of the signed-in account (shown in My Account).
+    if (_data.email.trim().isEmpty) {
+      _data.email = AuthService.currentEmail ?? '';
+    }
 
     _nameController =
         TextEditingController(
@@ -473,16 +480,18 @@ class _UserProfileFormState
   void _continue() {
     FocusScope.of(context).unfocus();
 
-    final String name =
-        _nameController.text.trim();
+    // Letters, spaces, ' and - only (no numbers or other symbols).
+    final String? nameProblem =
+        NameRules.validate(_nameController.text);
 
-    if (name.isEmpty) {
-      _showMessage(
-        'Please enter your name or nickname.',
-      );
+    if (nameProblem != null) {
+      _showMessage(nameProblem);
 
       return;
     }
+
+    final String name =
+        NameRules.normalize(_nameController.text);
 
     if (_selectedDateOfBirth ==
         null) {
@@ -780,11 +789,15 @@ class _UserProfileFormState
                   textInputAction:
                       TextInputAction.done,
 
+                  // Letters, spaces, ' and - only.
+                  inputFormatters:
+                      NameRules.inputFormatters,
+
                   onChanged: (
                     value,
                   ) {
                     _data.nickname =
-                        value.trim();
+                        NameRules.normalize(value);
                   },
 
                   style:

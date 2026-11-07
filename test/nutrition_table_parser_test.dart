@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nutripal/models/nutrition_label_data.dart';
+import 'package:nutripal/services/label_reading_assessor.dart';
 import 'package:nutripal/services/nutrition_label_ocr_service.dart';
 import 'package:nutripal/services/nutrition_table_parser.dart';
 
@@ -75,10 +76,12 @@ List<OcrTextLine> _rotate(List<OcrTextLine> lines, double angle) {
 
 NutrientRow _row(NutritionLabelData data, String namePart) {
   return data.nutrients.firstWhere(
-    (NutrientRow r) => r.name.toLowerCase().contains(namePart.toLowerCase()),
+    (NutrientRow r) =>
+        r.name.toLowerCase().contains(namePart.toLowerCase()) ||
+        r.labelName.toLowerCase().contains(namePart.toLowerCase()),
     orElse: () => throw StateError(
       'No row containing "$namePart". Rows: '
-      '${data.nutrients.map((NutrientRow r) => r.name).toList()}',
+      '${data.nutrients.map((NutrientRow r) => '${r.name} (${r.labelName})').toList()}',
     ),
   );
 }
@@ -142,7 +145,8 @@ void _expectMalaysianLabel(NutritionLabelData data) {
 
   expect(data.nutrients.length, 7);
 
-  expect(_row(data, 'energy').name, 'Tenaga / Energy');
+  expect(_row(data, 'energy').name, 'Energy');
+  expect(_row(data, 'energy').labelName, 'Tenaga / Energy');
   expect(_cell(data, 'energy', 0), <String>['1800 kJ', '430 kcal']);
   expect(_cell(data, 'energy', 1), <String>['540 kJ', '129 kcal']);
 
@@ -275,13 +279,209 @@ const List<String> _cartonRows = <String>[
   'Lemak / Fat',
   'Kolesterol / Cholesterol',
   'Karbohidrat / Carbohydrate',
-  'Jumlah Gula / Total Sugars',
+  'Jumlah gula / Total sugars',
   'Protein / Protein',
   'Natrium / Sodium',
 ];
 
+// Real label (Coke can, white stencil font on red, curved
+// can) with what ML Kit produced on the phone:
+//   - "LEMAK(g)" -> "LENAKIg)", "(g)" -> "(O)",
+//     "KARBOHIDRAT" -> "KARBOHIORAT", "NATRIUM" -> "MATRIUM"
+//   - units only in the names, numbers without units
+//   - "19" (energy per 100 ml) not read at all
+//   - value columns sit higher than their names because of
+//     the can's curve (more so further right)
+//   - "CAMPURAN PEMANIS - LIHAT RAMUAN" under the table
+// Snack box (23 g serving) with a three-line "Per Serving /
+// Setiap Hidangan / (23g)" heading. ML Kit read "4.9 g" as
+// "4.9 9" and dropped the "g" of most other values.
+List<OcrTextLine> _snackBoxLabel({bool servingColumnLostGrams = false}) {
+  OcrTextLine t(String s, double x, double y) =>
+      _text(s, x, y, height: 30, charWidth: 14);
+
+  String g(String v) => servingColumnLostGrams ? '${v}9' : '$v g';
+
+  return <OcrTextLine>[
+    t('NUTRITION INFORMATION /', 655, 870),
+    t('MAKLUMAT PEMAKANAN', 655, 905),
+    t('Serving Size / Saiz Hidangan: 23g', 655, 950),
+    t('Servings Per Box / Hidangan Sekotak: 2', 625, 985),
+    t('Per 100g', 800, 1040),
+    t('/ Setiap', 800, 1075),
+    t('100g', 800, 1110),
+    t('Per Serving', 935, 1035),
+    t('/ Setiap', 935, 1070),
+    t('Hidangan', 935, 1105),
+    t('(23g)', 955, 1145),
+    t('Energy / Tenaga', 580, 1170),
+    t('456 kcal', 805, 1170),
+    t('105 kcal', 950, 1170),
+    t('Protein', 580, 1215),
+    t('6.4 g', 815, 1215),
+    t('1.59', 965, 1215),
+    t('Carbohydrate /', 580, 1260),
+    t('Karbohidrat', 580, 1290),
+    t('65.9 g', 810, 1260),
+    t(g('15.2'), 955, 1260),
+    t('Total Sugars /', 620, 1340),
+    t('Jumlah Gula /', 620, 1370),
+    t('4.9 9', 820, 1340),
+    t('1.19', 965, 1340),
+    t('Dietary Fibre /', 580, 1420),
+    t('Serat Diet', 580, 1450),
+    t('9.59', 820, 1420),
+    t(g('2.2'), 965, 1420),
+    t('Fat / Lemak', 580, 1500),
+    t('16.3 g', 810, 1500),
+    t(g('3.7'), 960, 1500),
+    t('Sodium / Natrium', 580, 1545),
+    t('1575 mg', 800, 1545),
+    t('362 mg', 950, 1545),
+  ];
+}
+
+List<OcrTextLine> _cokeLabel({
+  String? servingLine = 'SAIZ HIDANGAN : 320 mL',
+  String sugars100 = '4.6',
+  bool readEnergy100 = false,
+}) {
+  OcrTextLine t(String s, double x, double y) =>
+      _text(s, x, y, height: 40, charWidth: 20);
+
+  // Shift caused by the curve: col 1 ~30 px, col 2 ~45 px up.
+  const double c1 = -30;
+  const double c2 = -45;
+
+  return <OcrTextLine>[
+    t('320 mL', 1040, 735),
+    t('MINUMAN BERPERISA BERKARBONAT', 320, 850),
+    t('MAKLUMAT PEMAKANAN', 350, 950),
+    t('HIDANGAN SETIAP TIN : 1', 350, 1000),
+    if (servingLine != null) t(servingLine, 845, 1000),
+    t('SETIAP', 350, 1055),
+    t('HIDANGAN', 845, 1080),
+    t('100mL', 1175, 1080),
+    t('TENAGA (kcal)', 355, 1150),
+    t('61', 990, 1150 + c1),
+    if (readEnergy100) t('19', 1220, 1150 + c2),
+    t('PROTEIN (O)', 355, 1210),
+    t('0.0', 970, 1210 + c1),
+    t('0.0', 1200, 1210 + c2),
+    t('LENAKIg)', 355, 1270),
+    t('0.0', 970, 1270 + c1),
+    t('0.0', 1200, 1270 + c2),
+    t('KARBOHIORAT (g)', 355, 1330),
+    t('14.7', 950, 1330 + c1),
+    t('4.6', 1200, 1330 + c2),
+    t('-JUMLAH GULA (g)', 365, 1390),
+    t('14.7', 950, 1390 + c1),
+    t(sugars100, 1200, 1390 + c2),
+    t('MATRIUM (mg)', 355, 1450),
+    t('6', 1010, 1450 + c1),
+    t('2', 1240, 1450 + c2),
+    t('CAMPURAN PFMANIS-', 340, 1500),
+    t('LIHAT RAMUAN', 700, 1508),
+    t('55% KURANG GULA BERBANDING DENGAN COCA-COLA KLASIK', 340, 1560),
+  ];
+}
+
 void main() {
   group('NutritionTableParser', () {
+    test('reads the curved Coke can label', () {
+      final NutritionLabelData data = NutritionTableParser.parse(_cokeLabel());
+
+      expect(
+        _bases(data),
+        <NutritionColumnBasis>[
+          NutritionColumnBasis.perServing,
+          NutritionColumnBasis.per100ml,
+        ],
+      );
+
+      expect(
+        data.nutrients.map((NutrientRow r) => r.labelName).toList(),
+        <String>[
+          'Tenaga',
+          'Protein',
+          'Lemak',
+          'Karbohidrat',
+          'Jumlah gula',
+          'Natrium',
+        ],
+      );
+
+      expect(
+        data.nutrients.map((NutrientRow r) => r.name).toList(),
+        <String>[
+          'Energy',
+          'Protein',
+          'Total Fat',
+          'Carbohydrate',
+          'Total Sugars',
+          'Sodium',
+        ],
+      );
+
+      expect(data.servingSizeAmount, 320);
+      expect(data.servingSizeUnit, 'ml');
+      expect(data.servingsPerPackage, 1);
+
+      expect(_cell(data, 'tenaga', 0), <String>['61 kcal']);
+      // "19" was not read: left empty, never borrowed from
+      // the row below.
+      expect(_cell(data, 'tenaga', 1), isEmpty);
+      expect(_cell(data, 'protein', 0), <String>['0 g']);
+      expect(_cell(data, 'protein', 1), <String>['0 g']);
+      expect(_cell(data, 'lemak', 0), <String>['0 g']);
+      expect(_cell(data, 'lemak', 1), <String>['0 g']);
+      expect(_cell(data, 'karbohidrat', 0), <String>['14.7 g']);
+      expect(_cell(data, 'karbohidrat', 1), <String>['4.6 g']);
+      expect(_cell(data, 'gula', 1), <String>['4.6 g']);
+      expect(_cell(data, 'natrium', 0), <String>['6 mg']);
+      expect(_cell(data, 'natrium', 1), <String>['2 mg']);
+    });
+
+    test('reads a misread serving line ("SAIZ HIDANGAH : 320 mI")', () {
+      final NutritionLabelData data = NutritionTableParser.parse(
+        _cokeLabel(servingLine: 'SAIZ HIDANGAH : 320 mI'),
+      );
+
+      expect(data.servingSizeAmount, 320);
+      expect(data.servingSizeUnit, 'ml');
+    });
+
+    test('a serving size worked out from the values is marked as such', () {
+      // Serving line unreadable, and "4.6" for sugars per
+      // 100 ml misread as "6" (what happened on the phone).
+      final NutritionLabelData data = NutritionTableParser.parse(
+        _cokeLabel(servingLine: null, sugars100: '6', readEnergy100: true),
+      );
+
+      // Big, precise values (61 / 19) count most, so the
+      // estimate is close to the real 320 ml.
+      expect(data.servingSizeAmount, 321);
+      expect(
+        data.notes,
+        contains('Serving size worked out from the values: 321 ml'),
+      );
+
+      // ...and the wrong sugars value is caught, which sends
+      // the label for an AI check.
+      expect(LabelReadingAssessor.inconsistentRows(data), <String>['Total Sugars']);
+    });
+
+    test('formats nutrient names with only the first letter capital', () {
+      expect(formatNutrientName('JUMLAH GULA'), 'Jumlah gula');
+      expect(
+        formatNutrientName('Jumlah Gula / Total Sugars'),
+        'Jumlah gula / Total sugars',
+      );
+      expect(formatNutrientName('VITAMIN B12'), 'Vitamin B12');
+      expect(formatNutrientName('VITAMIN A'), 'Vitamin A');
+      expect(formatNutrientName('omega-3'), 'Omega-3');
+    });
+
     test('reads the carton label and ignores the claim under the rows', () {
       final NutritionLabelData data =
           NutritionTableParser.parse(_cartonLabel());
@@ -294,7 +494,23 @@ void main() {
         ],
       );
 
-      expect(data.nutrients.map((NutrientRow r) => r.name).toList(), _cartonRows);
+      expect(
+        data.nutrients.map((NutrientRow r) => r.labelName).toList(),
+        _cartonRows,
+      );
+
+      expect(
+        data.nutrients.map((NutrientRow r) => r.name).toList(),
+        <String>[
+          'Energy',
+          'Total Fat',
+          'Cholesterol',
+          'Carbohydrate',
+          'Total Sugars',
+          'Protein',
+          'Sodium',
+        ],
+      );
 
       expect(data.servingSizeAmount, 15);
       expect(data.servingSizeUnit, 'ml');
@@ -316,7 +532,23 @@ void main() {
         ),
       );
 
-      expect(data.nutrients.map((NutrientRow r) => r.name).toList(), _cartonRows);
+      expect(
+        data.nutrients.map((NutrientRow r) => r.labelName).toList(),
+        _cartonRows,
+      );
+
+      expect(
+        data.nutrients.map((NutrientRow r) => r.name).toList(),
+        <String>[
+          'Energy',
+          'Total Fat',
+          'Cholesterol',
+          'Carbohydrate',
+          'Total Sugars',
+          'Protein',
+          'Sodium',
+        ],
+      );
     });
 
     test('reads every row of the tuna label', () {
@@ -332,19 +564,37 @@ void main() {
       );
 
       expect(
-        data.nutrients.map((NutrientRow r) => r.name).toList(),
+        data.nutrients.map((NutrientRow r) => r.labelName).toList(),
         <String>[
           'Tenaga',
           'Protein',
           'Lemak',
-          'Asid Lemak monotidaktepu',
-          'Asid Lemak politidaktepu',
+          'Asid lemak monotidaktepu',
+          'Asid lemak politidaktepu',
           'Omega 3',
-          'Asid Lemak tepu',
+          'Asid lemak tepu',
           'Asid lemak trans',
           'Karbohidrat',
-          'Jumlah Gula',
+          'Jumlah gula',
           'Natrium',
+          'Vitamin B12',
+        ],
+      );
+
+      expect(
+        data.nutrients.map((NutrientRow r) => r.name).toList(),
+        <String>[
+          'Energy',
+          'Protein',
+          'Total Fat',
+          'Monounsaturated Fat',
+          'Polyunsaturated Fat',
+          'Omega 3',
+          'Saturated Fat',
+          'Trans Fat',
+          'Carbohydrate',
+          'Total Sugars',
+          'Sodium',
           'Vitamin B12',
         ],
       );
@@ -477,9 +727,10 @@ void main() {
       ]);
 
       expect(data.nutrients.length, 3);
-      expect(_row(data, 'energy').name, 'Tenaga / Energy');
+      expect(_row(data, 'energy').labelName, 'Tenaga / Energy');
       expect(_cell(data, 'energy', 0), <String>['1500 kJ', '360 kcal']);
-      expect(_row(data, 'saturated').name, 'Lemak tepu / Saturated fat');
+      expect(_row(data, 'saturated').labelName, 'Lemak tepu / Saturated fat');
+      expect(_row(data, 'saturated').name, 'Saturated Fat');
       expect(_cell(data, 'saturated', 0), <String>['2 g']);
     });
 
@@ -512,7 +763,8 @@ void main() {
         _text('10g', 300, 170),
       ]);
 
-      expect(_row(data, 'sugars').name.toLowerCase(), 'sugars');
+      expect(_row(data, 'sugars').name, 'Total Sugars');
+      expect(_row(data, 'sugars').labelName, 'Sugars');
       expect(_cell(data, 'sugars', 0), <String>['20 g']);
     });
 
@@ -582,6 +834,118 @@ void main() {
       expect(bounds, isNotNull);
       expect(bounds!.right, greaterThanOrEqualTo(568));
       expect(bounds.bottom, lessThan(470));
+    });
+    for (final bool lostGrams in <bool>[false, true]) {
+      test(
+          'snack box: one value per cell'
+          '${lostGrams ? ' (serving column lost its "g")' : ''}', () {
+        final NutritionLabelData data = NutritionTableParser.parse(
+          _snackBoxLabel(servingColumnLostGrams: lostGrams),
+        );
+
+        expect(_bases(data), <NutritionColumnBasis>[
+          NutritionColumnBasis.per100g,
+          NutritionColumnBasis.perServing,
+        ]);
+
+        expect(data.nutrients.map((NutrientRow r) => r.name).toList(), <String>[
+          'Energy',
+          'Protein',
+          'Carbohydrate',
+          'Total Sugars',
+          'Dietary Fibre',
+          'Total Fat',
+          'Sodium',
+        ]);
+
+        // "4.9 9" is 4.9 g, not 4.9 g and 9 g.
+        expect(_cell(data, 'sugars', 0), <String>['4.9 g']);
+        expect(_cell(data, 'sugars', 1), <String>['1.1 g']);
+
+        // "(23g)" belongs to the "Per Serving" heading.
+        expect(_cell(data, 'energy', 0), <String>['456 kcal']);
+        expect(_cell(data, 'energy', 1), <String>['105 kcal']);
+
+        expect(_cell(data, 'protein', 1), <String>['1.5 g']);
+        expect(_cell(data, 'carbohydrate', 1), <String>['15.2 g']);
+        expect(_cell(data, 'fibre', 0), <String>['9.5 g']);
+        expect(_cell(data, 'fibre', 1), <String>['2.2 g']);
+        expect(_cell(data, 'fat', 1), <String>['3.7 g']);
+        expect(_cell(data, 'sodium', 1), <String>['362 mg']);
+
+        for (final NutrientRow r in data.nutrients) {
+          for (final List<NutritionValue> cell in r.valuesByColumn) {
+            expect(cell.length, lessThanOrEqualTo(1), reason: r.name);
+          }
+        }
+
+        expect(data.servingSizeAmount, 23);
+        expect(data.servingSizeUnit, 'g');
+        expect(data.servingsPerPackage, 2);
+        expect(LabelReadingAssessor.inconsistentRows(data), isEmpty);
+      });
+    }
+
+    test('joins units printed in their own column', () {
+      final NutritionLabelData data = NutritionTableParser.parse(<OcrTextLine>[
+        _text('Nutrition Information', 20, 40),
+        _text('Per 100ml', 300, 80),
+        _text('Per Serving', 480, 80),
+        _text('Carbohydrate / S', 20, 120),
+        _text('5.5', 300, 120),
+        _text('g', 400, 122),
+        _text('13.8', 480, 120),
+        _text('g', 580, 122),
+        _text('Vitamin A / A I', 20, 150),
+        _text('69', 300, 150),
+        _text('Hg', 400, 152),
+        _text('173', 480, 150),
+        _text('µg', 580, 152),
+        _text('Vitamin E', 20, 180),
+        _text('0.9', 300, 180),
+        _text('mg', 400, 182),
+        _text('2.3', 480, 180),
+        _text('mg', 580, 182),
+        _text('Thiamin (Vitamin B1)', 20, 210),
+        _text('0.1', 300, 210),
+        _text('0.3', 480, 210),
+      ]);
+
+      expect(_cell(data, 'carbohydrate', 0), <String>['5.5 g']);
+      expect(_cell(data, 'carbohydrate', 1), <String>['13.8 g']);
+      expect(_cell(data, 'vitamin a', 0), <String>['69 µg']);
+      expect(_cell(data, 'vitamin a', 1), <String>['173 µg']);
+      expect(_cell(data, 'vitamin e', 0), <String>['0.9 mg']);
+      expect(_cell(data, 'vitamin e', 1), <String>['2.3 mg']);
+
+      // No unit anywhere in the row: usual unit, with a note.
+      expect(_cell(data, 'thiamin', 0), <String>['0.1 mg']);
+      expect(_row(data, 'thiamin').name, 'Vitamin B1');
+      expect(
+        data.notes.any((String n) => n.contains('usual unit')),
+        isTrue,
+      );
+
+      // Stray letters from the unreadable Arabic half.
+      expect(_row(data, 'carbohydrate').labelName, 'Carbohydrate');
+      expect(_row(data, 'vitamin a').labelName, 'Vitamin A');
+      expect(data.hasUnreadableScript, isTrue);
+    });
+
+    test('keeps two values in one cell when the units differ', () {
+      final NutritionLabelData data = NutritionTableParser.parse(<OcrTextLine>[
+        _text('Nutrition Information', 20, 40),
+        _text('Per serving', 300, 80),
+        _text('Energy', 20, 120),
+        _text('230 kJ / 55 kcal', 300, 120),
+        _text('Vitamin D', 20, 150),
+        _text('5 µg (200 IU)', 300, 150),
+        _text('Protein', 20, 180),
+        _text('2.0 g', 300, 180),
+      ]);
+
+      expect(_cell(data, 'energy', 0), <String>['230 kJ', '55 kcal']);
+      expect(_cell(data, 'vitamin d', 0).length, 2);
     });
   });
 

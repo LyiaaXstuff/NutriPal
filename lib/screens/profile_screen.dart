@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/auth_service.dart';
+import 'change_password_screen.dart';
 import 'health_conditions_settings.dart';
+import 'login_screen.dart';
 import 'user_account.dart';
 import 'weight_management_settings.dart';
 
@@ -180,6 +183,22 @@ class _ProfileScreenState
     }
 
     setState(() {});
+  }
+
+  // =====================================================
+  // SECURITY (CHANGE PASSWORD)
+  // =====================================================
+
+  Future<void> _openSecurity() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (
+          context,
+        ) =>
+            const ChangePasswordScreen(),
+      ),
+    );
   }
 
   // =====================================================
@@ -726,12 +745,27 @@ class _ProfileScreenState
       },
     );
 
-    if (logout == true &&
-        mounted) {
-      _showComingSoon(
-        'Firebase logout',
-      );
+    if (logout != true || !mounted) {
+      return;
     }
+
+    await AuthService.signOut();
+
+    if (!mounted) {
+      return;
+    }
+
+    // Back to the login screen, with no way to go "back"
+    // into the signed-in app.
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (
+          context,
+        ) =>
+            const LoginScreen(),
+      ),
+      (Route<dynamic> route) => false,
+    );
   }
 
   // =====================================================
@@ -1049,11 +1083,8 @@ class _ProfileScreenState
                         'Security',
                     subtitle:
                         'Change your password',
-                    onTap: () {
-                      _showComingSoon(
-                        'Security',
-                      );
-                    },
+                    onTap:
+                        _openSecurity,
                   ),
                 ],
               ),

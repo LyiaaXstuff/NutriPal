@@ -9,6 +9,8 @@ const {
   buildRequestBody,
   sanitizeLabel,
   LabelReaderError,
+  SYSTEM_PROMPT,
+  OUTPUT_SCHEMA,
 } = require('../src/label_reader');
 
 const IMAGE = 'A'.repeat(200);
@@ -69,20 +71,45 @@ test('rejects missing or oversized images', () => {
   );
 });
 
-test('builds a forced tool call with image first', () => {
+test('asks for structured JSON output with the image first', () => {
   const body = buildRequestBody({
     imageBase64: IMAGE,
     mediaType: 'image/jpeg',
-    model: 'claude-haiku-5-5',
+    model: 'claude-sonnet-5-5',
   });
 
-  assert.equal(body.model, 'claude-haiku-5-5');
-  assert.deepEqual(body.tool_choice, { type: 'tool', name: 'record_nutrition_table' });
+  assert.equal(body.model, 'claude-sonnet-5-5');
+  // Sonnet 5.5 rejects forced tool_choice: never send it.
+  assert.equal(body.tool_choice, undefined);
+  assert.equal(body.tools, undefined);
+  assert.equal(body.output_config.format.type, 'json_schema');
+  assert.equal(body.output_config.format.schema.additionalProperties, false);
   assert.equal(body.messages[0].content[0].type, 'image');
   assert.equal(body.messages[0].content[0].source.data, IMAGE);
 });
 
-test('returns the sanitized table from a tool_use block', async () => {
+test('every schema object lists all its properties as required', () => {
+  const check = (node, path) => {
+    if (!node || typeof node !== 'object') return;
+
+    if (node.properties) {
+      assert.deepEqual(
+        [...node.required].sort(),
+        Object.keys(node.properties).sort(),
+        `required at ${path}`,
+      );
+      assert.equal(node.additionalProperties, false, `additionalProperties at ${path}`);
+
+      for (const [key, child] of Object.entries(node.properties)) check(child, `${path}.${key}`);
+    }
+
+    if (node.items) check(node.items, `${path}[]`);
+  };
+
+  check(OUTPUT_SCHEMA, 'root');
+});
+
+test('returns the sanitized table from the JSON text block', async () => {
   const calls = [];
 
   const result = await readNutritionLabel({
@@ -93,7 +120,8 @@ test('returns the sanitized table from a tool_use block', async () => {
       200,
       {
         model: 'claude-haiku-5-5',
-        content: [{ type: 'tool_use', name: 'record_nutrition_table', input: TUNA }],
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: JSON.stringify(TUNA) }],
         usage: { input_tokens: 3000, output_tokens: 600 },
       },
       calls,
@@ -155,4 +183,28 @@ test('maps API failures to safe error codes', async () => {
     }),
     (error) => error.code === 'internal',
   );
+});
+
+test('keeps Arabic names and the English name for Arabic-only rows', () => {
+  const label = sanitizeLabel({
+    columns: [{ label: 'Per 100ml', basis: 'per_100ml' }],
+    nutrients: [
+      {
+        name: 'Protein / بروتين',
+        english_name: '',
+        cells: [{ values: [{ amount: 2.6, unit: 'g', printed: '2.6 g' }] }],
+      },
+      {
+        name: 'صوديوم',
+        english_name: ' Sodium ',
+        cells: [{ values: [{ amount: 48, unit: 'mg', printed: '48 mg' }] }],
+      },
+    ],
+  });
+
+  assert.equal(label.nutrients[0].name, 'Protein / بروتين');
+  assert.equal(label.nutrients[0].english_name, undefined);
+  assert.equal(label.nutrients[1].name, 'صوديوم');
+  assert.equal(label.nutrients[1].english_name, 'Sodium');
+  assert.match(SYSTEM_PROMPT, /Arabic/);
 });

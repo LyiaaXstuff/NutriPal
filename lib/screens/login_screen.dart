@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
+import '../widgets/progress_dialog.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 
@@ -117,11 +119,33 @@ class _LoginScreenState extends State<LoginScreen>
   // LOGIN
   // =====================================================
 
-  void _login() {
+  Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
-    // Temporary login.
-    // Firebase Authentication can replace this later.
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('Please enter your email and password.');
+      return;
+    }
+
+    try {
+      await runWithProgress<void>(
+        context,
+        () => AuthService.signIn(email: email, password: password),
+      );
+    } on AuthServiceException catch (error) {
+      _showMessage(error.message);
+      return;
+    }
+
+    if (!mounted) return;
+
+    _goToHome();
+  }
+
+  void _goToHome() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -129,6 +153,16 @@ class _LoginScreenState extends State<LoginScreen>
             const HomeScreen(),
       ),
     );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message)),
+      );
   }
 
   // =====================================================
@@ -151,15 +185,24 @@ class _LoginScreenState extends State<LoginScreen>
   // FORGOT PASSWORD
   // =====================================================
 
-  void _forgotPassword() {
+  Future<void> _forgotPassword() async {
     FocusScope.of(context).unfocus();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Forgot Password will be connected to Firebase later.',
-        ),
-      ),
+    final String email = _emailController.text.trim();
+
+    try {
+      await runWithProgress<void>(
+        context,
+        () => AuthService.sendPasswordResetTo(email),
+      );
+    } on AuthServiceException catch (error) {
+      _showMessage(error.message);
+      return;
+    }
+
+    _showMessage(
+      'If an account exists for $email, a password reset link has been sent. '
+      'Please check your inbox and spam folder.',
     );
   }
 
@@ -167,16 +210,24 @@ class _LoginScreenState extends State<LoginScreen>
   // GOOGLE LOGIN
   // =====================================================
 
-  void _signInWithGoogle() {
+  Future<void> _signInWithGoogle() async {
     FocusScope.of(context).unfocus();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Google Sign-In will be connected to Firebase later.',
-        ),
-      ),
-    );
+    final bool signedIn;
+
+    try {
+      signedIn = await runWithProgress<bool>(
+        context,
+        AuthService.signInWithGoogle,
+      );
+    } on AuthServiceException catch (error) {
+      _showMessage(error.message);
+      return;
+    }
+
+    if (!signedIn || !mounted) return;
+
+    _goToHome();
   }
 
   // =====================================================

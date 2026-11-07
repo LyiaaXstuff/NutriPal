@@ -144,6 +144,26 @@ class ExtractedNutritionReviewScreen
   }
 
   // =====================================================
+  // WHERE THE VALUES CAME FROM
+  // =====================================================
+
+  String _sourceSummary() {
+    final int rows =
+        data.nutrients.length;
+
+    switch (data.extractionMethod) {
+      case NutritionExtractionMethod.ai:
+        return '$rows nutrient rows extracted from this label by NutriPal AI '
+            '(checked against on-device reading).';
+      case NutritionExtractionMethod.barcode:
+        return '$rows nutrients found for barcode ${data.barcode ?? ''} '
+            'in Open Food Facts.';
+      case NutritionExtractionMethod.onDevice:
+        return '$rows nutrient rows extracted from this label on your phone.';
+    }
+  }
+
+  // =====================================================
   // BUILD
   // =====================================================
 
@@ -290,6 +310,100 @@ class ExtractedNutritionReviewScreen
                     ),
 
                     // ===========================================
+                    // PRODUCT (barcode scans)
+                    // ===========================================
+
+                    if (data.productName != null ||
+                        data.productBrand != null) ...[
+                      Container(
+                        width:
+                            double.infinity,
+                        padding:
+                            const EdgeInsets.all(
+                          16,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              Colors.white,
+                          borderRadius:
+                              BorderRadius.circular(
+                            18,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                const Color(
+                              0xFFE4D9F7,
+                            ),
+                          ),
+                        ),
+                        child:
+                            Row(
+                          children: [
+                            const Icon(
+                              Icons
+                                  .qr_code_scanner_rounded,
+                              color:
+                                  selectedTeal,
+                              size:
+                                  30,
+                            ),
+                            const SizedBox(
+                              width:
+                                  14,
+                            ),
+                            Expanded(
+                              child:
+                                  Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    data.productName ??
+                                        'Unnamed product',
+                                    style:
+                                        const TextStyle(
+                                      color:
+                                          darkPurple,
+                                      fontSize:
+                                          17,
+                                      fontWeight:
+                                          FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (data.productBrand != null)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(
+                                        top:
+                                            3,
+                                      ),
+                                      child:
+                                          Text(
+                                        data.productBrand!,
+                                        style:
+                                            const TextStyle(
+                                          color:
+                                              secondaryText,
+                                          fontSize:
+                                              14,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(
+                        height:
+                            22,
+                      ),
+                    ],
+
+                    // ===========================================
                     // SERVING INFORMATION
                     // ===========================================
 
@@ -407,8 +521,7 @@ class ExtractedNutritionReviewScreen
                             CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${data.nutrients.length} nutrient rows extracted from this label '
-                            '${data.extractionMethod == NutritionExtractionMethod.ai ? 'by NutriPal AI (checked against on-device reading).' : 'on your phone.'}',
+                            _sourceSummary(),
                             style:
                                 const TextStyle(
                               color:
@@ -599,31 +712,19 @@ class _DynamicNutritionCard
     BuildContext context,
   ) {
     // =====================================================
-    // KEEP ORIGINAL TOP-TO-BOTTOM ORDER
+    // SAME NUTRIENTS IN EVERY COLUMN, LABEL ORDER
+    // =====================================================
+    //
+    // Every section (per serving, per 100 g / ml) lists
+    // the same nutrients in the same order. A value that
+    // could not be read shows "Not detected" instead of
+    // the row disappearing.
     // =====================================================
 
     final List<NutrientRow> nutrientRows =
-        data.nutrients
-            .where(
-              (
-                NutrientRow row,
-              ) {
-                if (columnIndex >=
-                    row
-                        .valuesByColumn
-                        .length) {
-                  return false;
-                }
-
-                return row
-                    .valuesByColumn[
-                      columnIndex
-                    ]
-                    .isNotEmpty;
-              },
-            )
-            .toList()
-          ..sort(
+        List<NutrientRow>.of(
+      data.nutrients,
+    )..sort(
             (
               NutrientRow a,
               NutrientRow b,
@@ -634,7 +735,31 @@ class _DynamicNutritionCard
             },
           );
 
-    if (nutrientRows.isEmpty) {
+    List<NutritionValue> valuesFor(
+      NutrientRow row,
+    ) {
+      if (columnIndex >=
+          row.valuesByColumn.length) {
+        return const [];
+      }
+
+      return row.valuesByColumn[
+          columnIndex];
+    }
+
+    final bool columnHasValues =
+        nutrientRows.any(
+      (
+        NutrientRow row,
+      ) {
+        return valuesFor(
+          row,
+        ).isNotEmpty;
+      },
+    );
+
+    if (nutrientRows.isEmpty ||
+        !columnHasValues) {
       return const _WarningCard(
         text:
             'No nutrient values were extracted for this column.',
@@ -670,11 +795,28 @@ class _DynamicNutritionCard
                   nutrientRows[i]
                       .name,
 
-              value:
+              // Label wording when it differs from the
+              // standard name ("Natrium" -> Sodium).
+              labelName:
                   nutrientRows[i]
-                      .valuesByColumn[
-                        columnIndex
-                      ]
+                          .hasDifferentLabelName
+                      ? nutrientRows[i]
+                          .labelName
+                      : null,
+
+              missing:
+                  valuesFor(
+                nutrientRows[i],
+              ).isEmpty,
+
+              value:
+                  valuesFor(
+                nutrientRows[i],
+              ).isEmpty
+                      ? 'Not detected'
+                      : valuesFor(
+                nutrientRows[i],
+              )
                       .map(
                         (
                           NutritionValue value,
@@ -831,9 +973,18 @@ class _NutrientRowWidget
 
   final String value;
 
+  // True when this column has no value for the nutrient.
+  final bool missing;
+
+  // Wording printed on the label, shown under the name
+  // when it differs from it.
+  final String? labelName;
+
   const _NutrientRowWidget({
     required this.name,
     required this.value,
+    this.missing = false,
+    this.labelName,
   });
 
   @override
@@ -855,21 +1006,53 @@ class _NutrientRowWidget
         children: [
           Expanded(
             child:
+                Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
                 Text(
-              name,
-              style:
-                  const TextStyle(
-                color:
-                    Color(
-                  0xFF38138C,
+                  name,
+                  style:
+                      const TextStyle(
+                    color:
+                        Color(
+                      0xFF38138C,
+                    ),
+                    fontSize:
+                        14.5,
+                    height:
+                        1.25,
+                    fontWeight:
+                        FontWeight.w700,
+                  ),
                 ),
-                fontSize:
-                    14.5,
-                height:
-                    1.25,
-                fontWeight:
-                    FontWeight.w700,
-              ),
+
+                if (labelName != null)
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(
+                      top:
+                          2,
+                    ),
+                    child:
+                        Text(
+                      'On label: $labelName',
+                      style:
+                          const TextStyle(
+                        color:
+                            Color(
+                          0xFF8A7BA8,
+                        ),
+                        fontSize:
+                            12,
+                        height:
+                            1.25,
+                        fontWeight:
+                            FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
 
@@ -885,15 +1068,25 @@ class _NutrientRowWidget
               textAlign:
                   TextAlign.right,
               style:
-                  const TextStyle(
+                  TextStyle(
                 color:
-                    Color(
-                  0xFF67558E,
-                ),
+                    missing
+                        ? const Color(
+                            0xFFB08A3E,
+                          )
+                        : const Color(
+                            0xFF67558E,
+                          ),
                 fontSize:
-                    14.5,
+                    missing
+                        ? 13.5
+                        : 14.5,
                 height:
                     1.25,
+                fontStyle:
+                    missing
+                        ? FontStyle.italic
+                        : FontStyle.normal,
                 fontWeight:
                     FontWeight.w600,
               ),

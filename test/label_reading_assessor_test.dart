@@ -116,6 +116,41 @@ void main() {
       // Unreadable cell stays empty instead of guessed.
       expect(b12.valuesByColumn[1], isEmpty);
     });
+
+    test('Arabic names are kept; Arabic-only rows use the English name', () {
+      Map<String, dynamic> row(String name, String english) =>
+          <String, dynamic>{
+            'name': name,
+            if (english.isNotEmpty) 'english_name': english,
+            'cells': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'values': <Map<String, dynamic>>[
+                  <String, dynamic>{'amount': 2.6, 'unit': 'g', 'printed': '2.6 g'},
+                ],
+              },
+            ],
+          };
+
+      final NutritionLabelData data = LabelReadingAssessor.fromAiJson(
+        <String, dynamic>{
+          'label': <String, dynamic>{
+            'is_nutrition_table': true,
+            'columns': <Map<String, dynamic>>[
+              <String, dynamic>{'label': 'Per 100ml', 'basis': 'per_100ml'},
+            ],
+            'nutrients': <Map<String, dynamic>>[
+              row('Protein / بروتين', ''),
+              row('صوديوم', 'Sodium'),
+            ],
+          },
+        },
+      );
+
+      expect(data.nutrients[0].name, 'Protein');
+      expect(data.nutrients[0].labelName, contains('بروتين'));
+      expect(data.nutrients[1].name, 'Sodium');
+      expect(data.nutrients[1].labelName, 'صوديوم');
+    });
   });
 
   group('verifyAiReading', () {
@@ -144,7 +179,7 @@ void main() {
       expect(check.confirmed, 6);
       expect(check.accepted, isFalse);
       expect(
-        check.unconfirmed.any((String s) => s.startsWith('Natrium')),
+        check.unconfirmed.any((String s) => s.startsWith('Sodium')),
         isTrue,
       );
     });
@@ -172,7 +207,7 @@ void main() {
       final List<String> problems = LabelReadingAssessor.problems(data);
 
       expect(problems.any((String p) => p.contains('corrected')), isTrue);
-      expect(problems.any((String p) => p.contains('Natrium')), isTrue);
+      expect(problems.any((String p) => p.contains('Sodium')), isTrue);
 
       final NutritionLabelData tiny = data.copyWith(
         nutrients: data.nutrients.take(2).toList(),
@@ -181,6 +216,23 @@ void main() {
       expect(
         LabelReadingAssessor.problems(tiny)
             .any((String p) => p.startsWith('Only 2')),
+        isTrue,
+      );
+    });
+
+    test('a label in a script the phone cannot read asks the AI', () {
+      final NutritionLabelData complete =
+          LabelReadingAssessor.fromAiJson(_tunaJson());
+
+      expect(complete.hasUnreadableScript, isFalse);
+
+      final NutritionLabelData arabic =
+          complete.copyWith(unreadableScriptRows: 5);
+
+      expect(arabic.hasUnreadableScript, isTrue);
+      expect(
+        LabelReadingAssessor.problems(arabic)
+            .any((String p) => p.contains('cannot read')),
         isTrue,
       );
     });

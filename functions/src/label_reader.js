@@ -22,8 +22,6 @@ const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // sends ~0.5 MB crops, so anything near this is misuse.
 const MAX_BASE64_LENGTH = 8 * 1024 * 1024;
 
-const TOOL_NAME = 'record_nutrition_table';
-
 const SYSTEM_PROMPT = `You read packaged-food nutrition tables for NutriPal, a Malaysian nutrition app.
 
 Read ONLY the nutrition information table (the bordered panel titled "Nutrition Information", "Maklumat Pemakanan", "Keterangan Pemakanan", "Nutrition Facts" or similar).
@@ -33,6 +31,9 @@ Rules:
 - Copy what is printed. Never calculate, estimate, convert or fill in values that are not printed.
 - Keep the table's row order. Include every nutrient row, including indented sub-rows (for example "- Asid Lemak tepu") and vitamins/minerals. Drop leading dashes or bullets from names.
 - Write nutrient names exactly as printed, in the label's language. If a row is bilingual, keep both, e.g. "Tenaga / Energy".
+- Labels may also be printed in Arabic, Chinese, Tamil, Thai or another script, alone or next to English / Malay. Read those parts too and copy them in their own script, e.g. "Protein / بروتين". Never replace printed text with a translation.
+- english_name: when the printed name has no English or Malay part (e.g. only "بروتين"), give the standard English nutrient name ("Protein"). Otherwise leave it empty.
+- Write every amount with Western digits: Arabic-Indic digits such as "٢٫٥" are 2.5.
 - Skip descriptor rows that have no values, such as "yang terdiri daripada" or "of which".
 - Skip claims and footnotes printed inside the table border below the rows, such as "a Cholesterol Free Food / Makanan Bebas Kolesterol" or "*Percent Daily Values are based on...". They are not nutrients.
 - Columns: list the value columns left to right. basis is per_serving for "Per serving", "Setiap hidangan", "Per sachet", "Per 30 g" style columns; per_100g or per_100ml for 100 g / 100 ml columns; percent for %NRV / %DV columns; other otherwise.
@@ -43,6 +44,11 @@ Rules:
 - serving_size is the serving amount in g or ml if printed (e.g. "Saiz hidangan: 36g" -> 36 g). servings_per_package is the number of servings per pack if printed.
 - If the image has no nutrition table, set is_nutrition_table to false and return empty lists.`;
 
+// Structured output (JSON schema). Newer models such as
+// Claude Sonnet 5.5 do not support forcing a tool call, so
+// the table is returned as JSON that must match this
+// schema (output_config.format). Every object lists all of
+// its properties as required and allows no extra ones.
 const VALUE_SCHEMA = {
   type: 'object',
   properties: {
@@ -54,83 +60,103 @@ const VALUE_SCHEMA = {
       type: 'string',
       enum: ['g', 'mg', 'µg', 'kcal', 'kJ', 'ml', 'IU', '%', ''],
     },
-    less_than: { type: 'boolean' },
+    less_than: { type: 'boolean', description: 'True for "<0.1 g".' },
     printed: {
       type: 'string',
       description: 'The cell text exactly as printed, e.g. "0.5g*".',
     },
   },
-  required: ['amount', 'unit', 'printed'],
+  required: ['amount', 'unit', 'less_than', 'printed'],
+  additionalProperties: false,
 };
 
-const TOOL_SCHEMA = {
-  name: TOOL_NAME,
-  description: 'Record the contents of the nutrition information table.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      is_nutrition_table: { type: 'boolean' },
-      serving_size: {
-        type: ['object', 'null'],
+const OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    is_nutrition_table: { type: 'boolean' },
+    serving_size: {
+      type: ['object', 'null'],
+      description: 'Serving amount in g or ml if printed, otherwise null.',
+      properties: {
+        amount: { type: 'number' },
+        unit: { type: 'string', enum: ['g', 'ml'] },
+      },
+      required: ['amount', 'unit'],
+      additionalProperties: false,
+    },
+    servings_per_package: {
+      type: ['number', 'null'],
+      description: 'Servings per pack if printed, otherwise null.',
+    },
+    physical_serving: {
+      type: ['object', 'null'],
+      description: 'e.g. "2 keping", "1 sachet", "15 chips" if printed, otherwise null.',
+      properties: {
+        amount: { type: 'number' },
+        name: { type: 'string' },
+      },
+      required: ['amount', 'name'],
+      additionalProperties: false,
+    },
+    columns: {
+      type: 'array',
+      items: {
+        type: 'object',
         properties: {
-          amount: { type: 'number' },
-          unit: { type: 'string', enum: ['g', 'ml'] },
-        },
-        required: ['amount', 'unit'],
-      },
-      servings_per_package: { type: ['number', 'null'] },
-      physical_serving: {
-        type: ['object', 'null'],
-        description: 'e.g. "2 keping", "1 sachet", "15 chips" if printed.',
-        properties: {
-          amount: { type: 'number' },
-          name: { type: 'string' },
-        },
-        required: ['amount', 'name'],
-      },
-      columns: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            label: { type: 'string', description: 'Header as printed.' },
-            basis: {
-              type: 'string',
-              enum: ['per_serving', 'per_100g', 'per_100ml', 'percent', 'other'],
-            },
+          label: { type: 'string', description: 'Header as printed.' },
+          basis: {
+            type: 'string',
+            enum: ['per_serving', 'per_100g', 'per_100ml', 'percent', 'other'],
           },
-          required: ['label', 'basis'],
         },
-      },
-      nutrients: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            cells: {
-              type: 'array',
-              description: 'One entry per column, in column order.',
-              items: {
-                type: 'object',
-                properties: {
-                  values: { type: 'array', items: VALUE_SCHEMA },
-                },
-                required: ['values'],
-              },
-            },
-          },
-          required: ['name', 'cells'],
-        },
-      },
-      notes: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Anything unreadable or unusual, briefly.',
+        required: ['label', 'basis'],
+        additionalProperties: false,
       },
     },
-    required: ['is_nutrition_table', 'columns', 'nutrients'],
+    nutrients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name exactly as printed.' },
+          english_name: {
+            type: 'string',
+            description:
+              'Standard English name only when the printed name has no English or Malay part, otherwise "".',
+          },
+          cells: {
+            type: 'array',
+            description: 'One entry per column, in column order.',
+            items: {
+              type: 'object',
+              properties: {
+                values: { type: 'array', items: VALUE_SCHEMA },
+              },
+              required: ['values'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['name', 'english_name', 'cells'],
+        additionalProperties: false,
+      },
+    },
+    notes: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Anything unreadable or unusual, briefly. Empty if none.',
+    },
   },
+  required: [
+    'is_nutrition_table',
+    'serving_size',
+    'servings_per_package',
+    'physical_serving',
+    'columns',
+    'nutrients',
+    'notes',
+  ],
+  additionalProperties: false,
 };
 
 class LabelReaderError extends Error {
@@ -183,10 +209,11 @@ function validateRequest(data) {
 function buildRequestBody({ imageBase64, mediaType, model }) {
   return {
     model,
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: SYSTEM_PROMPT,
-    tools: [TOOL_SCHEMA],
-    tool_choice: { type: 'tool', name: TOOL_NAME },
+    output_config: {
+      format: { type: 'json_schema', schema: OUTPUT_SCHEMA },
+    },
     messages: [
       {
         role: 'user',
@@ -208,7 +235,7 @@ function buildRequestBody({ imageBase64, mediaType, model }) {
 /**
  * Makes sure Claude's answer has the shape the app expects,
  * dropping anything malformed instead of failing the scan.
- * @param {any} input tool_use input
+ * @param {any} input parsed JSON from Claude
  */
 function sanitizeLabel(input) {
   const asNumber = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -231,8 +258,11 @@ function sanitizeLabel(input) {
         .map((n) => {
           const cells = Array.isArray(n.cells) ? n.cells : [];
 
+          const english = typeof n.english_name === 'string' ? n.english_name.trim() : '';
+
           return {
             name: n.name.trim(),
+            ...(english ? { english_name: english } : {}),
             cells: columns.map((_, i) => {
               const cell = cells[i];
               const values = cell && Array.isArray(cell.values) ? cell.values : [];
@@ -333,16 +363,35 @@ async function readNutritionLabel({ data, apiKey, model, fetchImpl = fetch }) {
 
   const body = await response.json();
 
-  const toolUse = Array.isArray(body.content)
-    ? body.content.find((block) => block.type === 'tool_use' && block.name === TOOL_NAME)
-    : undefined;
+  if (body.stop_reason === 'refusal') {
+    throw new LabelReaderError('internal', 'AI declined to read this image.');
+  }
 
-  if (!toolUse || typeof toolUse.input !== 'object') {
+  if (body.stop_reason === 'max_tokens') {
+    throw new LabelReaderError('internal', 'AI answer was cut off. Please try again.');
+  }
+
+  const text = Array.isArray(body.content)
+    ? body.content
+        .filter((block) => block.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('')
+    : '';
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(text);
+  } catch (_) {
+    parsed = null;
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
     throw new LabelReaderError('internal', 'AI returned no table.');
   }
 
   return {
-    label: sanitizeLabel(toolUse.input),
+    label: sanitizeLabel(parsed),
     model: body.model || model,
     usage: body.usage || null,
   };
@@ -355,5 +404,5 @@ module.exports = {
   sanitizeLabel,
   LabelReaderError,
   SYSTEM_PROMPT,
-  TOOL_SCHEMA,
+  OUTPUT_SCHEMA,
 };

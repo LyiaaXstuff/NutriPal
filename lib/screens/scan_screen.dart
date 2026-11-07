@@ -5,7 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/nutrition_label_data.dart';
+import '../services/barcode_reader_service.dart';
+import '../services/food_database_service.dart';
 import '../services/nutrition_label_ocr_service.dart';
+import '../widgets/progress_dialog.dart';
+import 'extracted_nutrition_review_screen.dart';
 import 'scan_preview_screen.dart';
 
 enum ScanMode {
@@ -389,6 +394,169 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   // =====================================================
+  // BARCODE -> FOOD DATABASE
+  // =====================================================
+  //
+  // 1. Read the product barcode in the photo (on-device).
+  // 2. Look it up in Open Food Facts.
+  // 3. Show its nutrition facts on the review screen.
+  //
+  // If the product is not in the database (or has no
+  // nutrition facts), offer to scan the nutrition label.
+  // =====================================================
+
+  Future<void> _lookUpBarcodePhoto(
+    String imagePath,
+  ) async {
+    final String? code;
+
+    try {
+      code = await runWithProgress<String?>(
+        context,
+        () => BarcodeReaderService.read(imagePath),
+      );
+    } catch (_) {
+      _showMessage(
+        'NutriPal could not read the barcode. Please try again.',
+      );
+
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (code == null) {
+      _showMessage(
+        'No barcode found. Hold the barcode flat inside the frame and try again.',
+      );
+
+      return;
+    }
+
+    final String barcode =
+        code;
+
+    final NutritionLabelData? product;
+
+    try {
+      product = await runWithProgress<NutritionLabelData?>(
+        context,
+        () => FoodDatabaseService.lookup(barcode),
+      );
+    } on FoodDatabaseException catch (error) {
+      _showMessage(
+        error.message,
+      );
+
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (product == null ||
+        product.nutrients.isEmpty) {
+      await _offerLabelScan(
+        barcode,
+        productKnown:
+            product != null,
+      );
+
+      return;
+    }
+
+    final NutritionLabelData found =
+        product;
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (
+          BuildContext context,
+        ) {
+          return ExtractedNutritionReviewScreen(
+            data:
+                found,
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _offerLabelScan(
+    String code, {
+    required bool productKnown,
+  }) async {
+    final bool? scanLabel =
+        await showDialog<bool>(
+      context:
+          context,
+      builder: (
+        BuildContext dialogContext,
+      ) {
+        return AlertDialog(
+          title: Text(
+            productKnown
+                ? 'No nutrition facts yet'
+                : 'Product not found',
+            style:
+                const TextStyle(
+              color:
+                  darkPurple,
+              fontWeight:
+                  FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            productKnown
+                ? 'Barcode $code is in the food database, but its nutrition facts have not been added yet.\n\nYou can scan the nutrition label instead.'
+                : 'Barcode $code is not in the food database yet.\n\nYou can scan the nutrition label instead.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
+              },
+              child:
+                  const Text(
+                'Cancel',
+              ),
+            ),
+            FilledButton(
+              style:
+                  FilledButton.styleFrom(
+                backgroundColor:
+                    primaryPurple,
+              ),
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
+              },
+              child:
+                  const Text(
+                'Scan nutrition label',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (scanLabel == true &&
+        mounted) {
+      _selectNutritionLabel();
+    }
+  }
+
+  // =====================================================
   // CAPTURE IMAGE
   // =====================================================
 
@@ -436,12 +604,9 @@ class _ScanScreenState extends State<ScanScreen>
       // =================================================
       // BARCODE MODE
       // =================================================
-      //
-      // Barcode API scanning will be implemented later.
-      // =================================================
 
-      _showMessage(
-        'Barcode scanning will be connected later.',
+      await _lookUpBarcodePhoto(
+        image.path,
       );
     } catch (_) {
       if (!mounted) {
@@ -495,8 +660,8 @@ class _ScanScreenState extends State<ScanScreen>
       // BARCODE MODE
       // =================================================
 
-      _showMessage(
-        'Barcode image processing will be connected later.',
+      await _lookUpBarcodePhoto(
+        image.path,
       );
     } catch (_) {
       if (!mounted) {

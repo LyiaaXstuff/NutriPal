@@ -56,9 +56,17 @@ class NutritionExtractionService {
 
     if (problems.isEmpty && !alwaysUseAi) return onDevice;
 
+    // Arabic, Thai... on the label: the phone kept only the
+    // English / Malay names.
+    final List<String> scriptNote = <String>[
+      if (onDevice.hasUnreadableScript)
+        'Part of this label is in a script the phone cannot read '
+            '(for example Arabic). Only the English / Malay names were used.',
+    ];
+
     if (!AiLabelReaderService.isAvailable) {
       _log('AI reading not available (Firebase not set up)');
-      return onDevice;
+      return onDevice.copyWith(notes: <String>[...onDevice.notes, ...scriptNote]);
     }
 
     // ---------------------------------------------------
@@ -75,6 +83,7 @@ class NutritionExtractionService {
       return onDevice.copyWith(
         notes: <String>[
           ...onDevice.notes,
+          ...scriptNote,
           'AI check was not available: ${error.message}',
         ],
       );
@@ -84,6 +93,7 @@ class NutritionExtractionService {
       return onDevice.copyWith(
         notes: <String>[
           ...onDevice.notes,
+          ...scriptNote,
           'AI check was not available. Please check the values carefully.',
         ],
       );
@@ -143,6 +153,7 @@ class NutritionExtractionService {
     return onDevice.copyWith(
       notes: <String>[
         ...onDevice.notes,
+        ...scriptNote,
         'An AI check did not confirm this reading. '
             'Please compare the values with the label.',
       ],

@@ -10,6 +10,64 @@ enum NutritionColumnBasis {
 }
 
 // =======================================================
+// NUTRIENT NAME FORMAT
+// =======================================================
+//
+// "JUMLAH GULA"                -> "Jumlah gula"
+// "Jumlah Gula / Total Sugars" -> "Jumlah gula / Total sugars"
+// "VITAMIN B12"                -> "Vitamin B12"
+// "omega-3"                    -> "Omega-3"
+//
+// Only the first letter (of each language, when the name
+// is bilingual) is a capital. Short codes with digits such
+// as B12 or D3 keep their capitals.
+// =======================================================
+
+String formatNutrientName(String name) {
+  final List<String> segments = name
+      .split(RegExp(r'\s*/\s*'))
+      .map((String segment) => segment.trim())
+      .where((String segment) => segment.isNotEmpty)
+      .toList();
+
+  final List<String> formatted = <String>[];
+
+  for (final String segment in segments) {
+    final List<String> words = segment
+        .split(RegExp(r'\s+'))
+        .map((String word) {
+          final bool code =
+              word.length <= 4 && RegExp(r'\d').hasMatch(word);
+
+          return code ? word.toUpperCase() : word.toLowerCase();
+        })
+        .toList();
+
+    // "Vitamin a" -> "Vitamin A": a vitamin letter is a code.
+    for (int i = 1; i < words.length; i++) {
+      if (RegExp(r'^\(?vit(?:amin)?\.?$').hasMatch(words[i - 1]) &&
+          RegExp(r'^[a-z]\)?[.,:]?$').hasMatch(words[i])) {
+        words[i] = words[i].toUpperCase();
+      }
+    }
+
+    String text = words.join(' ');
+
+    final int firstLetter = text.indexOf(RegExp(r'[a-z]'));
+
+    if (firstLetter >= 0) {
+      text = text.substring(0, firstLetter) +
+          text[firstLetter].toUpperCase() +
+          text.substring(firstLetter + 1);
+    }
+
+    formatted.add(text);
+  }
+
+  return formatted.join(' / ');
+}
+
+// =======================================================
 // HOW THE TABLE WAS READ
 // =======================================================
 
@@ -20,6 +78,10 @@ enum NutritionExtractionMethod {
   // Claude vision via the extractNutritionLabel Cloud
   // Function, cross-checked against on-device OCR.
   ai,
+
+  // Product barcode looked up in the Open Food Facts
+  // database (no label photo).
+  barcode,
 }
 
 // =======================================================
@@ -104,7 +166,16 @@ class NutritionColumn {
 // =======================================================
 
 class NutrientRow {
+  // Canonical English name from NutrientNameNormalizer
+  // ("Sodium", "Total Sugars"), or the cleaned label name
+  // when the nutrient is not in its dictionary. Health
+  // rules should look nutrients up by this name.
   final String name;
+
+  // The label's own wording, cleaned of OCR artefacts
+  // ("Natrium", "Jumlah gula / Total sugars"). Null when
+  // not available; use [labelName].
+  final String? rawName;
 
   // Original top-to-bottom row order.
   final int order;
@@ -124,7 +195,17 @@ class NutrientRow {
     required this.name,
     required this.order,
     required this.valuesByColumn,
+    this.rawName,
   });
+
+  // Wording printed on the label (falls back to [name]).
+  String get labelName => rawName ?? name;
+
+  // True when the label's wording differs from the
+  // canonical name, e.g. "Natrium" vs "Sodium".
+  bool get hasDifferentLabelName =>
+      rawName != null &&
+      rawName!.trim().toLowerCase() != name.trim().toLowerCase();
 
   bool get hasAnyValue {
     for (final List<NutritionValue> values
@@ -203,6 +284,24 @@ class NutritionLabelData {
   // could not be confirmed by on-device OCR".
   final List<String> notes;
 
+  // Rows whose name had a second language the phone could
+  // not read (Arabic, Thai...), e.g. "Protein / 3".
+  final int unreadableScriptRows;
+
+  // Enough such rows to say the label uses a script that
+  // on-device OCR cannot read.
+  bool get hasUnreadableScript => unreadableScriptRows >= 2;
+
+  // =====================================================
+  // PRODUCT (barcode lookups; null for label photos)
+  // =====================================================
+
+  final String? productName;
+
+  final String? productBrand;
+
+  final String? barcode;
+
   const NutritionLabelData({
     this.servingSizeAmount,
     this.servingSizeUnit,
@@ -214,6 +313,10 @@ class NutritionLabelData {
     required this.rawText,
     this.extractionMethod = NutritionExtractionMethod.onDevice,
     this.notes = const [],
+    this.unreadableScriptRows = 0,
+    this.productName,
+    this.productBrand,
+    this.barcode,
   });
 
   // =====================================================
@@ -231,6 +334,10 @@ class NutritionLabelData {
     String? rawText,
     NutritionExtractionMethod? extractionMethod,
     List<String>? notes,
+    int? unreadableScriptRows,
+    String? productName,
+    String? productBrand,
+    String? barcode,
   }) {
     return NutritionLabelData(
       servingSizeAmount: servingSizeAmount ?? this.servingSizeAmount,
@@ -243,6 +350,10 @@ class NutritionLabelData {
       rawText: rawText ?? this.rawText,
       extractionMethod: extractionMethod ?? this.extractionMethod,
       notes: notes ?? this.notes,
+      unreadableScriptRows: unreadableScriptRows ?? this.unreadableScriptRows,
+      productName: productName ?? this.productName,
+      productBrand: productBrand ?? this.productBrand,
+      barcode: barcode ?? this.barcode,
     );
   }
 

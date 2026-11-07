@@ -21,6 +21,7 @@
 import 'dart:math' as math;
 
 import '../models/nutrition_label_data.dart';
+import 'nutrient_name_normalizer.dart';
 
 class AiVerification {
   // Values with a number that were looked up in the OCR.
@@ -110,6 +111,12 @@ class LabelReadingAssessor {
       result.add('Some values were corrected automatically.');
     }
 
+    // Arabic, Thai... cannot be read by on-device OCR:
+    // let the AI read the whole label.
+    if (data.hasUnreadableScript) {
+      result.add('Part of the label is in a script the phone cannot read.');
+    }
+
     final List<String> inconsistent = inconsistentRows(data);
 
     if (inconsistent.isNotEmpty) {
@@ -154,13 +161,21 @@ class LabelReadingAssessor {
 
         if (match.isEmpty) continue;
 
-        final double expected = match.first.amount * r;
+        final NutritionValue b = match.first;
+        final double expected = b.amount * r;
 
-        // Labels round values, so small numbers are skipped
-        // and a little slack is allowed.
+        // Labels round values, so small numbers are skipped.
         if (a.amount < 1 || expected < 1) break;
 
-        if ((a.amount - expected).abs() > math.max(0.3 * expected, 0.6)) {
+        // Allowed difference = the rounding of both printed
+        // numbers ("6" can be 5.5-6.4, "4.6" can be 4.55-4.64)
+        // plus 5 %. "14.7 vs 6 x 3.2" is flagged, "6 vs 2 x
+        // 3.2" is not.
+        final double tolerance = 0.5 * _precision(a) +
+            0.5 * _precision(b) * r +
+            0.05 * expected;
+
+        if ((a.amount - expected).abs() > tolerance) {
           result.add(row.name);
         }
 
@@ -169,6 +184,18 @@ class LabelReadingAssessor {
     }
 
     return result;
+  }
+
+  // Size of the last printed digit: "14.7" -> 0.1, "6" -> 1.
+  static double _precision(NutritionValue value) {
+    final RegExpMatch? number =
+        RegExp(r'\d+(?:[.,](\d+))?').firstMatch(value.rawText);
+
+    if (number == null) return 0.1;
+
+    final int decimals = number.group(1)?.length ?? 0;
+
+    return math.pow(10, -decimals).toDouble();
   }
 
   // =====================================================
@@ -352,9 +379,22 @@ class LabelReadingAssessor {
         continue;
       }
 
+      // Name printed only in Arabic (or another script):
+      // the AI also gives the English name to standardise.
+      final String englishName =
+          (rawRow['english_name'] as String? ?? '').trim();
+
+      final NormalizedNutrientName printed =
+          NutrientNameNormalizer.normalizeDetailed(name);
+
+      final String canonical = !printed.wasStandardized && englishName.isNotEmpty
+          ? NutrientNameNormalizer.normalize(englishName)
+          : printed.canonicalName;
+
       nutrients.add(
         NutrientRow(
-          name: name,
+          name: canonical,
+          rawName: formatNutrientName(NutrientNameNormalizer.clean(name)),
           order: nutrients.length,
           valuesByColumn: valuesByColumn,
         ),

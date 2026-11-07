@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
+import '../services/password_rules.dart';
+import '../widgets/progress_dialog.dart';
+
 import 'successful_signup_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -18,9 +22,6 @@ class _RegisterScreenState extends State<RegisterScreen>
   // CONTROLLERS
   // =====================================================
 
-  final TextEditingController _nameController =
-      TextEditingController();
-
   final TextEditingController _emailController =
       TextEditingController();
 
@@ -33,9 +34,6 @@ class _RegisterScreenState extends State<RegisterScreen>
   // =====================================================
   // FOCUS NODES
   // =====================================================
-
-  final FocusNode _nameFocusNode =
-      FocusNode();
 
   final FocusNode _emailFocusNode =
       FocusNode();
@@ -124,15 +122,11 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   @override
   void dispose() {
-    _nameController.dispose();
-
     _emailController.dispose();
 
     _passwordController.dispose();
 
     _confirmPasswordController.dispose();
-
-    _nameFocusNode.dispose();
 
     _emailFocusNode.dispose();
 
@@ -149,11 +143,10 @@ class _RegisterScreenState extends State<RegisterScreen>
   // CREATE ACCOUNT
   // =====================================================
 
-  void _createAccount() {
+  Future<void> _createAccount() async {
     FocusScope.of(context).unfocus();
 
-    if (_nameController.text.trim().isEmpty ||
-        _emailController.text.trim().isEmpty ||
+    if (_emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty ||
         _confirmPasswordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -180,8 +173,34 @@ class _RegisterScreenState extends State<RegisterScreen>
       return;
     }
 
-    // Temporary behaviour.
-    // Firebase registration will replace this later.
+    if (!PasswordRules.isStrong(_passwordController.text)) {
+      _showMessage(
+        'Password must be at least ${PasswordRules.minLength} characters '
+        'and include an uppercase letter, a lowercase letter and a number.',
+      );
+
+      return;
+    }
+
+    try {
+      await runWithProgress<void>(
+        context,
+        () => AuthService.register(
+          email: _emailController.text,
+          password: _passwordController.text,
+        ),
+      );
+    } on AuthServiceException catch (error) {
+      _showMessage(error.message);
+      return;
+    }
+
+    if (!mounted) return;
+
+    _goToSignupSuccess();
+  }
+
+  void _goToSignupSuccess() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -191,22 +210,38 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+  }
+
   // =====================================================
   // GOOGLE SIGN UP
   // =====================================================
 
-  void _signUpWithGoogle() {
+  Future<void> _signUpWithGoogle() async {
     FocusScope.of(context).unfocus();
 
-    // Temporary behaviour.
-    // Google Firebase Authentication will replace this later.
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            const SuccessfulSignupScreen(),
-      ),
-    );
+    final bool signedIn;
+
+    try {
+      signedIn = await runWithProgress<bool>(
+        context,
+        AuthService.signInWithGoogle,
+      );
+    } on AuthServiceException catch (error) {
+      _showMessage(error.message);
+      return;
+    }
+
+    if (!signedIn || !mounted) return;
+
+    _goToSignupSuccess();
   }
 
   // =====================================================
@@ -534,64 +569,6 @@ class _RegisterScreenState extends State<RegisterScreen>
                         CrossAxisAlignment.start,
 
                     children: [
-                      // =========================================
-                      // FULL NAME
-                      // =========================================
-
-                      const Text(
-                        'FULL NAME',
-
-                        style:
-                            TextStyle(
-                          color:
-                              Color(
-                            0xFF6F687A,
-                          ),
-
-                          fontSize:
-                              12,
-
-                          fontWeight:
-                              FontWeight.bold,
-
-                          letterSpacing:
-                              0.5,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height:
-                            7,
-                      ),
-
-                      _normalField(
-                        controller:
-                            _nameController,
-
-                        focusNode:
-                            _nameFocusNode,
-
-                        icon:
-                            Icons.person_outline,
-
-                        hint:
-                            'Enter your full name',
-
-                        action:
-                            TextInputAction.next,
-
-                        onSubmitted:
-                            (_) {
-                          _emailFocusNode
-                              .requestFocus();
-                        },
-                      ),
-
-                      const SizedBox(
-                        height:
-                            16,
-                      ),
-
                       // =========================================
                       // EMAIL
                       // =========================================
