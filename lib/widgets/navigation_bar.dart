@@ -1,10 +1,24 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+
+// =======================================================
+// NUTRIPAL NAVIGATION BAR (floating glass)
+// =======================================================
+//
+// Floating, detached pill with a frosted-glass surface:
+// the page scrolls behind it and shows through blurred.
+// The Home screen sets Scaffold(extendBody: true) so the
+// content can go behind the bar; pages add
+// MediaQuery.paddingOf(context).bottom to their bottom
+// padding so the last item is never hidden.
+// =======================================================
 
 class NutripalNavigationBar extends StatelessWidget {
   final int selectedIndex;
 
   final VoidCallback onHomeTap;
-  final VoidCallback onHistoryTap;
+  final VoidCallback onFavouritesTap;
   final VoidCallback onScanTap;
   final VoidCallback onCompareTap;
   final VoidCallback onProfileTap;
@@ -13,7 +27,7 @@ class NutripalNavigationBar extends StatelessWidget {
     super.key,
     required this.selectedIndex,
     required this.onHomeTap,
-    required this.onHistoryTap,
+    required this.onFavouritesTap,
     required this.onScanTap,
     required this.onCompareTap,
     required this.onProfileTap,
@@ -49,48 +63,6 @@ class NutripalNavigationBar extends StatelessWidget {
       Color(0xFFE4F8F7);
 
   // =====================================================
-  // LIQUID BLOB POSITION
-  // =====================================================
-
-  double _getBlobLeft({
-    required int index,
-    required double totalWidth,
-  }) {
-    const double scanSpace = 82;
-    const double blobWidth = 56;
-
-    final double availableWidth =
-        totalWidth - scanSpace;
-
-    final double itemWidth =
-        availableWidth / 4;
-
-    switch (index) {
-      case 0:
-        return (itemWidth / 2) -
-            (blobWidth / 2);
-
-      case 1:
-        return (itemWidth * 1.5) -
-            (blobWidth / 2);
-
-      case 3:
-        return (itemWidth * 2.5) +
-            scanSpace -
-            (blobWidth / 2);
-
-      case 4:
-        return (itemWidth * 3.5) +
-            scanSpace -
-            (blobWidth / 2);
-
-      default:
-        return (totalWidth / 2) -
-            (blobWidth / 2);
-    }
-  }
-
-  // =====================================================
   // BUILD
   // =====================================================
 
@@ -98,11 +70,12 @@ class NutripalNavigationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
+      // Detached from the screen edges.
       minimum: const EdgeInsets.fromLTRB(
-        14,
+        18,
         0,
-        14,
-        12,
+        18,
+        16,
       ),
       child: SizedBox(
         height: 92,
@@ -111,43 +84,32 @@ class NutripalNavigationBar extends StatelessWidget {
             context,
             constraints,
           ) {
-            final double totalWidth =
-                constraints.maxWidth;
-
-            final bool showLiquidBlob =
-                selectedIndex != 2;
-
             return Stack(
               clipBehavior: Clip.none,
               alignment:
                   Alignment.bottomCenter,
               children: [
                 // =================================================
-                // WHITE NAVIGATION BACKGROUND
+                // FLOATING SHADOW (outside the clip)
                 // =================================================
                 Container(
                   height: 72,
                   decoration: BoxDecoration(
-                    color: Colors.white,
                     borderRadius:
                         BorderRadius.circular(
                       36,
-                    ),
-                    border: Border.all(
-                      color: borderPurple,
-                      width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
                         color:
                             primaryPurple
                                 .withValues(
-                          alpha: 0.08,
+                          alpha: 0.12,
                         ),
-                        blurRadius: 18,
+                        blurRadius: 30,
                         offset: const Offset(
                           0,
-                          5,
+                          12,
                         ),
                       ),
                     ],
@@ -155,78 +117,55 @@ class NutripalNavigationBar extends StatelessWidget {
                 ),
 
                 // =================================================
-                // MOVING LIQUID BLOB
+                // FROSTED GLASS SURFACE
                 // =================================================
-                AnimatedPositioned(
-                  duration: const Duration(
-                    milliseconds: 450,
+                ClipRRect(
+                  borderRadius:
+                      BorderRadius.circular(
+                    36,
                   ),
-                  curve:
-                      Curves.easeInOutCubic,
-                  left: _getBlobLeft(
-                    index: selectedIndex,
-                    totalWidth: totalWidth,
-                  ),
-                  bottom: 28,
-                  child: AnimatedOpacity(
-                    duration: const Duration(
-                      milliseconds: 180,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: 12,
+                      sigmaY: 12,
                     ),
-                    opacity:
-                        showLiquidBlob
-                            ? 1
-                            : 0,
                     child: Container(
-                      width: 56,
-                      height: 56,
+                      height: 72,
                       decoration:
                           BoxDecoration(
-                        color: lightTeal,
-
-                        // Slightly irregular shape
                         borderRadius:
-                            const BorderRadius.only(
-                          topLeft:
-                              Radius.circular(
-                            30,
-                          ),
-                          topRight:
-                              Radius.circular(
-                            23,
-                          ),
-                          bottomLeft:
-                              Radius.circular(
-                            21,
-                          ),
-                          bottomRight:
-                              Radius.circular(
-                            31,
-                          ),
+                            BorderRadius.circular(
+                          36,
+                        ),
+
+                        // Milky glass with a light
+                        // top edge.
+                        gradient:
+                            LinearGradient(
+                          begin: Alignment
+                              .topCenter,
+                          end: Alignment
+                              .bottomCenter,
+                          colors: [
+                            Colors.white
+                                .withValues(
+                              alpha: 0.30,
+                            ),
+                            const Color(
+                              0xFFF3ECFF,
+                            ).withValues(
+                              alpha: 0.20,
+                            ),
+                          ],
                         ),
 
                         border: Border.all(
-                          color:
-                              selectedTeal
-                                  .withValues(
-                            alpha: 0.20,
+                          color: Colors.white
+                              .withValues(
+                            alpha: 0.6,
                           ),
                           width: 1.2,
                         ),
-
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                selectedTeal
-                                    .withValues(
-                              alpha: 0.15,
-                            ),
-                            blurRadius: 12,
-                            offset: const Offset(
-                              0,
-                              4,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ),
@@ -259,20 +198,22 @@ class NutripalNavigationBar extends StatelessWidget {
                         ),
                       ),
 
-                      // HISTORY
+                      // FAVOURITES
+                      // (History moved to Home ->
+                      // Recent scans -> View all.)
                       Expanded(
                         child:
                             _NavigationItem(
                           icon: Icons
-                              .history_rounded,
+                              .favorite_border_rounded,
                           activeIcon: Icons
-                              .history_rounded,
-                          label: 'History',
+                              .favorite_rounded,
+                          label: 'Favourites',
                           selected:
                               selectedIndex ==
                                   1,
                           onTap:
-                              onHistoryTap,
+                              onFavouritesTap,
                         ),
                       ),
 
@@ -381,10 +322,14 @@ class NutripalNavigationBar extends StatelessWidget {
                                     ],
                         ),
 
+                        // Glass ring around the
+                        // scan button.
                         border: Border.all(
-                          color:
-                              backgroundColor,
-                          width: 5,
+                          color: Colors.white
+                              .withValues(
+                            alpha: 0.9,
+                          ),
+                          width: 4,
                         ),
 
                         boxShadow: [
@@ -486,20 +431,9 @@ class _NavigationItem extends StatelessWidget {
             BorderRadius.circular(
           30,
         ),
-        child: AnimatedContainer(
-          duration: const Duration(
-            milliseconds: 350,
-          ),
-          curve:
-              Curves.easeInOutCubic,
-
-          transform:
-              Matrix4.translationValues(
-            0,
-            selected ? -5 : 0,
-            0,
-          ),
-
+        // Selected = teal icon, bold label and a dot.
+        // No lifting or bouncing.
+        child: SizedBox(
           child: Column(
             mainAxisAlignment:
                 MainAxisAlignment.center,
@@ -516,8 +450,8 @@ class _NavigationItem extends StatelessWidget {
                   child,
                   animation,
                 ) {
-                  return ScaleTransition(
-                    scale: animation,
+                  return FadeTransition(
+                    opacity: animation,
                     child: child,
                   );
                 },
@@ -533,10 +467,7 @@ class _NavigationItem extends StatelessWidget {
                       selected
                           ? selectedTeal
                           : staticPurple,
-                  size:
-                      selected
-                          ? 27
-                          : 25,
+                  size: 25,
                 ),
               ),
 
@@ -563,9 +494,15 @@ class _NavigationItem extends StatelessWidget {
                           ? FontWeight.w800
                           : FontWeight.w500,
                 ),
+                // Shrinks a long label (Favourites)
+                // on narrow phones instead of wrapping.
                 child:
-                    Text(
-                  label,
+                    FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                  ),
                 ),
               ),
 

@@ -7,6 +7,11 @@
 //   nutrition table (already cropped on the phone) and
 //   returns the table as JSON, read by Claude.
 //
+// askNutriPal
+//   Callable from the app. Answers follow-up questions
+//   about one analysed product (Layer 4: explains the
+//   app's analysis, never changes its numbers).
+//
 // The Anthropic API key is a Firebase secret: it never
 // ships inside the app.
 //
@@ -20,6 +25,7 @@ const { defineSecret, defineString, defineBoolean } = require('firebase-function
 const logger = require('firebase-functions/logger');
 
 const { readNutritionLabel, LabelReaderError } = require('./src/label_reader');
+const { askNutriPal, AskNutriPalError } = require('./src/ask_nutripal');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
@@ -81,6 +87,55 @@ exports.extractNutritionLabel = onCall(
       logger.error('unexpected error', error);
 
       throw new HttpsError('internal', 'AI reading failed.');
+    }
+  },
+);
+
+exports.askNutriPal = onCall(
+  {
+    region: 'asia-southeast1',
+    secrets: [ANTHROPIC_API_KEY],
+    timeoutSeconds: 60,
+    memory: '256MiB',
+    maxInstances: 3,
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (REQUIRE_AUTH.value() && !request.auth) {
+      throw new HttpsError('unauthenticated', 'Please sign in to use Ask NutriPal.');
+    }
+
+    const started = Date.now();
+
+    try {
+      const result = await askNutriPal({
+        data: request.data,
+        apiKey: ANTHROPIC_API_KEY.value(),
+        model: ANTHROPIC_MODEL.value(),
+      });
+
+      logger.info('ask nutripal answered', {
+        model: result.model,
+        steps: result.steps.length,
+        usage: result.usage,
+        ms: Date.now() - started,
+      });
+
+      return { answer: result.answer, steps: result.steps };
+    } catch (error) {
+      if (error instanceof AskNutriPalError) {
+        logger.warn('ask nutripal failed', {
+          code: error.code,
+          message: error.message,
+          detail: error.detail,
+        });
+
+        throw new HttpsError(error.code, error.message);
+      }
+
+      logger.error('unexpected error', error);
+
+      throw new HttpsError('internal', 'Ask NutriPal failed.');
     }
   },
 );

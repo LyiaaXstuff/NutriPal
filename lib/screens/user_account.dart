@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/auth_service.dart';
 import '../services/name_rules.dart';
+import '../services/scan_history_service.dart';
+import '../widgets/progress_dialog.dart';
+import 'login_screen.dart';
 
 class UserAccount extends StatefulWidget {
   final ProfileSetupData data;
@@ -181,6 +185,300 @@ class _UserAccountState extends State<UserAccount> {
   // =====================================================
   // SAVE
   // =====================================================
+
+  // =====================================================
+  // DELETE ACCOUNT
+  // =====================================================
+  //
+  // 1. Confirm (password, or the Google account picker).
+  // 2. Delete the Firebase Authentication account.
+  // 3. Remove this account's scan history and favourites
+  //    from the phone.
+  // 4. Go back to the login screen.
+  // =====================================================
+
+  static const Color deleteRed =
+      Color(0xFFE53945);
+
+  void _showSnack(
+    String message, {
+    Color color = primaryPurple,
+  }) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Future<void> _deleteAccount() async {
+    FocusScope.of(context).unfocus();
+
+    if (!AuthService.isSignedIn) {
+      _showSnack(
+        'Please sign in again, then delete your account.',
+      );
+      return;
+    }
+
+    final bool usesPassword =
+        AuthService.hasPasswordLogin;
+
+    final String? password =
+        await _confirmDeleteDialog(
+      usesPassword: usesPassword,
+    );
+
+    // Cancelled.
+    if (password == null || !mounted) {
+      return;
+    }
+
+    final String? userId =
+        AuthService.currentUserId;
+
+    final NavigatorState navigator =
+        Navigator.of(context);
+
+    final ScaffoldMessengerState messenger =
+        ScaffoldMessenger.of(context);
+
+    bool deleted = false;
+
+    try {
+      deleted = await runWithProgress<bool>(
+        context,
+        () async {
+          final bool done =
+              await AuthService.deleteAccount(
+            password:
+                usesPassword ? password : null,
+          );
+
+          if (done && userId != null) {
+            await ScanHistoryService.instance
+                .deleteAllForUser(userId);
+          }
+
+          return done;
+        },
+      );
+    } on AuthServiceException catch (error) {
+      if (!mounted) return;
+
+      _showSnack(
+        error.message,
+        color: deleteRed,
+      );
+      return;
+    } catch (_) {
+      if (!mounted) return;
+
+      _showSnack(
+        'Your account could not be deleted. Please try again.',
+        color: deleteRed,
+      );
+      return;
+    }
+
+    // Google account picker closed: nothing deleted.
+    if (!deleted) {
+      return;
+    }
+
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (
+          context,
+        ) =>
+            const LoginScreen(),
+      ),
+      (Route<dynamic> route) => false,
+    );
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Your NutriPal account has been deleted.',
+        ),
+        backgroundColor: primaryPurple,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Returns the password (email accounts), '' (Google
+  /// accounts) or null when cancelled.
+  Future<String?> _confirmDeleteDialog({
+    required bool usesPassword,
+  }) {
+    final TextEditingController passwordController =
+        TextEditingController();
+
+    bool hidden = true;
+
+    return showDialog<String>(
+      context: context,
+      builder: (
+        BuildContext dialogContext,
+      ) {
+        return StatefulBuilder(
+          builder: (
+            BuildContext context,
+            StateSetter setDialogState,
+          ) {
+            final bool canDelete = !usesPassword ||
+                passwordController.text.isNotEmpty;
+
+            return AlertDialog(
+              backgroundColor:
+                  backgroundColor,
+              shape:
+                  RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(
+                  22,
+                ),
+              ),
+              title: const Text(
+                'Delete your account?',
+                style: TextStyle(
+                  color: darkPurple,
+                  fontWeight:
+                      FontWeight.w800,
+                ),
+              ),
+              content: Column(
+                mainAxisSize:
+                    MainAxisSize.min,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This permanently deletes your NutriPal account, '
+                    'together with the scan history and favourites '
+                    'saved for it on this phone. This cannot be undone.',
+                    style: TextStyle(
+                      color: mediumPurple,
+                      height: 1.4,
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 16,
+                  ),
+
+                  if (usesPassword)
+                    TextField(
+                      controller:
+                          passwordController,
+                      obscureText: hidden,
+                      autofocus: true,
+                      onChanged: (_) {
+                        setDialogState(() {});
+                      },
+                      decoration:
+                          InputDecoration(
+                        labelText:
+                            'Enter your password to confirm',
+                        filled: true,
+                        fillColor:
+                            Colors.white,
+                        border:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(
+                            12,
+                          ),
+                        ),
+                        suffixIcon:
+                            IconButton(
+                          tooltip: hidden
+                              ? 'Show password'
+                              : 'Hide password',
+                          onPressed: () {
+                            setDialogState(() {
+                              hidden = !hidden;
+                            });
+                          },
+                          icon: Icon(
+                            hidden
+                                ? Icons
+                                    .visibility_outlined
+                                : Icons
+                                    .visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    const Text(
+                      'Next, choose your Google account to confirm it is you.',
+                      style: TextStyle(
+                        color: darkPurple,
+                        fontWeight:
+                            FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                    );
+                  },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: primaryPurple,
+                      fontWeight:
+                          FontWeight.w700,
+                    ),
+                  ),
+                ),
+                FilledButton(
+                  style:
+                      FilledButton.styleFrom(
+                    backgroundColor:
+                        deleteRed,
+                    disabledBackgroundColor:
+                        deleteRed.withValues(
+                      alpha: 0.35,
+                    ),
+                  ),
+                  onPressed: canDelete
+                      ? () {
+                          Navigator.pop(
+                            dialogContext,
+                            usesPassword
+                                ? passwordController
+                                    .text
+                                : '',
+                          );
+                        }
+                      : null,
+                  child: const Text(
+                    'Delete account',
+                    style: TextStyle(
+                      fontWeight:
+                          FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _saveChanges() {
     FocusScope.of(context).unfocus();
@@ -674,8 +972,40 @@ class _UserAccountState extends State<UserAccount> {
                   ),
                 ),
 
+                // =================================================
+                // DELETE MY ACCOUNT
+                // =================================================
                 const SizedBox(
-                  height: 20,
+                  height: 40,
+                ),
+
+                Center(
+                  child: TextButton(
+                    onPressed:
+                        _deleteAccount,
+                    style:
+                        TextButton.styleFrom(
+                      foregroundColor:
+                          deleteRed,
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: const Text(
+                      'Delete my account',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 10,
                 ),
               ],
             ),

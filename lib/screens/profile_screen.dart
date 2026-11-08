@@ -4,6 +4,7 @@ import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
 import 'change_password_screen.dart';
 import 'health_conditions_settings.dart';
+import 'history_screen.dart';
 import 'login_screen.dart';
 import 'user_account.dart';
 import 'weight_management_settings.dart';
@@ -124,18 +125,6 @@ class _ProfileScreenState
   }
 
   // =====================================================
-  // NUTRITION PERSONALITY
-  // =====================================================
-
-  bool get _hasNutritionPersonality {
-    final String? personality =
-        widget.data.nutritionPersonality;
-
-    return personality != null &&
-        personality.trim().isNotEmpty;
-  }
-
-  // =====================================================
   // COMPLETE WEIGHT MANAGEMENT DATA
   // =====================================================
 
@@ -188,6 +177,24 @@ class _ProfileScreenState
   // =====================================================
   // SECURITY (CHANGE PASSWORD)
   // =====================================================
+
+  // =====================================================
+  // SCAN HISTORY (90 days; not a bottom tab)
+  // =====================================================
+
+  Future<void> _openScanHistory() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (
+          context,
+        ) =>
+            HistoryScreen(
+          profile: widget.data,
+        ),
+      ),
+    );
+  }
 
   Future<void> _openSecurity() async {
     await Navigator.push(
@@ -605,7 +612,7 @@ class _ProfileScreenState
                 ),
 
                 const Text(
-                  'Choose a NutriPal mascot or upload your own picture.',
+                  'Upload your own picture from your device.',
                   style:
                       TextStyle(
                     color:
@@ -617,28 +624,6 @@ class _ProfileScreenState
 
                 const SizedBox(
                   height: 18,
-                ),
-
-                _AvatarOption(
-                  icon:
-                      Icons.auto_awesome_rounded,
-                  title:
-                      'Choose NutriPal mascot',
-                  subtitle:
-                      'Select a mascot style',
-                  onTap: () {
-                    Navigator.pop(
-                      sheetContext,
-                    );
-
-                    _showComingSoon(
-                      'Mascot selection',
-                    );
-                  },
-                ),
-
-                const SizedBox(
-                  height: 10,
                 ),
 
                 _AvatarOption(
@@ -784,11 +769,15 @@ class _ProfileScreenState
         child: SingleChildScrollView(
           physics:
               const ClampingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(
+          // Room for the floating navigation bar.
+          padding: EdgeInsets.fromLTRB(
             20,
             10,
             20,
-            28,
+            28 +
+                MediaQuery.paddingOf(
+                  context,
+                ).bottom,
           ),
           child: Column(
             crossAxisAlignment:
@@ -899,144 +888,6 @@ class _ProfileScreenState
               ),
 
               // =================================================
-              // NUTRITION PERSONALITY
-              // =================================================
-
-              const Text(
-                'Your Nutrition Personality',
-                style:
-                    TextStyle(
-                  color:
-                      darkPurple,
-                  fontSize:
-                      19,
-                  fontWeight:
-                      FontWeight.w900,
-                ),
-              ),
-
-              const SizedBox(
-                height: 10,
-              ),
-
-              Container(
-                width:
-                    double.infinity,
-                padding:
-                    const EdgeInsets.all(
-                  18,
-                ),
-                decoration:
-                    BoxDecoration(
-                  borderRadius:
-                      BorderRadius.circular(
-                    22,
-                  ),
-                  gradient:
-                      const LinearGradient(
-                    begin:
-                        Alignment.topLeft,
-                    end:
-                        Alignment.bottomRight,
-                    colors: [
-                      darkPurple,
-                      primaryPurple,
-                      Color(
-                        0xFF7050B6,
-                      ),
-                    ],
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.auto_awesome_rounded,
-                          color:
-                              Colors.white,
-                          size:
-                              27,
-                        ),
-
-                        const SizedBox(
-                          width: 12,
-                        ),
-
-                        Expanded(
-                          child: Text(
-                            _hasNutritionPersonality
-                                ? 'Your nutrition personality is ${widget.data.nutritionPersonality}.'
-                                : 'Take a short assessment to discover your nutrition style and matching mascot.',
-                            style:
-                                const TextStyle(
-                              color:
-                                  Colors.white,
-                              fontSize:
-                                  14,
-                              height:
-                                  1.35,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(
-                      height: 18,
-                    ),
-
-                    SizedBox(
-                      width:
-                          double.infinity,
-                      height:
-                          44,
-                      child:
-                          ElevatedButton(
-                        onPressed: () {
-                          _showComingSoon(
-                            'Nutrition Personality assessment',
-                          );
-                        },
-                        style:
-                            ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Colors.white,
-                          foregroundColor:
-                              darkPurple,
-                          elevation:
-                              0,
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              14,
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          _hasNutritionPersonality
-                              ? 'Retake assessment'
-                              : 'Start assessment',
-                          style:
-                              const TextStyle(
-                            fontSize:
-                                15,
-                            fontWeight:
-                                FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(
-                height: 22,
-              ),
-
-              // =================================================
               // ACCOUNT
               // =================================================
 
@@ -1085,6 +936,46 @@ class _ProfileScreenState
                         'Change your password',
                     onTap:
                         _openSecurity,
+                  ),
+                ],
+              ),
+
+              const SizedBox(
+                height: 22,
+              ),
+
+              // =================================================
+              // YOUR SCANS
+              // =================================================
+
+              const Text(
+                'Your Scans',
+                style:
+                    TextStyle(
+                  color:
+                      darkPurple,
+                  fontSize:
+                      19,
+                  fontWeight:
+                      FontWeight.w900,
+                ),
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+
+              _MenuGroup(
+                children: [
+                  _ProfileMenuTile(
+                    icon:
+                        Icons.history_rounded,
+                    title:
+                        'Scan History',
+                    subtitle:
+                        'Scans from the last 90 days',
+                    onTap:
+                        _openScanHistory,
                   ),
                 ],
               ),
@@ -1146,64 +1037,95 @@ class _ProfileScreenState
                 ],
               ),
 
-              const SizedBox(
-                height: 22,
-              ),
-
               // =================================================
               // LOGOUT
               // =================================================
+              //
+              // Set apart from the menu groups (extra space and
+              // a divider) and styled as an action button, not
+              // a menu row, so it is not read as part of
+              // Health & Nutrition Goals.
 
-              SizedBox(
-                width:
-                    double.infinity,
-                height:
-                    54,
-                child:
-                    OutlinedButton.icon(
-                  onPressed:
-                      _logout,
-                  icon:
-                      const Icon(
-                    Icons.logout_rounded,
-                    size: 23,
-                  ),
-                  label:
-                      const Text(
-                    'Log out',
-                    style:
-                        TextStyle(
-                      fontSize:
-                          16,
-                      fontWeight:
-                          FontWeight.w800,
-                    ),
-                  ),
-                  style:
-                      OutlinedButton.styleFrom(
-                    foregroundColor:
-                        logoutRed,
-                    backgroundColor:
-                        Colors.white,
-                    side:
-                        const BorderSide(
-                      color:
-                          Color(
-                        0xFFFF8D94,
-                      ),
-                    ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        17,
-                      ),
-                    ),
-                  ),
-                ),
+              const SizedBox(
+                height: 30,
+              ),
+
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color:
+                    lightPurple,
+              ),
+
+              const SizedBox(
+                height: 24,
+              ),
+
+              _LogoutButton(
+                onPressed: _logout,
+                color: logoutRed,
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// =======================================================
+// LOGOUT BUTTON
+// =======================================================
+//
+// A centred, soft-red action button. Unlike the menu rows
+// (white card, icon on the left, arrow on the right) it
+// has a filled tint, centred text and no arrow, so it
+// reads as an action that ends the session. Tapping it
+// still asks "Log out?" first.
+// =======================================================
+
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  final Color color;
+
+  const _LogoutButton({
+    required this.onPressed,
+    required this.color,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: color.withValues(
+            alpha: 0.10,
+          ),
+          foregroundColor: color,
+          overlayColor: color,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(
+              16,
+            ),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        icon: const Icon(
+          Icons.logout_rounded,
+          size: 22,
+        ),
+        label: const Text(
+          'Log out',
         ),
       ),
     );

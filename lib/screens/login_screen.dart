@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/onboarding_service.dart';
 import '../widgets/progress_dialog.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
+import 'verify_email_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -62,6 +64,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+
+    // Reaching Login means onboarding is done (Get Started
+    // or Skip), so the next app start goes straight here.
+    OnboardingService.markSeen();
 
     _passwordFocusNode.addListener(() {
       if (!mounted) {
@@ -130,22 +136,63 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
+    // Remove the message from an earlier attempt.
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    final bool verified;
+
     try {
-      await runWithProgress<void>(
+      verified = await runWithProgress<bool>(
         context,
         () => AuthService.signIn(email: email, password: password),
       );
     } on AuthServiceException catch (error) {
-      _showMessage(error.message);
+      _showAuthError(error);
       return;
     }
 
     if (!mounted) return;
 
+    if (!verified) {
+      // Right password, but the email link has not been
+      // tapped yet: the app stays closed until it is.
+      ScaffoldMessenger.of(context).clearSnackBars();
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VerifyEmailScreen(
+            email: email,
+            from: VerifyEmailFrom.login,
+          ),
+        ),
+      );
+      return;
+    }
+
     _goToHome();
   }
 
+  // Accounts are only created on the Register screen. When
+  // the account does not exist (or the details are wrong),
+  // offer a shortcut to Register.
+  void _showAuthError(AuthServiceException error) {
+    _showMessage(
+      error.message,
+      action: error.suggestsRegister
+          ? SnackBarAction(
+              label: 'Register',
+              onPressed: _goToRegister,
+            )
+          : null,
+    );
+  }
+
   void _goToHome() {
+    // Messages are shared by all screens: do not carry an
+    // old error (such as a wrong password) into Home.
+    ScaffoldMessenger.of(context).clearSnackBars();
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -155,13 +202,25 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message, {
+    SnackBarAction? action,
+  }) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(message),
+          action: action,
+          duration: Duration(
+            seconds: action == null ? 4 : 6,
+          ),
+          // A message with a button would otherwise stay
+          // until tapped, even after leaving this screen.
+          persist: false,
+        ),
       );
   }
 
@@ -171,6 +230,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _goToRegister() {
     FocusScope.of(context).unfocus();
+
+    ScaffoldMessenger.of(context).clearSnackBars();
 
     Navigator.push(
       context,
@@ -216,12 +277,16 @@ class _LoginScreenState extends State<LoginScreen>
     final bool signedIn;
 
     try {
+      // Login only: a Google account without a NutriPal
+      // account is sent to Register.
       signedIn = await runWithProgress<bool>(
         context,
-        AuthService.signInWithGoogle,
+        () => AuthService.signInWithGoogle(
+          mode: GoogleAuthMode.login,
+        ),
       );
     } on AuthServiceException catch (error) {
-      _showMessage(error.message);
+      _showAuthError(error);
       return;
     }
 
@@ -284,10 +349,10 @@ class _LoginScreenState extends State<LoginScreen>
                   compactScreen ||
                       keyboardOpen;
 
-              final double titleSize =
-                  compact
-                      ? 27
-                      : 30;
+              // Same size as "Create Account" on the
+              // Register screen.
+              const double titleSize =
+                  28;
 
               final double topPadding =
                   keyboardOpen

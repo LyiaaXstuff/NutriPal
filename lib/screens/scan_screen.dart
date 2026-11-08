@@ -6,12 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/nutrition_label_data.dart';
+import '../models/profile_setup_data.dart';
 import '../services/barcode_reader_service.dart';
 import '../services/food_database_service.dart';
-import '../services/nutrition_label_ocr_service.dart';
 import '../widgets/progress_dialog.dart';
-import 'extracted_nutrition_review_screen.dart';
-import 'scan_preview_screen.dart';
+import 'analysing_screen.dart';
+import 'confirm_photo_screen.dart';
+import 'scan_flow.dart';
 
 enum ScanMode {
   nutritionLabel,
@@ -19,8 +20,13 @@ enum ScanMode {
 }
 
 class ScanScreen extends StatefulWidget {
+  // The user's health profile, for the personalised
+  // result after a scan.
+  final ProfileSetupData? profile;
+
   const ScanScreen({
     super.key,
+    this.profile,
   });
 
   @override
@@ -65,6 +71,13 @@ class _ScanScreenState extends State<ScanScreen>
 
   ScanMode _scanMode =
       ScanMode.nutritionLabel;
+
+  late final ScanFlowContext _flow =
+      ScanFlowContext(
+    profile:
+        widget.profile ??
+            ProfileSetupData(),
+  );
 
   // =====================================================
   // INIT
@@ -319,7 +332,14 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   // =====================================================
-  // OPEN NUTRITION PREVIEW
+  // OPEN CONFIRM PHOTO
+  // =====================================================
+  //
+  // Scan product -> Confirm photo -> Analysing ->
+  // (Quick verification) -> Your nutrition insights.
+  //
+  // Retake / back / "Scan another" all come back here,
+  // with the camera still open.
   // =====================================================
 
   Future<void> _openNutritionPreview(
@@ -329,67 +349,20 @@ class _ScanScreenState extends State<ScanScreen>
       return;
     }
 
-    final String? confirmedImagePath =
-        await Navigator.push<String>(
+    await Navigator.push<void>(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (
           BuildContext context,
         ) {
-          return ScanPreviewScreen(
+          return ConfirmPhotoScreen(
             imagePath:
                 imagePath,
-
-            // ===========================================
-            // REAL OCR + LABEL VALIDATION
-            // ===========================================
-
-            onValidate:
-                NutritionLabelOcrService
-                    .validateStatus,
+            flow:
+                _flow,
           );
         },
       ),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    // ===================================================
-    // RETAKE / BACK
-    // ===================================================
-    //
-    // If null is returned, user pressed:
-    //
-    // Retake
-    // Back
-    //
-    // Stay on the camera screen.
-    // ===================================================
-
-    if (confirmedImagePath ==
-        null) {
-      return;
-    }
-
-    // ===================================================
-    // CONFIRMED IMAGE
-    // ===================================================
-    //
-    // Later we will replace this with:
-    //
-    // nutrient extraction
-    // portion selection
-    // personalised insights
-    //
-    // For now, return the confirmed image to the
-    // previous screen.
-    // ===================================================
-
-    Navigator.pop(
-      context,
-      confirmedImagePath,
     );
   }
 
@@ -477,9 +450,11 @@ class _ScanScreenState extends State<ScanScreen>
         builder: (
           BuildContext context,
         ) {
-          return ExtractedNutritionReviewScreen(
+          return AnalysingScreen(
             data:
                 found,
+            flow:
+                _flow,
           );
         },
       ),

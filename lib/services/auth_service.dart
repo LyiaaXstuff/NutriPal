@@ -15,11 +15,35 @@ import 'package:google_sign_in/google_sign_in.dart';
 class AuthServiceException implements Exception {
   final String message;
 
-  const AuthServiceException(this.message);
+  // Firebase error code, or 'not-registered' /
+  // 'already-registered' for the Google checks. Lets a
+  // screen add a "Register" or "Log in" button.
+  final String? code;
+
+  const AuthServiceException(this.message, {this.code});
+
+  /// True when the account does not exist (or the email /
+  /// password do not match one).
+  bool get suggestsRegister => const <String>{
+        'not-registered',
+        'user-not-found',
+        'wrong-password',
+        'invalid-credential',
+        'invalid-login-credentials',
+      }.contains(code);
+
+  /// True when the account already exists (Register screen).
+  bool get suggestsLogin => const <String>{
+        'already-registered',
+        'email-already-in-use',
+      }.contains(code);
 
   @override
   String toString() => message;
 }
+
+/// Which screen started Google sign-in.
+enum GoogleAuthMode { login, register }
 
 class AuthService {
   AuthService._();
@@ -38,46 +62,184 @@ class AuthService {
       ) ??
       false;
 
+  /// True when the signed-in user signs in with Google.
+  static bool get hasGoogleLogin =>
+      _user?.providerData.any(
+        (UserInfo info) => info.providerId == GoogleAuthProvider.PROVIDER_ID,
+      ) ??
+      false;
+
+  /// Firebase uid of the signed-in user, or null.
+  static String? get currentUserId => _user?.uid;
+
   /// True when someone is signed in.
   static bool get isSignedIn => _user != null;
 
   // =====================================================
   // REGISTER (email + password)
   // =====================================================
+  //
+  // Creates the account and emails a verification link.
+  // The user stays signed in so the "Check your email"
+  // screen can resend the link and check whether it was
+  // tapped, but the app is not opened until the email is
+  // verified.
+  //
+  // Returns false when the account was created but the
+  // email could not be sent (for example no connection);
+  // the user can tap Resend on the next screen.
+  // =====================================================
 
-  static Future<void> register({
+  static Future<bool> register({
     required String email,
     required String password,
   }) async {
     _requireFirebase();
 
+    final UserCredential result;
+
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      result = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
     } on FirebaseAuthException catch (error) {
-      throw AuthServiceException(_messageFor(error));
+      throw AuthServiceException(_messageFor(error), code: error.code);
+    }
+
+    try {
+      await result.user?.sendEmailVerification();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
   // =====================================================
   // LOG IN (email + password)
   // =====================================================
+  //
+  // Returns false when the password is right but the email
+  // has not been verified yet. The user stays signed in so
+  // the "Check your email" screen can resend the link; the
+  // app itself is not opened.
+  // =====================================================
 
-  static Future<void> signIn({
+  static Future<bool> signIn({
     required String email,
     required String password,
   }) async {
     _requireFirebase();
 
+    final UserCredential result;
+
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      result = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
     } on FirebaseAuthException catch (error) {
-      throw AuthServiceException(_messageFor(error, signingIn: true));
+      throw AuthServiceException(
+        _messageFor(error, signingIn: true),
+        code: error.code,
+      );
+    }
+
+    return result.user?.emailVerified ?? false;
+  }
+
+  // =====================================================
+  // EMAIL VERIFICATION
+  // =====================================================
+  //
+  // Firebase sends a link (not a code). Tapping it marks
+  // the email as verified on Firebase's side; the app sees
+  // the change after reloading the user.
+  // Google accounts are already verified by Google.
+  // =====================================================
+
+  /// True when the signed-in user has verified their email.
+  static bool get isEmailVerified => _user?.emailVerified ?? false;
+
+  /// Sends the verification link again.
+  static Future<void> sendVerificationEmail() async {
+    _requireFirebase();
+
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      throw const AuthServiceException(
+        'Please log in again to get a new verification email.',
+      );
+    }
+
+    try {
+      await user.sendEmailVerification();
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'too-many-requests') {
+        throw const AuthServiceException(
+          'A verification email was sent recently. '
+          'Please wait a few minutes before asking for another.',
+        );
+      }
+
+      throw AuthServiceException(_messageFor(error));
+    }
+  }
+
+  /// Reloads the user from Firebase and returns true when
+  /// the verification link has been tapped.
+  static Future<bool> checkEmailVerified() async {
+    _requireFirebase();
+
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) return false;
+
+    try {
+      await user.reload();
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_messageFor(error));
+    }
+
+    final bool verified =
+        FirebaseAuth.instance.currentUser?.emailVerified ?? false;
+
+    if (verified) {
+      // Refresh the ID token so Cloud Functions see the
+      // verified email straight away.
+      try {
+        await FirebaseAuth.instance.currentUser?.getIdToken(true);
+      } catch (_) {
+        // The old token still works; it refreshes itself.
+      }
+    }
+
+    return verified;
+  }
+
+  /// Deletes an account whose email was never verified
+  /// (for example a mistyped address), then signs out, so
+  /// the address can be registered again. Verified accounts
+  /// are never touched here.
+  static Future<void> discardUnverifiedAccount() async {
+    if (Firebase.apps.isEmpty) return;
+
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user != null && !user.emailVerified && hasPasswordLogin) {
+      try {
+        await user.delete();
+      } catch (_) {
+        // Could not delete (for example offline): the user
+        // is still signed out below and can log in later.
+      }
+    }
+
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      // Already signed out.
     }
   }
 
@@ -93,6 +255,17 @@ class AuthService {
   // Returns false when the user closed the account picker,
   // so the screen can stay quiet instead of showing an
   // error.
+  //
+  // Login and Register are kept apart. Firebase creates an
+  // account the first time a Google account signs in, so:
+  //   GoogleAuthMode.login     a new Google account is NOT
+  //                            accepted: the account
+  //                            Firebase just made is deleted
+  //                            and the user is told to
+  //                            register first.
+  //   GoogleAuthMode.register  an existing account is not
+  //                            set up again: the user is
+  //                            told to log in instead.
   // =====================================================
 
   // OAuth "web client" of project nutripal-fyp (client_type 3
@@ -113,7 +286,9 @@ class AuthService {
     _googleReady = true;
   }
 
-  static Future<bool> signInWithGoogle() async {
+  static Future<bool> signInWithGoogle({
+    GoogleAuthMode mode = GoogleAuthMode.login,
+  }) async {
     _requireFirebase();
 
     try {
@@ -130,9 +305,39 @@ class AuthService {
         );
       }
 
-      await FirebaseAuth.instance.signInWithCredential(
+      final UserCredential result =
+          await FirebaseAuth.instance.signInWithCredential(
         GoogleAuthProvider.credential(idToken: idToken),
       );
+
+      final bool isNew = result.additionalUserInfo?.isNewUser ?? false;
+
+      if (mode == GoogleAuthMode.login && isNew) {
+        // Undo the account Firebase just created.
+        try {
+          await result.user?.delete();
+        } catch (_) {
+          // Could not delete: still signed out below.
+        }
+
+        await _forgetGoogle();
+
+        throw const AuthServiceException(
+          'There is no NutriPal account for this Google account yet. '
+          'Please register first.',
+          code: 'not-registered',
+        );
+      }
+
+      if (mode == GoogleAuthMode.register && !isNew) {
+        await _forgetGoogle();
+
+        throw const AuthServiceException(
+          'This Google account is already registered. '
+          'Please log in instead.',
+          code: 'already-registered',
+        );
+      }
 
       return true;
     } on GoogleSignInException catch (error) {
@@ -143,6 +348,22 @@ class AuthService {
       );
     } on FirebaseAuthException catch (error) {
       throw AuthServiceException(_messageFor(error));
+    }
+  }
+
+  /// Signs out of Firebase and forgets the Google account,
+  /// so the account picker appears again next time.
+  static Future<void> _forgetGoogle() async {
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {
+      // Nothing to forget.
+    }
+
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      // Already signed out.
     }
   }
 
@@ -263,6 +484,112 @@ class AuthService {
     }
 
     return email;
+  }
+
+  // =====================================================
+  // DELETE ACCOUNT
+  // =====================================================
+  //
+  // Permanently deletes the Firebase Authentication account.
+  // Firebase only allows this shortly after signing in, so
+  // the user confirms first:
+  //   email + password  -> current password
+  //   Google            -> pick the same Google account
+  //
+  // Returns false when the user closed the Google account
+  // picker (nothing was deleted). On success the user is
+  // signed out. Data stored on the phone is removed by the
+  // screen (ScanHistoryService.deleteAllForUser).
+  // =====================================================
+
+  static Future<bool> deleteAccount({String? password}) async {
+    _requireFirebase();
+
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      throw const AuthServiceException(
+        'Please sign in again, then delete your account.',
+      );
+    }
+
+    try {
+      if (hasPasswordLogin) {
+        final String? email = user.email;
+
+        if (password == null || password.isEmpty) {
+          throw const AuthServiceException(
+            'Enter your password to confirm.',
+          );
+        }
+
+        if (email == null || email.isEmpty) {
+          throw const AuthServiceException(
+            'This account has no email address. Please contact support.',
+          );
+        }
+
+        await user.reauthenticateWithCredential(
+          EmailAuthProvider.credential(email: email, password: password),
+        );
+      } else if (hasGoogleLogin) {
+        await _initGoogle();
+
+        final GoogleSignInAccount account =
+            await GoogleSignIn.instance.authenticate();
+
+        final String? idToken = account.authentication.idToken;
+
+        if (idToken == null) {
+          throw const AuthServiceException(
+            'Google did not confirm your account. Please try again.',
+          );
+        }
+
+        await user.reauthenticateWithCredential(
+          GoogleAuthProvider.credential(idToken: idToken),
+        );
+      }
+
+      await user.delete();
+    } on GoogleSignInException catch (error) {
+      if (error.code == GoogleSignInExceptionCode.canceled) return false;
+
+      throw AuthServiceException(
+        'Google confirmation failed (${error.code.name}). Please try again.',
+      );
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'user-mismatch') {
+        throw const AuthServiceException(
+          'Please choose the Google account you use for NutriPal.',
+        );
+      }
+
+      if (error.code == 'wrong-password' ||
+          error.code == 'invalid-credential' ||
+          error.code == 'invalid-login-credentials') {
+        throw const AuthServiceException('Your password is incorrect.');
+      }
+
+      throw AuthServiceException(_messageFor(error));
+    }
+
+    // Forget the Google account and any session left over.
+    if (_googleReady) {
+      try {
+        await GoogleSignIn.instance.disconnect();
+      } catch (_) {
+        // Not signed in with Google: nothing to do.
+      }
+    }
+
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      // The user no longer exists; nothing to sign out.
+    }
+
+    return true;
   }
 
   // =====================================================

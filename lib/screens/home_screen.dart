@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../models/scan_record.dart';
+import '../services/scan_history_service.dart';
 import '../widgets/navigation_bar.dart';
+import '../widgets/scan_record_card.dart';
+import 'compare_screen.dart';
+import 'favourites_screen.dart';
+import 'history_screen.dart';
 import 'profile_screen.dart';
+import 'saved_scan_navigation.dart';
 import 'scan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,22 +27,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 // =======================================================
-// RECENT SCAN MODEL
-// =======================================================
-
-class RecentScanItem {
-  final String productName;
-  final DateTime scannedAt;
-  final IconData icon;
-
-  const RecentScanItem({
-    required this.productName,
-    required this.scannedAt,
-    required this.icon,
-  });
-}
-
-// =======================================================
 // HOME SCREEN STATE
 // =======================================================
 
@@ -47,9 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color backgroundColor =
       Color(0xFFF7F2E9);
 
-  static const Color primaryPurple =
-      Color(0xFF4B2E83);
-
   // =====================================================
   // DATA
   // =====================================================
@@ -57,14 +45,22 @@ class _HomeScreenState extends State<HomeScreen> {
   late final ProfileSetupData _data;
 
   // 0 = Home
-  // 1 = History
+  // 1 = Favourites
   // 3 = Compare
   // 4 = Profile
   //
-  // Scan is an action rather than a tab.
+  // Scan is an action rather than a tab. History is not a
+  // tab: Home -> Recent scans -> View all (or Profile ->
+  // Scan history).
   int _selectedIndex = 0;
 
-  final List<RecentScanItem> _recentScans = [];
+  // Recent scans, History and Favourites (90-day history,
+  // favourites kept until removed).
+  final ScanHistoryService _history =
+      ScanHistoryService.instance;
+
+  // How many scans Home shows before "View all".
+  static const int _recentCount = 5;
 
   // =====================================================
   // INIT
@@ -81,6 +77,10 @@ class _HomeScreenState extends State<HomeScreen> {
         widget.userName!.trim().isNotEmpty) {
       _data.nickname = widget.userName!.trim();
     }
+
+    // Loads this user's saved scans and removes the ones
+    // older than 90 days (favourites are kept).
+    _history.load();
   }
 
   // =====================================================
@@ -113,10 +113,59 @@ class _HomeScreenState extends State<HomeScreen> {
   // OPEN SCANNER
   // =====================================================
 
+  // =====================================================
+  // HISTORY / SAVED SCANS
+  // =====================================================
+
+  void _openHistory() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (
+          BuildContext context,
+        ) {
+          return HistoryScreen(
+            profile: _data,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openSavedScan(ScanRecord record) {
+    openSavedScan(
+      context,
+      record: record,
+      profile: _data,
+    );
+  }
+
+  Future<void> _toggleFavourite(ScanRecord record) async {
+    final ScanRecord? updated =
+        await _history.toggleFavourite(record.id);
+
+    if (!mounted || updated == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            updated.isFavourite
+                ? 'Added to favourites.'
+                : 'Removed from favourites.',
+          ),
+          backgroundColor: const Color(0xFF4B2E83),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   Future<void> _openScanner() async {
-    final String? imagePath =
-        await Navigator.of(context).push<String>(
-      PageRouteBuilder<String>(
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
         transitionDuration: const Duration(
           milliseconds: 220,
         ),
@@ -128,7 +177,9 @@ class _HomeScreenState extends State<HomeScreen> {
           animation,
           secondaryAnimation,
         ) {
-          return const ScanScreen();
+          return ScanScreen(
+            profile: _data,
+          );
         },
 
         // Fade only.
@@ -150,22 +201,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    if (imagePath == null || !mounted) {
-      return;
-    }
-
-    // Later:
-    // Send imagePath to OCR / nutrition-label extraction.
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Image captured. Nutrition label processing will be connected next.',
-        ),
-        backgroundColor: primaryPurple,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    // Finished scans are saved to history by the result
+    // screen; Home updates through ScanHistoryService.
   }
 
   // =====================================================
@@ -178,38 +215,45 @@ class _HomeScreenState extends State<HomeScreen> {
       // HOME
       // =================================================
       case 0:
-        return _HomeTab(
+        return ListenableBuilder(
           key: const ValueKey('home'),
-          displayName: _displayName,
-          recentScans: _recentScans,
-          onProfileTap: () {
-            _selectTab(4);
+          listenable: _history,
+          builder: (
+            BuildContext context,
+            Widget? child,
+          ) {
+            return _HomeTab(
+              displayName: _displayName,
+              recentScans:
+                  _history.recent(_recentCount),
+              onProfileTap: () {
+                _selectTab(4);
+              },
+              onScanTap: _openScanner,
+              onViewAll: _openHistory,
+              onOpenScan: _openSavedScan,
+              onFavouriteTap: _toggleFavourite,
+            );
           },
-          onScanTap: _openScanner,
         );
 
       // =================================================
-      // HISTORY
+      // FAVOURITES
       // =================================================
       case 1:
-        return const _SimpleTabPage(
-          key: ValueKey('history'),
-          icon: Icons.history_rounded,
-          title: 'History',
-          description:
-              'Your scanned products will appear here.',
+        return FavouritesScreen(
+          key: const ValueKey('favourites'),
+          profile: _data,
         );
 
       // =================================================
       // COMPARE
       // =================================================
       case 3:
-        return const _SimpleTabPage(
-          key: ValueKey('compare'),
-          icon: Icons.compare_arrows_rounded,
-          title: 'Compare',
-          description:
-              'Compare scanned products and their nutrition information here.',
+        return CompareScreen(
+          key: const ValueKey('compare'),
+          profile: _data,
+          onScanTap: _openScanner,
         );
 
       // =================================================
@@ -234,6 +278,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundColor,
+
+      // Pages scroll behind the floating glass bar.
+      extendBody: true,
 
       // =================================================
       // SMOOTH MAIN TAB TRANSITION
@@ -270,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _selectTab(0);
         },
 
-        onHistoryTap: () {
+        onFavouritesTap: () {
           _selectTab(1);
         },
 
@@ -296,17 +343,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _HomeTab extends StatelessWidget {
   final String displayName;
-  final List<RecentScanItem> recentScans;
+
+  // Latest few scans only; the full list is History.
+  final List<ScanRecord> recentScans;
 
   final VoidCallback onProfileTap;
   final VoidCallback onScanTap;
+  final VoidCallback onViewAll;
+  final ValueChanged<ScanRecord> onOpenScan;
+  final ValueChanged<ScanRecord> onFavouriteTap;
 
   const _HomeTab({
-    super.key,
     required this.displayName,
     required this.recentScans,
     required this.onProfileTap,
     required this.onScanTap,
+    required this.onViewAll,
+    required this.onOpenScan,
+    required this.onFavouriteTap,
   });
 
   // =====================================================
@@ -351,54 +405,13 @@ class _HomeTab extends StatelessWidget {
   }
 
   // =====================================================
-  // FORMAT DATE
-  // =====================================================
-
-  String _formatDate(DateTime date) {
-    const List<String> months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-
-    final int hour = date.hour == 0
-        ? 12
-        : date.hour > 12
-            ? date.hour - 12
-            : date.hour;
-
-    final String minute =
-        date.minute.toString().padLeft(
-              2,
-              '0',
-            );
-
-    final String period =
-        date.hour >= 12 ? 'PM' : 'AM';
-
-    return '${date.day} '
-        '${months[date.month - 1]} '
-        '${date.year}, '
-        '$hour:$minute $period';
-  }
-
-  // =====================================================
   // BUILD
   // =====================================================
 
   @override
   Widget build(BuildContext context) {
-    final List<RecentScanItem> recent =
-        recentScans.take(3).toList();
+    final List<ScanRecord> recent =
+        recentScans;
 
     return ColoredBox(
       color: backgroundColor,
@@ -406,11 +419,15 @@ class _HomeTab extends StatelessWidget {
         bottom: false,
         child: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(
+          // Room for the floating navigation bar.
+          padding: EdgeInsets.fromLTRB(
             22,
             22,
             22,
-            30,
+            30 +
+                MediaQuery.paddingOf(
+                  context,
+                ).bottom,
           ),
           child: Column(
             crossAxisAlignment:
@@ -712,12 +729,7 @@ class _HomeTab extends StatelessWidget {
 
                   if (recentScans.isNotEmpty)
                     TextButton(
-                      onPressed: () {
-                        _showMessage(
-                          context,
-                          'Scan history will be connected next.',
-                        );
-                      },
+                      onPressed: onViewAll,
                       style:
                           TextButton.styleFrom(
                         foregroundColor:
@@ -762,7 +774,7 @@ class _HomeTab extends StatelessWidget {
                 ...List.generate(
                   recent.length,
                   (index) {
-                    final RecentScanItem scan =
+                    final ScanRecord scan =
                         recent[index];
 
                     return Padding(
@@ -775,15 +787,14 @@ class _HomeTab extends StatelessWidget {
                                 : 10,
                       ),
                       child:
-                          _RecentScanCard(
-                        title:
-                            scan.productName,
-                        date:
-                            _formatDate(
-                          scan.scannedAt,
-                        ),
-                        icon:
-                            scan.icon,
+                          ScanRecordCard(
+                        record: scan,
+                        onTap: () {
+                          onOpenScan(scan);
+                        },
+                        onFavouriteTap: () {
+                          onFavouriteTap(scan);
+                        },
                       ),
                     );
                   },
@@ -873,116 +884,6 @@ class _EmptyRecentScans
               ),
               fontSize: 14,
               height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =======================================================
-// RECENT SCAN CARD
-// =======================================================
-
-class _RecentScanCard
-    extends StatelessWidget {
-  final String title;
-  final String date;
-  final IconData icon;
-
-  const _RecentScanCard({
-    required this.title,
-    required this.date,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(
-        10,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
-        border: Border.all(
-          color: const Color(
-            0xFFDCCFF0,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: const Color(
-                0xFFF3ECFF,
-              ),
-              borderRadius:
-                  BorderRadius.circular(
-                13,
-              ),
-            ),
-            child: Icon(
-              icon,
-              color: const Color(
-                0xFF4B2E83,
-              ),
-              size: 30,
-            ),
-          ),
-
-          const SizedBox(
-            width: 14,
-          ),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style:
-                      const TextStyle(
-                    color: Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 16,
-                    fontWeight:
-                        FontWeight.w600,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 4,
-                ),
-
-                Text(
-                  date,
-                  style:
-                      const TextStyle(
-                    color: Color(
-                      0xFF67558E,
-                    ),
-                    fontSize: 13.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: Color(
-              0xFF4B2E83,
             ),
           ),
         ],
@@ -1085,104 +986,6 @@ class _NutritionLabelIllustration
             borderRadius:
                 BorderRadius.circular(
               4,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// HISTORY / COMPARE PLACEHOLDER
-// =======================================================
-
-class _SimpleTabPage
-    extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _SimpleTabPage({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: const Color(
-        0xFFF7F2E9,
-      ),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding:
-                const EdgeInsets.all(
-              30,
-            ),
-            child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              children: [
-                Container(
-                  width: 78,
-                  height: 78,
-                  decoration:
-                      const BoxDecoration(
-                    shape:
-                        BoxShape.circle,
-                    color: Color(
-                      0xFFF3ECFF,
-                    ),
-                  ),
-                  child: Icon(
-                    icon,
-                    color:
-                        const Color(
-                      0xFF4B2E83,
-                    ),
-                    size: 38,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
-                Text(
-                  title,
-                  style:
-                      const TextStyle(
-                    color: Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 25,
-                    fontWeight:
-                        FontWeight.w900,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                Text(
-                  description,
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      const TextStyle(
-                    color: Color(
-                      0xFF67558E,
-                    ),
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                ),
-              ],
             ),
           ),
         ),

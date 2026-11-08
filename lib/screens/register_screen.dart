@@ -5,6 +5,7 @@ import '../services/password_rules.dart';
 import '../widgets/progress_dialog.dart';
 
 import 'successful_signup_screen.dart';
+import 'verify_email_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
@@ -182,8 +183,13 @@ class _RegisterScreenState extends State<RegisterScreen>
       return;
     }
 
+    // Remove the message from an earlier attempt.
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    final bool emailSent;
+
     try {
-      await runWithProgress<void>(
+      emailSent = await runWithProgress<bool>(
         context,
         () => AuthService.register(
           email: _emailController.text,
@@ -191,16 +197,31 @@ class _RegisterScreenState extends State<RegisterScreen>
         ),
       );
     } on AuthServiceException catch (error) {
-      _showMessage(error.message);
+      _showAuthError(error);
       return;
     }
 
     if (!mounted) return;
 
-    _goToSignupSuccess();
+    // Email sign-up: verify the address before profile
+    // setup (Google sign-up skips this step).
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VerifyEmailScreen(
+          email: _emailController.text.trim(),
+          from: VerifyEmailFrom.register,
+          emailSent: emailSent,
+        ),
+      ),
+    );
   }
 
   void _goToSignupSuccess() {
+    ScaffoldMessenger.of(context).clearSnackBars();
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -210,14 +231,41 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message, {
+    SnackBarAction? action,
+  }) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(message),
+          action: action,
+          duration: Duration(
+            seconds: action == null ? 4 : 6,
+          ),
+          // A message with a button would otherwise stay
+          // until tapped, even after leaving this screen.
+          persist: false,
+        ),
       );
+  }
+
+  // Already registered: offer to go back to Login.
+  void _showAuthError(AuthServiceException error) {
+    _showMessage(
+      error.message,
+      action: error.suggestsLogin
+          ? SnackBarAction(
+              label: 'Log in',
+              onPressed: () {
+                Navigator.maybePop(context);
+              },
+            )
+          : null,
+    );
   }
 
   // =====================================================
@@ -230,12 +278,16 @@ class _RegisterScreenState extends State<RegisterScreen>
     final bool signedIn;
 
     try {
+      // Register only: an existing account is sent to
+      // Login instead of repeating the profile setup.
       signedIn = await runWithProgress<bool>(
         context,
-        AuthService.signInWithGoogle,
+        () => AuthService.signInWithGoogle(
+          mode: GoogleAuthMode.register,
+        ),
       );
     } on AuthServiceException catch (error) {
-      _showMessage(error.message);
+      _showAuthError(error);
       return;
     }
 
@@ -477,6 +529,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                   textAlign:
                       TextAlign.center,
 
+                  // Same size as "Welcome Back" on the
+                  // Login screen.
                   style:
                       TextStyle(
                     color:
@@ -485,7 +539,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     ),
 
                     fontSize:
-                        25,
+                        28,
 
                     fontWeight:
                         FontWeight.bold,

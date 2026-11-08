@@ -81,6 +81,19 @@ class ProfileSetupData {
   // Very active
 
   // =====================================================
+  // LIMITS FROM THE USER'S DOCTOR OR DIETITIAN (optional)
+  // =====================================================
+  //
+  // When set, these replace NutriPal's default targets in
+  // the nutrition analysis (rules document, Layer 2).
+
+  double? providerSodiumLimitMg;
+
+  double? providerCarbsPerMealG;
+
+  double? providerEnergyKcal;
+
+  // =====================================================
   // NUTRITION PERSONALITY
   // =====================================================
 
@@ -137,6 +150,11 @@ class ProfileSetupData {
     this.height,
     this.heightUnit = 'cm',
     this.activityLevel,
+
+    // PROVIDER LIMITS
+    this.providerSodiumLimitMg,
+    this.providerCarbsPerMealG,
+    this.providerEnergyKcal,
 
     // NUTRITION PERSONALITY
     this.nutritionPersonality,

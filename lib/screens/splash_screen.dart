@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:nutripal/screens/login_screen.dart';
 import 'package:nutripal/screens/onboarding_screen.dart';
+import 'package:nutripal/services/onboarding_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -43,18 +45,28 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    Future.delayed(
-      const Duration(seconds: 4),
-      () {
-        if (!mounted) return;
+    _openNextScreen();
+  }
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const OnboardingScreen(),
-          ),
-        );
-      },
+  // New user (onboarding never shown on this phone):
+  // Onboarding. Existing user: straight to Login.
+  Future<void> _openNextScreen() async {
+    final List<Object?> results = await Future.wait<Object?>([
+      OnboardingService.hasSeen(),
+      Future<void>.delayed(const Duration(seconds: 4)),
+    ]);
+
+    final bool seenOnboarding = results.first as bool? ?? false;
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => seenOnboarding
+            ? const LoginScreen()
+            : const OnboardingScreen(),
+      ),
     );
   }
 
