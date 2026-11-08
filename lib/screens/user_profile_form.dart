@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
@@ -77,6 +78,11 @@ class _UserProfileFormState
           today.month,
           today.day,
         );
+
+    // Click (if Touch sounds is on) + light vibration as
+    // each wheel moves.
+    final _WheelTicker ticker =
+        _WheelTicker();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -265,7 +271,12 @@ class _UserProfileFormState
                             ),
                           ),
                           child:
-                              CupertinoDatePicker(
+                              NotificationListener<
+                                  ScrollUpdateNotification>(
+                            onNotification:
+                                ticker.onScroll,
+                            child:
+                                CupertinoDatePicker(
                             mode:
                                 CupertinoDatePickerMode.date,
 
@@ -293,6 +304,7 @@ class _UserProfileFormState
                                     newDate;
                               });
                             },
+                          ),
                           ),
                         ),
                       ),
@@ -659,7 +671,7 @@ class _UserProfileFormState
                                 0xFF38138C,
                               ),
                               fontSize:
-                                  37,
+                                  34,
                               height:
                                   1.03,
                               fontWeight:
@@ -674,7 +686,7 @@ class _UserProfileFormState
                           ),
 
                           Text(
-                            'These details help NutriPal personalise your nutrition insights.',
+                            'Tell us a little about you.',
                             style:
                                 TextStyle(
                               color:
@@ -1174,5 +1186,56 @@ class _UserProfileFormState
         ),
       ),
     );
+  }
+}
+
+// =======================================================
+// WHEEL TICK (birthday picker)
+// =======================================================
+//
+// Plays the phone's click sound and a light "selection"
+// vibration each time the day, month or year wheel moves
+// to a new value, like a real dial.
+//
+// The click follows the phone's own setting: it only
+// plays when "Touch sounds" is turned on in Android
+// Settings; otherwise the user only feels the vibration.
+// =======================================================
+
+class _WheelTicker {
+  // Last item shown in the middle of each wheel.
+  final Map<int, int> _lastItem = <int, int>{};
+
+  DateTime _lastTick = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // A fast fling passes many items; this keeps the clicks
+  // from blurring into a buzz.
+  static const Duration _minGap = Duration(milliseconds: 35);
+
+  bool onScroll(ScrollUpdateNotification notification) {
+    final ScrollMetrics metrics = notification.metrics;
+
+    if (metrics is! FixedExtentMetrics) return false;
+
+    final int wheel = identityHashCode(notification.context);
+    final int item = metrics.itemIndex;
+    final int? previous = _lastItem[wheel];
+
+    _lastItem[wheel] = item;
+
+    // First report from a wheel is where it starts: no click.
+    if (previous == null || previous == item) return false;
+
+    final DateTime now = DateTime.now();
+
+    if (now.difference(_lastTick) < _minGap) return false;
+
+    _lastTick = now;
+
+    SystemSound.play(SystemSoundType.click);
+    HapticFeedback.selectionClick();
+
+    // Let the picker handle the scroll as usual.
+    return false;
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/user_profile_service.dart';
 import 'diabetes_form.dart';
 import 'cholesterol_form.dart';
 import 'weight_management_form.dart';
@@ -166,6 +167,9 @@ class _HealthConditionsFormState
   // =====================================================
 
   void _goToHome() {
+    // Setup finished: save the profile to Firestore.
+    UserProfileService.save(widget.data);
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -397,38 +401,49 @@ class _HealthConditionsFormState
               // =========================
               Row(
                 children: [
+                  // Two lines. A little more room for the
+                  // title; on very narrow phones it shrinks
+                  // slightly instead of wrapping to a third
+                  // line.
                   const Expanded(
                     flex:
-                        6,
+                        7,
                     child:
-                        Text(
-                      'What\nmatters\nto you',
-                      style:
-                          TextStyle(
-                        color:
-                            Color(
-                          0xFF38138C,
+                        FittedBox(
+                      fit:
+                          BoxFit.scaleDown,
+                      alignment:
+                          Alignment.centerLeft,
+                      child:
+                          Text(
+                        'What matters\nto you',
+                        style:
+                            TextStyle(
+                          color:
+                              Color(
+                            0xFF38138C,
+                          ),
+                          fontSize:
+                              34,
+                          height:
+                              1.03,
+                          fontWeight:
+                              FontWeight.w900,
                         ),
-                        fontSize:
-                            37,
-                        height:
-                            1.03,
-                        fontWeight:
-                            FontWeight.w900,
                       ),
                     ),
                   ),
 
                   Expanded(
                     flex:
-                        5,
+                        4,
                     child:
                         SizedBox(
                       height:
                           135,
                       child:
                           Image.asset(
-                        'assets/images/NutriPal Mascot9.png',
+                        'assets/images/NutriPal Mascot10.png',
                         fit:
                             BoxFit.contain,
                       ),

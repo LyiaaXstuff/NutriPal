@@ -1,1 +1,44 @@
-{"functions":[{"source":"functions","codebase":"default","ignore":["node_modules",".git","firebase-debug.log","firebase-debug.*.log","test"]}],"flutter":{"platforms":{"android":{"default":{"projectId":"nutripal-fyp","appId":"1:1071932117427:android:c57628eefd08161f1afbc6","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"nutripal-fyp","configurations":{"android":"1:1071932117427:android:c57628eefd08161f1afbc6","ios":"1:1071932117427:ios:1da5abb29b7b24501afbc6","macos":"1:1071932117427:ios:1da5abb29b7b24501afbc6","web":"1:1071932117427:web:0d30aff93abd974e1afbc6","windows":"1:1071932117427:web:9b05295647d183201afbc6"}}}}}}
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-southeast1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "test"
+      ]
+    }
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "nutripal-fyp",
+          "appId": "1:1071932117427:android:c57628eefd08161f1afbc6",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "nutripal-fyp",
+          "configurations": {
+            "android": "1:1071932117427:android:c57628eefd08161f1afbc6",
+            "ios": "1:1071932117427:ios:1da5abb29b7b24501afbc6",
+            "macos": "1:1071932117427:ios:1da5abb29b7b24501afbc6",
+            "web": "1:1071932117427:web:0d30aff93abd974e1afbc6",
+            "windows": "1:1071932117427:web:9b05295647d183201afbc6"
+          }
+        }
+      }
+    }
+  }
+}

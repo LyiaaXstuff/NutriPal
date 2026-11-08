@@ -245,27 +245,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
                 const SizedBox(height: 28),
 
+                // Same section-title style as My Account
+                // (PROFILE DETAILS) and Weight Management Goal.
                 const Text(
-                  'Change password',
+                  'CHANGE PASSWORD',
                   style: TextStyle(
-                    color: darkPurple,
-                    fontSize: 21,
+                    color: primaryPurple,
+                    fontSize: 16,
                     fontWeight: FontWeight.w900,
+                    letterSpacing: 0.4,
                   ),
                 ),
 
-                const SizedBox(height: 6),
-
-                const Text(
-                  'Enter your current password, then choose a new one.',
-                  style: TextStyle(
-                    color: mediumPurple,
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
-
-                const SizedBox(height: 14),
+                // Same gap as under PROFILE DETAILS.
+                const SizedBox(height: 12),
 
                 // =============================================
                 // FORM CARD

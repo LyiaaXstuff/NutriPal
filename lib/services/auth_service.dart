@@ -498,11 +498,19 @@ class AuthService {
   //
   // Returns false when the user closed the Google account
   // picker (nothing was deleted). On success the user is
-  // signed out. Data stored on the phone is removed by the
-  // screen (ScanHistoryService.deleteAllForUser).
+  // signed out.
+  //
+  // [beforeDelete] runs after the password / Google check
+  // and before the account is deleted, while the user is
+  // still signed in: the screen deletes the user's saved
+  // data (Firestore profile and scans) there, because the
+  // security rules only let the owner delete it.
   // =====================================================
 
-  static Future<bool> deleteAccount({String? password}) async {
+  static Future<bool> deleteAccount({
+    String? password,
+    Future<void> Function()? beforeDelete,
+  }) async {
     _requireFirebase();
 
     final User? user = FirebaseAuth.instance.currentUser;
@@ -549,6 +557,17 @@ class AuthService {
         await user.reauthenticateWithCredential(
           GoogleAuthProvider.credential(idToken: idToken),
         );
+      }
+
+      if (beforeDelete != null) {
+        try {
+          await beforeDelete();
+        } catch (_) {
+          throw const AuthServiceException(
+            'Your saved data could not be deleted, so your account was kept. '
+            'Please check your internet connection and try again.',
+          );
+        }
       }
 
       await user.delete();

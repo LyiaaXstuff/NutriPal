@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/onboarding_service.dart';
 import '../widgets/progress_dialog.dart';
-import 'home_screen.dart';
+import 'after_sign_in.dart';
 import 'register_screen.dart';
 import 'verify_email_screen.dart';
 
@@ -188,18 +188,10 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  // Loads the saved profile (Firestore), then opens Home,
+  // or the setup forms if setup was never finished.
   void _goToHome() {
-    // Messages are shared by all screens: do not carry an
-    // old error (such as a wrong password) into Home.
-    ScaffoldMessenger.of(context).clearSnackBars();
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            const HomeScreen(),
-      ),
-    );
+    openHomeAfterSignIn(context);
   }
 
   void _showMessage(

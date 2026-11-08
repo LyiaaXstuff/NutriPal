@@ -113,23 +113,29 @@ class _ScanScreenState extends State<ScanScreen>
   // APP LIFECYCLE
   // =====================================================
 
+  //
+  // Leaving the app (or opening the gallery, which
+  // covers it) releases the camera; coming back opens it
+  // again. The controller is null by then, so the resume
+  // check must not require one (it used to, which left a
+  // black screen after the gallery was closed).
   @override
   void didChangeAppLifecycleState(
     AppLifecycleState state,
   ) {
-    final CameraController? controller =
-        _cameraController;
-
-    if (controller == null ||
-        !controller.value.isInitialized) {
-      return;
-    }
-
     if (state ==
         AppLifecycleState.inactive) {
-      controller.dispose();
+      final CameraController? controller =
+          _cameraController;
+
+      if (controller == null ||
+          !controller.value.isInitialized) {
+        return;
+      }
 
       _cameraController = null;
+
+      controller.dispose();
 
       if (mounted) {
         setState(() {
@@ -139,7 +145,12 @@ class _ScanScreenState extends State<ScanScreen>
       }
     } else if (state ==
         AppLifecycleState.resumed) {
-      _initializeCamera();
+      // Not while the first start is still running
+      // (the permission prompt also pauses the app).
+      if (_cameraController == null &&
+          !_isInitializing) {
+        _initializeCamera();
+      }
     }
   }
 
@@ -1022,6 +1033,31 @@ class _ScanScreenState extends State<ScanScreen>
                         ),
                       ),
                     ),
+
+                    // =============================================
+                    // BARCODE LASER LINE
+                    // =============================================
+                    //
+                    // Red line sweeping up and down inside
+                    // the frame, like a shop scanner.
+
+                    if (_scanMode ==
+                        ScanMode.barcode)
+                      Positioned(
+                        left:
+                            frameRect.left,
+                        top:
+                            frameRect.top,
+                        width:
+                            frameRect.width,
+                        height:
+                            frameRect.height,
+                        child:
+                            const IgnorePointer(
+                          child:
+                              _BarcodeLaser(),
+                        ),
+                      ),
 
                     // =============================================
                     // INSTRUCTION
@@ -2442,6 +2478,121 @@ class _HelpItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// =======================================================
+// BARCODE LASER
+// =======================================================
+//
+// A glowing red line that sweeps up and down the barcode
+// frame. With "remove animations" turned on in the phone's
+// accessibility settings it stays still in the middle.
+
+class _BarcodeLaser extends StatefulWidget {
+  const _BarcodeLaser();
+
+  @override
+  State<_BarcodeLaser> createState() => _BarcodeLaserState();
+}
+
+class _BarcodeLaserState extends State<_BarcodeLaser>
+    with SingleTickerProviderStateMixin {
+  static const Color _laserRed = Color(0xFFFF2D2D);
+
+  // Keeps the line clear of the teal corners.
+  static const double _inset = 18;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  late final Animation<double> _position = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints box) {
+        final double travel = math.max(0.0, box.maxHeight - _inset * 2);
+
+        return AnimatedBuilder(
+          animation: _position,
+          builder: (BuildContext context, Widget? line) {
+            return Stack(
+              children: [
+                Positioned(
+                  left: _inset,
+                  right: _inset,
+                  // Centre the 14 px glow box on the line.
+                  top: _inset + travel * _position.value - 7,
+                  height: 14,
+                  child: line!,
+                ),
+              ],
+            );
+          },
+          child: const _LaserBeam(color: _laserRed),
+        );
+      },
+    );
+  }
+}
+
+class _LaserBeam extends StatelessWidget {
+  final Color color;
+
+  const _LaserBeam({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        height: 2.5,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(2),
+          // Fades out at both ends.
+          gradient: LinearGradient(
+            colors: <Color>[
+              color.withValues(alpha: 0),
+              color,
+              color,
+              color.withValues(alpha: 0),
+            ],
+            stops: const <double>[0, 0.12, 0.88, 1],
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: color.withValues(alpha: 0.75),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

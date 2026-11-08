@@ -85,16 +85,17 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
       label: _data,
       productName: _productName,
       imagePath: widget.imagePath,
+      // This name came from the barcode, the photo or the
+      // default: a name saved earlier for the same product
+      // (for example one the user typed) wins.
+      keepExistingName: true,
     );
 
     if (!mounted) return;
 
     setState(() {
       _recordId = record.id;
-
-      // A product scanned before keeps the name the user
-      // gave it.
-      if (_productName == 'Scanned product') _productName = record.productName;
+      _productName = record.productName;
     });
   }
 
@@ -201,7 +202,10 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
       ),
     );
 
-    controller.dispose();
+    // Not disposed here: the dialog is still fading out
+    // and its text field keeps using the controller for a
+    // few frames (disposing now crashes in debug). It holds
+    // no listeners, so it is simply garbage collected.
 
     if (amount == null || amount <= 0 || !mounted) return;
 
@@ -238,7 +242,10 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
       ),
     );
 
-    controller.dispose();
+    // Not disposed here: the dialog is still fading out
+    // and its text field keeps using the controller for a
+    // few frames (disposing now crashes in debug). It holds
+    // no listeners, so it is simply garbage collected.
 
     if (name == null || name.isEmpty || !mounted) return;
 

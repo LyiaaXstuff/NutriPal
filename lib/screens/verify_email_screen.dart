@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../widgets/progress_dialog.dart';
-import 'home_screen.dart';
+import 'after_sign_in.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 import 'successful_signup_screen.dart';
@@ -158,12 +158,32 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
 
     ScaffoldMessenger.of(context).clearSnackBars();
 
-    Navigator.pushAndRemoveUntil(
-      context,
+    if (_fromRegister) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (BuildContext context) => const SuccessfulSignupScreen(),
+        ),
+        (Route<dynamic> route) => false,
+      );
+      return;
+    }
+
+    _openAfterLogin();
+  }
+
+  // From Login: load the saved profile, then Home (or the
+  // setup forms). If it cannot load, back to Login.
+  Future<void> _openAfterLogin() async {
+    final NavigatorState navigator = Navigator.of(context);
+
+    final bool opened = await openHomeAfterSignIn(context);
+
+    if (opened || !navigator.mounted) return;
+
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (BuildContext context) => _fromRegister
-            ? const SuccessfulSignupScreen()
-            : const HomeScreen(),
+        builder: (BuildContext context) => const LoginScreen(),
       ),
       (Route<dynamic> route) => false,
     );

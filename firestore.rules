@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// =======================================================
+// NUTRIPAL FIRESTORE SECURITY RULES
+// =======================================================
+//
+//   users/{uid}                profile + health settings
+//   users/{uid}/scans/{scanId} scan history + favourites
+//
+// Each user can read and write ONLY their own data, and
+// only after verifying their email (Google accounts are
+// verified by Google). Everything else is denied.
+//
+// Deploy:  firebase deploy --only firestore:rules
+// =======================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+
+      // Profile document: only the expected fields. The
+      // optional avatar is a small JPEG as base64 text
+      // (about 50-70 KB; capped well below Firestore's
+      // 1 MB document limit).
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['profile', 'setupComplete', 'updatedAt', 'avatar'])
+        && request.resource.data.profile is map
+        && request.resource.data.setupComplete is bool
+        && (!('avatar' in request.resource.data)
+            || (request.resource.data.avatar is string
+                && request.resource.data.avatar.size() < 300000));
+
+      match /scans/{scanId} {
+        allow read, delete: if isOwner(uid);
+
+        // One scan: the record text must be present and
+        // reasonably small (a label is a few KB).
+        allow create, update: if isOwner(uid)
+          && request.resource.data.record is string
+          && request.resource.data.record.size() < 200000
+          && request.resource.data.isFavourite is bool;
+      }
+    }
+
+    // Anything not matched above is denied.
+  }
+}

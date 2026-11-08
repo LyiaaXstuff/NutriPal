@@ -4,6 +4,7 @@ import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
 import '../services/nutrition_analysis_service.dart';
 import '../services/nutrition_extraction_service.dart';
+import '../services/product_name_service.dart';
 import '../services/value_check_service.dart';
 import '../widgets/nutripal_ui.dart';
 import 'nutrition_insights_screen.dart';
@@ -15,7 +16,8 @@ import 'scan_flow.dart';
 // =======================================================
 //
 // 1. Read the nutrition table (on-device OCR, AI fallback)
-//    - or use the barcode lookup result.
+//    - or use the barcode lookup result. Label photos also
+//    look for the product name (ProductNameService).
 // 2. Double-check the numbers (ValueCheckService).
 // 3. Suspicious values -> Quick verification.
 //    Otherwise         -> Your nutrition insights.
@@ -71,6 +73,13 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
     // ---- 1. read ---------------------------------------
 
     _set(0, _StepState.running);
+
+    // Label photos: look for the product name (barcode in
+    // the photo, or a name printed on the pack) while the
+    // table is read. It never changes a nutrition value.
+    final Future<DetectedProductName?> nameSearch = widget.data == null
+        ? ProductNameService.detect(widget.imagePath!)
+        : Future<DetectedProductName?>.value(null);
 
     NutritionLabelData data;
 
@@ -140,6 +149,21 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
     await _pause();
 
     if (!mounted) return;
+
+    // Add the product name if one was found in time
+    // (otherwise "Scanned product"; the user can rename).
+    if ((data.productName ?? '').trim().isEmpty) {
+      final DetectedProductName? name = await nameSearch.timeout(
+        const Duration(seconds: 6),
+        onTimeout: () => null,
+      );
+
+      if (!mounted) return;
+
+      if (name != null) {
+        data = data.copyWith(productName: name.name, productBrand: name.brand);
+      }
+    }
 
     _set(3, _StepState.done);
 

@@ -1,8 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../models/nutrition_analysis.dart';
 import '../models/profile_setup_data.dart';
+import '../services/user_profile_service.dart';
+import '../widgets/weight_plan_widgets.dart';
 import 'home_screen.dart';
+
+// =======================================================
+// STEP 3 · YOUR WEIGHT PLAN (profile setup)
+// =======================================================
+//
+// Three questions, each in its own card:
+//
+//   1. Weight goal      Lose / Maintain / Gain
+//   2. About your body  gender, weight (kg), height (cm)
+//   3. Activity level   four levels
+//
+// Each card's number turns into a tick when answered. The
+// footer shows progress and Continue only works once all
+// three are answered (no error pop-ups). When everything
+// is filled in, "Your daily energy guide" shows the energy
+// target NutriPal will use, from the same calculation as
+// the nutrition analysis.
+//
+// The tiles and fields are shared with Profile > Health
+// Conditions > Weight management (weight_plan_widgets.dart).
+// =======================================================
 
 class WeightManagementForm extends StatefulWidget {
   final ProfileSetupData data;
@@ -13,17 +36,15 @@ class WeightManagementForm extends StatefulWidget {
   });
 
   @override
-  State<WeightManagementForm> createState() =>
-      _WeightManagementFormState();
+  State<WeightManagementForm> createState() => _WeightManagementFormState();
 }
 
-class _WeightManagementFormState
-    extends State<WeightManagementForm> {
+class _WeightManagementFormState extends State<WeightManagementForm> {
   late final TextEditingController _weightController;
   late final TextEditingController _heightController;
 
   // =====================================================
-  // INIT
+  // INIT / DISPOSE
   // =====================================================
 
   @override
@@ -33,25 +54,13 @@ class _WeightManagementFormState
     _normaliseUnitsToMetric();
 
     _weightController = TextEditingController(
-      text: widget.data.currentWeight != null
-          ? _formatNumber(
-              widget.data.currentWeight!,
-            )
-          : '',
+      text: WeightPlanOptions.formatNumber(widget.data.currentWeight),
     );
 
     _heightController = TextEditingController(
-      text: widget.data.height != null
-          ? _formatNumber(
-              widget.data.height!,
-            )
-          : '',
+      text: WeightPlanOptions.formatNumber(widget.data.height),
     );
   }
-
-  // =====================================================
-  // DISPOSE
-  // =====================================================
 
   @override
   void dispose() {
@@ -61,21 +70,15 @@ class _WeightManagementFormState
     super.dispose();
   }
 
-  // =====================================================
-  // STANDARDISE UNITS
-  // =====================================================
-
+  // Older profiles may hold lb / inches: convert once, so
+  // the screen only ever shows kg and cm.
   void _normaliseUnitsToMetric() {
-    if (widget.data.weightUnit == 'lb' &&
-        widget.data.currentWeight != null) {
-      widget.data.currentWeight =
-          widget.data.currentWeight! * 0.45359237;
+    if (widget.data.weightUnit == 'lb' && widget.data.currentWeight != null) {
+      widget.data.currentWeight = widget.data.currentWeight! * 0.45359237;
     }
 
-    if (widget.data.heightUnit == 'in' &&
-        widget.data.height != null) {
-      widget.data.height =
-          widget.data.height! * 2.54;
+    if (widget.data.heightUnit == 'in' && widget.data.height != null) {
+      widget.data.height = widget.data.height! * 2.54;
     }
 
     widget.data.weightUnit = 'kg';
@@ -83,80 +86,21 @@ class _WeightManagementFormState
   }
 
   // =====================================================
-  // FORMAT NUMBER
+  // PROGRESS
   // =====================================================
 
-  String _formatNumber(
-    double value,
-  ) {
-    if (value == value.roundToDouble()) {
-      return value.toInt().toString();
-    }
+  bool get _goalDone => widget.data.weightGoal != null;
 
-    return value.toStringAsFixed(1);
-  }
+  bool get _bodyDone =>
+      widget.data.genderForEnergyEstimate != null &&
+      WeightPlanOptions.weightOk(widget.data.currentWeight) &&
+      WeightPlanOptions.heightOk(widget.data.height);
 
-  // =====================================================
-  // SELECT GOAL
-  // =====================================================
+  bool get _activityDone => widget.data.activityLevel != null;
 
-  void _selectGoal(
-    String goal,
-  ) {
-    setState(() {
-      widget.data.weightGoal = goal;
-    });
-  }
+  int get _doneCount => (_goalDone ? 1 : 0) + (_bodyDone ? 1 : 0) + (_activityDone ? 1 : 0);
 
-  // =====================================================
-  // SELECT GENDER
-  // =====================================================
-
-  void _selectGender(
-    String gender,
-  ) {
-    setState(() {
-      widget.data.genderForEnergyEstimate = gender;
-    });
-  }
-
-  // =====================================================
-  // SELECT ACTIVITY
-  // =====================================================
-
-  void _selectActivity(
-    String activity,
-  ) {
-    setState(() {
-      widget.data.activityLevel = activity;
-    });
-  }
-
-  // =====================================================
-  // WEIGHT CHANGE
-  // =====================================================
-
-  void _onWeightChanged(
-    String value,
-  ) {
-    widget.data.currentWeight =
-        double.tryParse(
-      value,
-    );
-  }
-
-  // =====================================================
-  // HEIGHT CHANGE
-  // =====================================================
-
-  void _onHeightChanged(
-    String value,
-  ) {
-    widget.data.height =
-        double.tryParse(
-      value,
-    );
-  }
+  bool get _allDone => _doneCount == 3;
 
   // =====================================================
   // CONTINUE
@@ -165,86 +109,20 @@ class _WeightManagementFormState
   void _continue() {
     FocusScope.of(context).unfocus();
 
-    widget.data.currentWeight =
-        double.tryParse(
-      _weightController.text.trim(),
-    );
-
-    widget.data.height =
-        double.tryParse(
-      _heightController.text.trim(),
-    );
+    if (!_allDone) return;
 
     widget.data.weightUnit = 'kg';
     widget.data.heightUnit = 'cm';
 
-    if (widget.data.weightGoal == null) {
-      _showMessage(
-        'Please select your weight goal.',
-      );
-
-      return;
-    }
-
-    if (widget.data.genderForEnergyEstimate == null) {
-      _showMessage(
-        'Please select your gender.',
-      );
-
-      return;
-    }
-
-    if (widget.data.currentWeight == null ||
-        widget.data.currentWeight! <= 0) {
-      _showMessage(
-        'Please enter your current weight.',
-      );
-
-      return;
-    }
-
-    if (widget.data.height == null ||
-        widget.data.height! <= 0) {
-      _showMessage(
-        'Please enter your height.',
-      );
-
-      return;
-    }
-
-    if (widget.data.activityLevel == null) {
-      _showMessage(
-        'Please select your activity level.',
-      );
-
-      return;
-    }
+    // Setup finished: save the profile to Firestore.
+    UserProfileService.save(widget.data);
 
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            HomeScreen(
-          data: widget.data,
-        ),
+        builder: (context) => HomeScreen(data: widget.data),
       ),
       (route) => false,
-    );
-  }
-
-  // =====================================================
-  // MESSAGE
-  // =====================================================
-
-  void _showMessage(
-    String message,
-  ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-        ),
-      ),
     );
   }
 
@@ -253,1234 +131,211 @@ class _WeightManagementFormState
   // =====================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-      },
-      child: Scaffold(
-        backgroundColor:
-            const Color(
-          0xFFF7F2E9,
-        ),
+  Widget build(BuildContext context) {
+    final DailyTargets? targets = _allDone ? WeightPlanOptions.energyTargets(widget.data) : null;
+    final int left = 3 - _doneCount;
 
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: WeightPlanColors.background,
         body: SafeArea(
           bottom: false,
           child: SingleChildScrollView(
-            keyboardDismissBehavior:
-                ScrollViewKeyboardDismissBehavior
-                    .onDrag,
-            physics:
-                const ClampingScrollPhysics(),
-            padding:
-                const EdgeInsets.fromLTRB(
-              24,
-              10,
-              24,
-              16,
-            ),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // =========================================
-                // HEADER
-                // =========================================
+                // ---- header (same as the other steps) ----
                 SizedBox(
                   height: 34,
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       SizedBox(
                         width: 28,
                         height: 28,
                         child: IconButton(
-                          onPressed: () {
-                            Navigator.pop(
-                              context,
-                            );
-                          },
+                          tooltip: 'Back',
+                          onPressed: () => Navigator.pop(context),
                           padding: EdgeInsets.zero,
-                          constraints:
-                              const BoxConstraints(),
-                          icon: const Icon(
-                            Icons.arrow_back_rounded,
-                            color:
-                                Color(
-                              0xFF4B2E83,
-                            ),
-                            size: 28,
-                          ),
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.arrow_back_rounded, color: WeightPlanColors.purple, size: 28),
                         ),
                       ),
-
                       const Text(
                         'STEP 3',
                         style: TextStyle(
-                          color:
-                              Color(
-                            0xFF67558E,
-                          ),
+                          color: WeightPlanColors.stepGrey,
                           fontSize: 18,
-                          fontWeight:
-                              FontWeight.w800,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 0.5,
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
-                // =========================================
-                // PROGRESS BAR
-                // =========================================
+                const SizedBox(height: 10),
                 ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(
-                    20,
-                  ),
-                  child:
-                      const LinearProgressIndicator(
+                  borderRadius: BorderRadius.circular(20),
+                  child: const LinearProgressIndicator(
                     value: 1,
                     minHeight: 8,
-                    backgroundColor:
-                        Color(
-                      0xFFE4D9F7,
-                    ),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(
-                      Color(
-                        0xFF4B2E83,
-                      ),
-                    ),
+                    backgroundColor: Color(0xFFE4D9F7),
+                    valueColor: AlwaysStoppedAnimation<Color>(WeightPlanColors.purple),
                   ),
                 ),
+                const SizedBox(height: 18),
 
-                const SizedBox(
-                  height: 18,
-                ),
-
-                // =========================================
-                // TITLE
-                // =========================================
+                // ---- title -------------------------------
                 const Text(
                   'Your weight plan',
                   style: TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 34,
+                    color: WeightPlanColors.ink,
+                    fontSize: 32,
                     height: 1.05,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
-                // =================================================
-                // 1. WEIGHT GOAL
-                // =================================================
-                const _SectionHeader(
-                  number: '1',
-                  title: 'WEIGHT GOAL',
-                ),
-
-                const SizedBox(
-                  height: 6,
-                ),
-
+                const SizedBox(height: 8),
                 const Text(
-                  'What is your weight goal?',
-                  style: TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.w800,
+                  'Three quick questions so NutriPal can estimate how much energy you need each day.',
+                  style: TextStyle(color: WeightPlanColors.muted, fontSize: 15, height: 1.45),
+                ),
+                const SizedBox(height: 18),
+
+                // ---- 1. weight goal ----------------------
+                _QuestionCard(
+                  number: 1,
+                  done: _goalDone,
+                  title: 'What is your weight goal?',
+                  child: WeightGoalRow(
+                    selected: widget.data.weightGoal,
+                    onChanged: (String goal) => setState(() => widget.data.weightGoal = goal),
                   ),
                 ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _GoalCard(
-                        label:
-                            'Lose weight',
-                        selected:
-                            widget.data.weightGoal ==
-                                'Lose weight',
-                        onTap: () {
-                          _selectGoal(
-                            'Lose weight',
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 8,
-                    ),
-
-                    Expanded(
-                      child: _GoalCard(
-                        label:
-                            'Maintain\nweight',
-                        selected:
-                            widget.data.weightGoal ==
-                                'Maintain weight',
-                        onTap: () {
-                          _selectGoal(
-                            'Maintain weight',
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 8,
-                    ),
-
-                    Expanded(
-                      child: _GoalCard(
-                        label:
-                            'Gain weight',
-                        selected:
-                            widget.data.weightGoal ==
-                                'Gain weight',
-                        onTap: () {
-                          _selectGoal(
-                            'Gain weight',
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
-                // =================================================
-                // 2. BODY INFORMATION
-                // =================================================
-                const _SectionHeader(
-                  number: '2',
-                  title:
-                      'BODY INFORMATION',
-                ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
-                // =========================================
-                // GENDER
-                // =========================================
-                const Text(
-                  'Gender',
-                  style: TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _GenderCard(
-                        label: 'Male',
-                        icon:
-                            Icons.male_rounded,
-                        selected:
-                            widget.data
-                                    .genderForEnergyEstimate ==
-                                'Male',
-                        onTap: () {
-                          _selectGender(
-                            'Male',
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 10,
-                    ),
-
-                    Expanded(
-                      child: _GenderCard(
-                        label: 'Female',
-                        icon:
-                            Icons.female_rounded,
-                        selected:
-                            widget.data
-                                    .genderForEnergyEstimate ==
-                                'Female',
-                        onTap: () {
-                          _selectGender(
-                            'Female',
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                  height: 14,
-                ),
-
-                // =========================================
-                // BODY MEASUREMENTS
-                // =========================================
-                const Text(
-                  'Body measurements',
-                  style: TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                Row(
-                  children: [
-                    // =====================================
-                    // CURRENT WEIGHT
-                    // =====================================
-                    Expanded(
-                      child: _BodyInputCard(
-                        icon: Icons
-                            .monitor_weight_outlined,
-                        rotateIcon: false,
-                        label:
-                            'Current weight',
-                        controller:
-                            _weightController,
-                        onChanged:
-                            _onWeightChanged,
-                        unit: 'kg',
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 10,
-                    ),
-
-                    // =====================================
-                    // HEIGHT
-                    // =====================================
-                    Expanded(
-                      child: _BodyInputCard(
-                        icon:
-                            Icons.straighten_rounded,
-                        rotateIcon: true,
-                        label: 'Height',
-                        controller:
-                            _heightController,
-                        onChanged:
-                            _onHeightChanged,
-                        unit: 'cm',
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
-                // =================================================
-                // 3. ACTIVITY LEVEL
-                // =================================================
-                const _SectionHeader(
-                  number: '3',
-                  title:
-                      'ACTIVITY LEVEL',
-                ),
-
-                const SizedBox(
-                  height: 6,
-                ),
-
-                const Text(
-                  'What is your usual activity level?',
-                  style: TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 9,
-                ),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActivityCard(
-                        icon: Icons
-                            .self_improvement_rounded,
-                        title:
-                            'Sedentary',
-                        description:
-                            'Little or no exercise',
-                        selected:
-                            widget.data.activityLevel ==
-                                'Sedentary',
-                        onTap: () {
-                          _selectActivity(
-                            'Sedentary',
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 10,
-                    ),
-
-                    Expanded(
-                      child: _ActivityCard(
-                        icon: Icons
-                            .directions_walk_rounded,
-                        title:
-                            'Lightly active',
-                        description:
-                            'Light exercise 1–3 days/week',
-                        selected:
-                            widget.data.activityLevel ==
-                                'Lightly active',
-                        onTap: () {
-                          _selectActivity(
-                            'Lightly active',
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                  height: 9,
-                ),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActivityCard(
-                        icon: Icons
-                            .directions_run_rounded,
-                        title:
-                            'Moderately active',
-                        description:
-                            'Moderate exercise 3–5 days/week',
-                        selected:
-                            widget.data.activityLevel ==
-                                'Moderately active',
-                        onTap: () {
-                          _selectActivity(
-                            'Moderately active',
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 10,
-                    ),
-
-                    Expanded(
-                      child: _ActivityCard(
-                        icon: Icons
-                            .sports_handball_rounded,
-                        title:
-                            'Very active',
-                        description:
-                            'Hard exercise 6–7 days/week',
-                        selected:
-                            widget.data.activityLevel ==
-                                'Very active',
-                        onTap: () {
-                          _selectActivity(
-                            'Very active',
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                  height: 14,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // =================================================
-        // CONTINUE
-        // =================================================
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Container(
-            color:
-                const Color(
-              0xFFF7F2E9,
-            ),
-            padding:
-                const EdgeInsets.fromLTRB(
-              24,
-              8,
-              24,
-              12,
-            ),
-            child: SizedBox(
-              width:
-                  double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed:
-                    _continue,
-                style:
-                    ElevatedButton.styleFrom(
-                  backgroundColor:
-                      const Color(
-                    0xFF4B2E83,
-                  ),
-                  foregroundColor:
-                      Colors.white,
-                  elevation: 4,
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      28,
-                    ),
-                  ),
-                ),
-                child:
-                    const Text(
-                  'Continue',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// SECTION HEADER
-// =======================================================
-
-class _SectionHeader extends StatelessWidget {
-  final String number;
-  final String title;
-
-  const _SectionHeader({
-    required this.number,
-    required this.title,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Row(
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          alignment:
-              Alignment.center,
-          decoration:
-              const BoxDecoration(
-            shape:
-                BoxShape.circle,
-            color:
-                Color(
-              0xFF5B3B9E,
-            ),
-          ),
-          child: Text(
-            number,
-            style:
-                const TextStyle(
-              color:
-                  Colors.white,
-              fontSize: 14,
-              fontWeight:
-                  FontWeight.w800,
-            ),
-          ),
-        ),
-
-        const SizedBox(
-          width: 10,
-        ),
-
-        Text(
-          title,
-          style:
-              const TextStyle(
-            color:
-                Color(
-              0xFF4B2E83,
-            ),
-            fontSize: 15,
-            fontWeight:
-                FontWeight.w800,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// =======================================================
-// GOAL CARD
-// =======================================================
-
-class _GoalCard extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _GoalCard({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius:
-          BorderRadius.circular(
-        13,
-      ),
-      child: AnimatedContainer(
-        duration:
-            const Duration(
-          milliseconds: 200,
-        ),
-        height: 62,
-        padding:
-            const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 6,
-        ),
-        decoration:
-            BoxDecoration(
-          color: selected
-              ? const Color(
-                  0xFFF3ECFF,
-                )
-              : Colors.white,
-          borderRadius:
-              BorderRadius.circular(
-            13,
-          ),
-          border: Border.all(
-            color: selected
-                ? const Color(
-                    0xFF4B2E83,
-                  )
-                : const Color(
-                    0xFFDCCFF0,
-                  ),
-            width:
-                selected
-                    ? 1.8
-                    : 1.2,
-          ),
-        ),
-        child: Stack(
-          children: [
-            // RADIO INDICATOR
-            Positioned(
-              top: 0,
-              right: 0,
-              child:
-                  _RadioIndicator(
-                selected:
-                    selected,
-                size: 17,
-              ),
-            ),
-
-            // GOAL TEXT
-            Center(
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal: 6,
-                ),
-                child: Text(
-                  label,
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      TextStyle(
-                    color: selected
-                        ? const Color(
-                            0xFF4B2E83,
-                          )
-                        : const Color(
-                            0xFF514A61,
-                          ),
-                    fontSize: 12.5,
-                    height: 1.05,
-                    fontWeight:
-                        selected
-                            ? FontWeight
-                                .w800
-                            : FontWeight
-                                .w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// GENDER CARD
-// =======================================================
-
-class _GenderCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _GenderCard({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius:
-          BorderRadius.circular(
-        13,
-      ),
-      child: AnimatedContainer(
-        duration:
-            const Duration(
-          milliseconds: 200,
-        ),
-        height: 60,
-        padding:
-            const EdgeInsets.symmetric(
-          horizontal: 12,
-        ),
-        decoration:
-            BoxDecoration(
-          color: selected
-              ? const Color(
-                  0xFFF3ECFF,
-                )
-              : Colors.white,
-          borderRadius:
-              BorderRadius.circular(
-            13,
-          ),
-          border: Border.all(
-            color: selected
-                ? const Color(
-                    0xFF4B2E83,
-                  )
-                : const Color(
-                    0xFFDCCFF0,
-                  ),
-            width:
-                selected
-                    ? 1.8
-                    : 1.2,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color:
-                  const Color(
-                0xFF4B2E83,
-              ),
-              size: 26,
-            ),
-
-            const SizedBox(
-              width: 7,
-            ),
-
-            Expanded(
-              child: Text(
-                label,
-                style:
-                    TextStyle(
-                  color: selected
-                      ? const Color(
-                          0xFF4B2E83,
-                        )
-                      : const Color(
-                          0xFF514A61,
-                        ),
-                  fontSize: 14,
-                  fontWeight:
-                      selected
-                          ? FontWeight
-                              .w800
-                          : FontWeight
-                              .w600,
-                ),
-              ),
-            ),
-
-            _RadioIndicator(
-              selected: selected,
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// BODY INPUT CARD
-// =======================================================
-
-class _BodyInputCard extends StatelessWidget {
-  final IconData icon;
-  final bool rotateIcon;
-  final String label;
-
-  final TextEditingController controller;
-
-  final ValueChanged<String> onChanged;
-
-  final String unit;
-
-  const _BodyInputCard({
-    required this.icon,
-    this.rotateIcon = false,
-    required this.label,
-    required this.controller,
-    required this.onChanged,
-    required this.unit,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Container(
-      height: 72,
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 7,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
-        border: Border.all(
-          color:
-              const Color(
-            0xFFDCCFF0,
-          ),
-          width: 1.2,
-        ),
-      ),
-      child: Row(
-        children: [
-          rotateIcon
-              ? RotatedBox(
-                  quarterTurns: 1,
-                  child: Icon(
-                    icon,
-                    color:
-                        const Color(
-                      0xFF4B2E83,
-                    ),
-                    size: 26,
-                  ),
-                )
-              : Icon(
-                  icon,
-                  color:
-                      const Color(
-                    0xFF4B2E83,
-                  ),
-                  size: 26,
-                ),
-
-          const SizedBox(
-            width: 7,
-          ),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(
-                      0xFF67558E,
-                    ),
-                    fontSize: 11,
-                    fontWeight:
-                        FontWeight.w600,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 3,
-                ),
-
-                Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 36,
-                        child: TextField(
-                          controller:
-                              controller,
-                          keyboardType:
-                              const TextInputType
-                                  .numberWithOptions(
-                            decimal:
-                                true,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter
-                                .allow(
-                              RegExp(
-                                r'^\d*\.?\d{0,2}',
-                              ),
-                            ),
-                          ],
-                          onChanged:
-                              onChanged,
-                          style:
-                              const TextStyle(
-                            color:
-                                Color(
-                              0xFF38138C,
-                            ),
-                            fontSize: 16,
-                            fontWeight:
-                                FontWeight.w700,
-                          ),
-                          decoration:
-                              InputDecoration(
-                            isDense: true,
-                            filled: true,
-                            fillColor:
-                                const Color(
-                              0xFFFCFAFF,
-                            ),
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                              horizontal:
-                                  8,
-                              vertical:
-                                  8,
-                            ),
-                            enabledBorder:
-                                OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                8,
-                              ),
-                              borderSide:
-                                  const BorderSide(
-                                color:
-                                    Color(
-                                  0xFFE2D8F1,
-                                ),
-                              ),
-                            ),
-                            focusedBorder:
-                                OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                8,
-                              ),
-                              borderSide:
-                                  const BorderSide(
-                                color:
-                                    Color(
-                                  0xFF4B2E83,
-                                ),
-                                width:
-                                    1.4,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 7,
-                    ),
-
-                    // FIXED UNIT
-                    Text(
-                      unit,
-                      style:
-                          const TextStyle(
-                        color:
-                            Color(
-                          0xFF67558E,
-                        ),
-                        fontSize: 13,
-                        fontWeight:
-                            FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      width: 2,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =======================================================
-// ACTIVITY CARD
-// =======================================================
-
-class _ActivityCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ActivityCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return InkWell(
-      onTap:
-          onTap,
-      borderRadius:
-          BorderRadius.circular(
-        14,
-      ),
-      child: AnimatedContainer(
-        duration:
-            const Duration(
-          milliseconds: 200,
-        ),
-        height: 86,
-        padding:
-            const EdgeInsets.all(
-          9,
-        ),
-        decoration:
-            BoxDecoration(
-          color: selected
-              ? const Color(
-                  0xFFF3ECFF,
-                )
-              : Colors.white,
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
-          border: Border.all(
-            color: selected
-                ? const Color(
-                    0xFF4B2E83,
-                  )
-                : const Color(
-                    0xFFDCCFF0,
-                  ),
-            width:
-                selected
-                    ? 1.8
-                    : 1.2,
-          ),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              right: 0,
-              child:
-                  _RadioIndicator(
-                selected:
-                    selected,
-                size: 20,
-              ),
-            ),
-
-            Row(
-              children: [
-                Icon(
-                  icon,
-                  color:
-                      const Color(
-                    0xFF4B2E83,
-                  ),
-                  size: 29,
-                ),
-
-                const SizedBox(
-                  width: 7,
-                ),
-
-                Expanded(
+                const SizedBox(height: 14),
+
+                // ---- 2. about your body ------------------
+                _QuestionCard(
+                  number: 2,
+                  done: _bodyDone,
+                  title: 'About your body',
                   child: Column(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding:
-                            const EdgeInsets.only(
-                          right: 18,
-                        ),
-                        child: Text(
-                          title,
-                          style:
-                              TextStyle(
-                            color: selected
-                                ? const Color(
-                                    0xFF4B2E83,
-                                  )
-                                : const Color(
-                                    0xFF514A61,
-                                  ),
-                            fontSize: 13,
-                            fontWeight:
-                                selected
-                                    ? FontWeight
-                                        .w800
-                                    : FontWeight
-                                        .w600,
-                          ),
-                        ),
+                      const WeightPlanLabel('Gender'),
+                      const SizedBox(height: 8),
+                      GenderRow(
+                        selected: widget.data.genderForEnergyEstimate,
+                        onChanged: (String gender) =>
+                            setState(() => widget.data.genderForEnergyEstimate = gender),
                       ),
-
-                      const SizedBox(
-                        height: 2,
-                      ),
-
-                      Text(
-                        description,
-                        style:
-                            const TextStyle(
-                          color:
-                              Color(
-                            0xFF67558E,
-                          ),
-                          fontSize: 10.5,
-                          height: 1.15,
-                        ),
+                      const SizedBox(height: 16),
+                      MeasurementFields(
+                        weightController: _weightController,
+                        heightController: _heightController,
+                        onWeightChanged: (String v) =>
+                            setState(() => widget.data.currentWeight = WeightPlanOptions.parse(v)),
+                        onHeightChanged: (String v) =>
+                            setState(() => widget.data.height = WeightPlanOptions.parse(v)),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 14),
+
+                // ---- 3. activity -------------------------
+                _QuestionCard(
+                  number: 3,
+                  done: _activityDone,
+                  title: 'How active are you?',
+                  child: ActivityList(
+                    selected: widget.data.activityLevel,
+                    onChanged: (String a) => setState(() => widget.data.activityLevel = a),
+                  ),
+                ),
+
+                // ---- energy guide ------------------------
+                if (targets != null) ...[
+                  const SizedBox(height: 14),
+                  EnergyGuideCard(
+                    kcalText: WeightPlanOptions.kcalText(targets.energyKcal),
+                    note: '${WeightPlanOptions.energyNote(targets, widget.data.weightGoal)} '
+                        'You can change your details in Profile.',
+                  ),
+                ],
               ],
             ),
-          ],
+          ),
+        ),
+
+        // ---- footer: progress + continue ---------------
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+            decoration: const BoxDecoration(
+              color: WeightPlanColors.background,
+              border: Border(top: BorderSide(color: WeightPlanColors.cardBorder)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    for (final bool done in <bool>[_goalDone, _bodyDone, _activityDone])
+                      Expanded(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          height: 6,
+                          margin: const EdgeInsets.only(right: 4),
+                          decoration: BoxDecoration(
+                            color: done ? WeightPlanColors.doneTeal : const Color(0xFFE4D9F7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$_doneCount of 3 done',
+                      style: const TextStyle(
+                        color: WeightPlanColors.muted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _allDone ? _continue : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: WeightPlanColors.purple,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFDCD3EC),
+                      disabledForegroundColor: const Color(0xFF4F4268),
+                      elevation: _allDone ? 4 : 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    ),
+                    child: Text(
+                      _allDone
+                          ? 'Continue'
+                          : left == 1
+                              ? 'Answer 1 more question'
+                              : 'Answer $left more questions',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1488,65 +343,70 @@ class _ActivityCard extends StatelessWidget {
 }
 
 // =======================================================
-// RADIO INDICATOR
+// QUESTION CARD (number turns into a tick when answered)
 // =======================================================
 
-class _RadioIndicator extends StatelessWidget {
-  final bool selected;
-  final double size;
+class _QuestionCard extends StatelessWidget {
+  final int number;
+  final bool done;
+  final String title;
+  final Widget child;
 
-  const _RadioIndicator({
-    required this.selected,
-    this.size = 24,
+  const _QuestionCard({
+    required this.number,
+    required this.done,
+    required this.title,
+    required this.child,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration:
-          const Duration(
-        milliseconds: 200,
+      duration: const Duration(milliseconds: 220),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: done ? WeightPlanColors.doneBorder : WeightPlanColors.cardBorder),
       ),
-      width: size,
-      height: size,
-      padding: EdgeInsets.all(
-        size * 0.18,
-      ),
-      decoration:
-          BoxDecoration(
-        shape:
-            BoxShape.circle,
-        color:
-            Colors.white,
-        border:
-            Border.all(
-          color: selected
-              ? const Color(
-                  0xFF4B2E83,
-                )
-              : const Color(
-                  0xFFB9ADCB,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: done ? WeightPlanColors.doneTeal : WeightPlanColors.purple,
                 ),
-          width: 2,
-        ),
-      ),
-      child: AnimatedContainer(
-        duration:
-            const Duration(
-          milliseconds: 200,
-        ),
-        decoration:
-            BoxDecoration(
-          shape:
-              BoxShape.circle,
-          color: selected
-              ? const Color(
-                  0xFF4B2E83,
-                )
-              : Colors.transparent,
-        ),
+                child: done
+                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 18, semanticLabel: 'Answered')
+                    : Text(
+                        '$number',
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: WeightPlanColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
     );
   }

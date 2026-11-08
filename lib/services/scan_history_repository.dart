@@ -9,10 +9,11 @@
 //                                (shared_preferences), one
 //                                list per signed-in user.
 //   InMemoryScanHistoryRepository tests.
-//   (later) FirestoreScanHistoryRepository
-//                                users/{uid}/scans/{id} with
-//                                the same fields as
-//                                ScanRecord.toJson().
+//   FirestoreScanHistoryRepository
+//                                Cloud Firestore,
+//                                users/{uid}/scans/{id}
+//                                (signed-in users; in its
+//                                own file).
 // =======================================================
 
 import 'dart:convert';

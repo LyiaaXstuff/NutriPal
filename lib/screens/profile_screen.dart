@@ -1,7 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
+import '../services/profile_photo_service.dart';
+import '../services/user_profile_service.dart';
+import '../widgets/profile_avatar.dart';
 import 'change_password_screen.dart';
 import 'health_conditions_settings.dart';
 import 'history_screen.dart';
@@ -515,23 +520,101 @@ class _ProfileScreenState
   }
 
   // =====================================================
-  // COMING SOON
+  // HERO CARD DATA
   // =====================================================
 
-  void _showComingSoon(
-    String feature,
+  String get _email {
+    final String saved = widget.data.email.trim();
+
+    if (saved.isNotEmpty) return saved;
+
+    return AuthService.currentEmail ?? '';
+  }
+
+  /// The user's health areas as (label, icon); "General
+  /// nutrition" when none is selected.
+  List<(String, IconData)> get _healthFocus {
+    final ProfileSetupData d = widget.data;
+
+    final IconData weightIcon = switch (d.weightGoal) {
+      'Lose weight' => Icons.trending_down_rounded,
+      'Gain weight' => Icons.trending_up_rounded,
+      'Maintain weight' => Icons.drag_handle_rounded,
+      _ => Icons.track_changes_rounded,
+    };
+
+    final List<(String, IconData)> areas = <(String, IconData)>[
+      if (d.diabetes) ('Diabetes', Icons.water_drop_outlined),
+      if (d.hypertension) ('Hypertension', Icons.monitor_heart_outlined),
+      if (d.highCholesterol) ('High cholesterol', Icons.favorite_border_rounded),
+      if (d.weightManagement) ('Weight management', weightIcon),
+    ];
+
+    if (areas.isEmpty) {
+      return const <(String, IconData)>[('General nutrition', Icons.eco_outlined)];
+    }
+
+    return areas;
+  }
+
+  // =====================================================
+  // PROFILE PICTURE
+  // =====================================================
+  //
+  // Gallery -> square 320 px JPEG (ProfilePhotoService)
+  // -> shown at once and saved to Firestore
+  // (UserProfileService.saveAvatar), so it is the same on
+  // every phone the user logs in on.
+
+  bool _savingPhoto = false;
+
+  Future<void> _pickFromGallery() async {
+    final ScaffoldMessengerState messenger =
+        ScaffoldMessenger.of(context);
+
+    setState(() => _savingPhoto = true);
+
+    Uint8List? photo;
+
+    try {
+      photo = await ProfilePhotoService.pickFromGallery();
+    } on ProfilePhotoException catch (error) {
+      _showSnack(messenger, error.message);
+    } finally {
+      if (mounted) setState(() => _savingPhoto = false);
+    }
+
+    // Closed the gallery without choosing.
+    if (photo == null || !mounted) return;
+
+    setState(() => widget.data.avatarPhoto = photo);
+
+    UserProfileService.saveAvatar(photo);
+
+    _showSnack(messenger, 'Profile picture updated.');
+  }
+
+  void _removePhoto() {
+    setState(() => widget.data.avatarPhoto = null);
+
+    UserProfileService.saveAvatar(null);
+
+    _showSnack(ScaffoldMessenger.of(context), 'Profile picture removed.');
+  }
+
+  void _showSnack(
+    ScaffoldMessengerState messenger,
+    String message,
   ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$feature will be connected next.',
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: primaryPurple,
+          behavior: SnackBarBehavior.floating,
         ),
-        backgroundColor:
-            primaryPurple,
-        behavior:
-            SnackBarBehavior.floating,
-      ),
-    );
+      );
   }
 
   // =====================================================
@@ -611,8 +694,10 @@ class _ProfileScreenState
                   height: 6,
                 ),
 
-                const Text(
-                  'Upload your own picture from your device.',
+                Text(
+                  widget.data.avatarPhoto == null
+                      ? 'Upload your own picture from your device.'
+                      : 'Choose a new picture or remove the current one.',
                   style:
                       TextStyle(
                     color:
@@ -638,11 +723,31 @@ class _ProfileScreenState
                       sheetContext,
                     );
 
-                    _showComingSoon(
-                      'Gallery upload',
-                    );
+                    _pickFromGallery();
                   },
                 ),
+
+                if (widget.data.avatarPhoto != null) ...[
+                  const SizedBox(
+                    height: 10,
+                  ),
+
+                  _AvatarOption(
+                    icon:
+                        Icons.delete_outline_rounded,
+                    title:
+                        'Remove photo',
+                    subtitle:
+                        'Go back to the NutriPal icon',
+                    onTap: () {
+                      Navigator.pop(
+                        sheetContext,
+                      );
+
+                      _removePhoto();
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -772,7 +877,7 @@ class _ProfileScreenState
           // Room for the floating navigation bar.
           padding: EdgeInsets.fromLTRB(
             20,
-            10,
+            26,
             20,
             28 +
                 MediaQuery.paddingOf(
@@ -784,107 +889,23 @@ class _ProfileScreenState
                 CrossAxisAlignment.start,
             children: [
               // =================================================
-              // PROFILE IMAGE
+              // PROFILE HERO CARD
               // =================================================
+              //
+              // Photo (tap to change), name, email and the
+              // health areas NutriPal checks for.
 
-              Center(
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: Stack(
-                        children: [
-                          Align(
-                            alignment:
-                                Alignment.center,
-                            child: Container(
-                              width: 84,
-                              height: 84,
-                              decoration:
-                                  BoxDecoration(
-                                shape:
-                                    BoxShape.circle,
-                                color:
-                                    selectedPurple,
-                                border:
-                                    Border.all(
-                                  color:
-                                      primaryPurple,
-                                  width:
-                                      2.2,
-                                ),
-                              ),
-                              child:
-                                  const Icon(
-                                Icons.person_rounded,
-                                color:
-                                    Color(
-                                  0xFFB79BEA,
-                                ),
-                                size:
-                                    60,
-                              ),
-                            ),
-                          ),
-
-                          Positioned(
-                            right: 1,
-                            bottom: 7,
-                            child:
-                                GestureDetector(
-                              onTap:
-                                  _openAvatarOptions,
-                              child: Container(
-                                width: 34,
-                                height: 34,
-                                decoration:
-                                    BoxDecoration(
-                                  shape:
-                                      BoxShape.circle,
-                                  color:
-                                      primaryPurple,
-                                  border:
-                                      Border.all(
-                                    color:
-                                        backgroundColor,
-                                    width:
-                                        3,
-                                  ),
-                                ),
-                                child:
-                                    const Icon(
-                                  Icons.edit_outlined,
-                                  color:
-                                      Colors.white,
-                                  size:
-                                      16,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Text(
-                      _displayName,
-                      style:
-                          const TextStyle(
-                        color:
-                            darkPurple,
-                        fontSize:
-                            21,
-                        fontWeight:
-                            FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
+              _ProfileHeroCard(
+                photo: widget.data.avatarPhoto,
+                name: _displayName,
+                email: _email,
+                healthFocus: _healthFocus,
+                savingPhoto: _savingPhoto,
+                onEditPhoto: _openAvatarOptions,
               ),
 
               const SizedBox(
-                height: 20,
+                height: 24,
               ),
 
               // =================================================
@@ -1425,6 +1446,232 @@ class _AvatarOption extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// =======================================================
+// PROFILE HERO CARD
+// =======================================================
+//
+// Purple card at the top of Profile, in the same style as
+// the "Scan a nutrition label" banner on Home.
+
+class _ProfileHeroCard extends StatelessWidget {
+  final Uint8List? photo;
+  final String name;
+  final String email;
+  final List<(String, IconData)> healthFocus;
+  final bool savingPhoto;
+  final VoidCallback onEditPhoto;
+
+  const _ProfileHeroCard({
+    required this.photo,
+    required this.name,
+    required this.email,
+    required this.healthFocus,
+    required this.savingPhoto,
+    required this.onEditPhoto,
+  });
+
+  static const TextStyle _label = TextStyle(
+    color: Color(0xC7FFFFFF),
+    fontSize: 12.5,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.6,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFF38138C), Color(0xFF4B2E83), Color(0xFF67558E)],
+          stops: <double>[0, 0.55, 1],
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: const Color(0xFF4B2E83).withValues(alpha: 0.22),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Decorative circles, as on the Home banner.
+          Positioned(
+            right: -60,
+            top: -70,
+            child: _circle(200, const Color(0xFFE4D9F7).withValues(alpha: 0.14)),
+          ),
+          Positioned(
+            right: 40,
+            bottom: -50,
+            child: _circle(120, const Color(0xFFF3ECFF).withValues(alpha: 0.10)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _photo(),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('MY PROFILE', style: _label),
+                          const SizedBox(height: 4),
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              height: 1.05,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (email.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              email,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xD9FFFFFF),
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                const Text('YOUR HEALTH FOCUS', style: _label),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (String label, IconData icon) in healthFocus)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon, color: Colors.white, size: 15),
+                            const SizedBox(width: 6),
+                            Text(
+                              label,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _circle(double size, Color color) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      );
+
+  Widget _photo() {
+    return SizedBox(
+      width: 86,
+      height: 86,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            child: GestureDetector(
+              onTap: onEditPhoto,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  ProfileAvatar(
+                    photo: photo,
+                    size: 80,
+                    borderWidth: 3,
+                    borderColor: Colors.white,
+                  ),
+
+                  // While a new photo is being prepared.
+                  if (savingPhoto)
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: Color(0xFF4B2E83),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Semantics(
+              button: true,
+              label: 'Change profile picture',
+              child: GestureDetector(
+                onTap: onEditPhoto,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF0F8F8A),
+                    border: Border.all(color: const Color(0xFF4B2E83), width: 3),
+                  ),
+                  child: const Icon(Icons.edit_outlined, color: Colors.white, size: 15),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

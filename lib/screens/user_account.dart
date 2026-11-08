@@ -4,6 +4,7 @@ import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
 import '../services/name_rules.dart';
 import '../services/scan_history_service.dart';
+import '../services/user_profile_service.dart';
 import '../widgets/progress_dialog.dart';
 import 'login_screen.dart';
 
@@ -253,18 +254,24 @@ class _UserAccountState extends State<UserAccount> {
       deleted = await runWithProgress<bool>(
         context,
         () async {
-          final bool done =
-              await AuthService.deleteAccount(
+          // Saved data is deleted after the password /
+          // Google check and before the account itself,
+          // while the user may still delete it (Firestore
+          // rules). If it fails, the account is kept.
+          return AuthService.deleteAccount(
             password:
                 usesPassword ? password : null,
+            beforeDelete: userId == null
+                ? null
+                : () async {
+                    await ScanHistoryService.instance
+                        .deleteAllForUser(userId);
+
+                    await UserProfileService.delete(
+                      userId,
+                    );
+                  },
           );
-
-          if (done && userId != null) {
-            await ScanHistoryService.instance
-                .deleteAllForUser(userId);
-          }
-
-          return done;
         },
       );
     } on AuthServiceException catch (error) {
@@ -515,6 +522,9 @@ class _UserAccountState extends State<UserAccount> {
           false;
     });
 
+    // Saved to Firestore (works offline, sent later).
+    UserProfileService.save(widget.data);
+
     ScaffoldMessenger.of(context)
         .showSnackBar(
       const SnackBar(
@@ -623,15 +633,18 @@ class _UserAccountState extends State<UserAccount> {
                 // =================================================
                 // PROFILE DETAILS
                 // =================================================
+                // Same section-title style as Weight
+                // Management Goal (GOAL, BODY INFORMATION...).
                 const Text(
-                  'Profile details',
+                  'PROFILE DETAILS',
                   style:
                       TextStyle(
                     color:
-                        darkPurple,
-                    fontSize: 21,
+                        primaryPurple,
+                    fontSize: 16,
                     fontWeight:
                         FontWeight.w900,
+                    letterSpacing: 0.4,
                   ),
                 ),
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/user_profile_service.dart';
 import 'weight_management_form.dart';
 import 'home_screen.dart';
 
@@ -71,6 +72,9 @@ class _CholesterolFormState
   }
 
   void _goToHome() {
+    // Setup finished: save the profile to Firestore.
+    UserProfileService.save(widget.data);
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -249,7 +253,7 @@ class _CholesterolFormState
 
               // SAME TITLE SIZE AS DIABETES
               const Text(
-                'Let’s understand your\ncholesterol needs',
+                'Your cholesterol profile',
                 style:
                     TextStyle(
                   color:
@@ -257,7 +261,7 @@ class _CholesterolFormState
                     0xFF38138C,
                   ),
                   fontSize:
-                      37,
+                      32,
                   height:
                       1.05,
                   fontWeight:

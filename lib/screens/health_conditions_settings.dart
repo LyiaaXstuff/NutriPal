@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../models/nutrition_analysis.dart';
 import '../models/profile_setup_data.dart';
+import '../services/user_profile_service.dart';
+import '../widgets/weight_plan_widgets.dart';
 
 class HealthConditionsSettings extends StatefulWidget {
   final ProfileSetupData data;
@@ -173,36 +175,33 @@ class _HealthConditionsSettingsState
   // CHOLESTEROL STORAGE
   // =====================================================
 
+  // The profile keeps the cholesterol details as three
+  // yes/no fields (set in setup, Step 3): highLdl,
+  // highTriglycerides and cholesterolNotSure. This screen
+  // works with one text value ("High LDL cholesterol",
+  // "High triglycerides", "Both" or "Not sure"), so these
+  // two methods translate between them.
+
   String? _readCholesterolType() {
-    final dynamic data =
+    final ProfileSetupData data =
         widget.data;
 
-    try {
-      final dynamic value =
-          data.cholesterolType;
+    if (data.cholesterolNotSure) {
+      return cholesterolNotSure;
+    }
 
-      if (value is String) {
-        return value;
-      }
-    } catch (_) {}
+    if (data.highLdl &&
+        data.highTriglycerides) {
+      return 'Both';
+    }
 
-    try {
-      final dynamic value =
-          data.cholesterolConcern;
+    if (data.highLdl) {
+      return cholesterolLdl;
+    }
 
-      if (value is String) {
-        return value;
-      }
-    } catch (_) {}
-
-    try {
-      final dynamic value =
-          data.highCholesterolType;
-
-      if (value is String) {
-        return value;
-      }
-    } catch (_) {}
+    if (data.highTriglycerides) {
+      return cholesterolTriglycerides;
+    }
 
     return null;
   }
@@ -210,27 +209,30 @@ class _HealthConditionsSettingsState
   void _writeCholesterolType(
     String? value,
   ) {
-    final dynamic data =
-        widget.data;
+    final Set<String> selected =
+        _cholesterolSelectionsFromStoredValue(
+      value,
+    );
 
-    try {
-      data.cholesterolType =
-          value;
+    final bool notSure =
+        selected.contains(
+      cholesterolNotSure,
+    );
 
-      return;
-    } catch (_) {}
+    widget.data.cholesterolNotSure =
+        notSure;
 
-    try {
-      data.cholesterolConcern =
-          value;
+    widget.data.highLdl =
+        !notSure &&
+            selected.contains(
+              cholesterolLdl,
+            );
 
-      return;
-    } catch (_) {}
-
-    try {
-      data.highCholesterolType =
-          value;
-    } catch (_) {}
+    widget.data.highTriglycerides =
+        !notSure &&
+            selected.contains(
+              cholesterolTriglycerides,
+            );
   }
 
   // =====================================================
@@ -375,29 +377,6 @@ class _HealthConditionsSettingsState
             _originalHeight ||
         _activityLevel !=
             _originalActivityLevel;
-  }
-
-  // =====================================================
-  // FORMAT NUMBER
-  // =====================================================
-
-  String _formatNumber(
-    double? value,
-  ) {
-    if (value == null) {
-      return '';
-    }
-
-    if (value ==
-        value.roundToDouble()) {
-      return value
-          .toInt()
-          .toString();
-    }
-
-    return value.toStringAsFixed(
-      1,
-    );
   }
 
   // =====================================================
@@ -1330,971 +1309,41 @@ class _HealthConditionsSettingsState
   // =====================================================
   // WEIGHT MANAGEMENT SHEET
   // =====================================================
+  //
+  // Same tiles and fields as setup Step 3
+  // (weight_plan_widgets.dart). Nothing changes until the
+  // user taps Done; the main screen's "Save changes" then
+  // saves it.
 
-  Future<void>
-      _showWeightManagementSheet() async {
-    String? tempGoal =
-        _weightGoal;
-
-    String? tempGender =
-        _gender;
-
-    String? tempActivity =
-        _activityLevel;
-
-    final TextEditingController
-        weightController =
-        TextEditingController(
-      text:
-          _formatNumber(
-        _currentWeight,
+  Future<void> _showWeightManagementSheet() async {
+    final _WeightSheetResult? result =
+        await showModalBottomSheet<_WeightSheetResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) => _WeightManagementSheet(
+        goal: _weightGoal,
+        sex: _gender,
+        weightKg: _currentWeight,
+        heightCm: _height,
+        activity: _activityLevel,
+        dateOfBirth: widget.data.dateOfBirth,
+        providerEnergyKcal: widget.data.providerEnergyKcal,
       ),
     );
 
-    final TextEditingController
-        heightController =
-        TextEditingController(
-      text:
-          _formatNumber(
-        _height,
-      ),
-    );
-
-    final bool? completed =
-        await showModalBottomSheet<bool>(
-      context:
-          context,
-
-      backgroundColor:
-          Colors.transparent,
-
-      isScrollControlled:
-          true,
-
-      builder: (
-        BuildContext sheetContext,
-      ) {
-        return StatefulBuilder(
-          builder: (
-            BuildContext context,
-            StateSetter setSheetState,
-          ) {
-            final double? tempWeight =
-                double.tryParse(
-              weightController.text.trim(),
-            );
-
-            final double? tempHeight =
-                double.tryParse(
-              heightController.text.trim(),
-            );
-
-            final bool complete =
-                tempGoal !=
-                        null &&
-                    tempGender !=
-                        null &&
-                    tempWeight !=
-                        null &&
-                    tempWeight >
-                        0 &&
-                    tempHeight !=
-                        null &&
-                    tempHeight >
-                        0 &&
-                    tempActivity !=
-                        null;
-
-            return SafeArea(
-              top:
-                  false,
-
-              child:
-                  Container(
-                height:
-                    MediaQuery.of(
-                          context,
-                        )
-                        .size
-                        .height *
-                    0.88,
-
-                decoration:
-                    const BoxDecoration(
-                  color:
-                      backgroundColor,
-
-                  borderRadius:
-                      BorderRadius.vertical(
-                    top:
-                        Radius.circular(
-                      30,
-                    ),
-                  ),
-                ),
-
-                child:
-                    Column(
-                  children: [
-                    const SizedBox(
-                      height:
-                          13,
-                    ),
-
-                    Container(
-                      width:
-                          44,
-
-                      height:
-                          5,
-
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            lightPurple,
-
-                        borderRadius:
-                            BorderRadius.circular(
-                          20,
-                        ),
-                      ),
-                    ),
-
-                    Expanded(
-                      child:
-                          SingleChildScrollView(
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior
-                                .onDrag,
-
-                        padding:
-                            const EdgeInsets.fromLTRB(
-                          22,
-                          14,
-                          22,
-                          20,
-                        ),
-
-                        child:
-                            Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-
-                          children: [
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child:
-                                      Text(
-                                    'Weight management',
-
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          darkPurple,
-
-                                      fontSize:
-                                          25,
-
-                                      fontWeight:
-                                          FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-
-                                IconButton(
-                                  onPressed:
-                                      () {
-                                    Navigator.pop(
-                                      sheetContext,
-                                    );
-                                  },
-
-                                  icon:
-                                      const Icon(
-                                    Icons
-                                        .close_rounded,
-
-                                    color:
-                                        primaryPurple,
-
-                                    size:
-                                        31,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const Center(
-                              child:
-                                  Text(
-                                'Complete the details below.',
-
-                                style:
-                                    TextStyle(
-                                  color:
-                                      mediumPurple,
-
-                                  fontSize:
-                                      16,
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  26,
-                            ),
-
-                            // =============================
-                            // WEIGHT GOAL
-                            // =============================
-
-                            const Text(
-                              'Weight goal',
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    darkPurple,
-
-                                fontSize:
-                                    17,
-
-                                fontWeight:
-                                    FontWeight.w800,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  10,
-                            ),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child:
-                                      _MiniChoiceCard(
-                                    text:
-                                        'Lose',
-
-                                    selected:
-                                        tempGoal ==
-                                            'Lose weight',
-
-                                    onTap:
-                                        () {
-                                      setSheetState(
-                                        () {
-                                          tempGoal =
-                                              'Lose weight';
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  width:
-                                      8,
-                                ),
-
-                                Expanded(
-                                  child:
-                                      _MiniChoiceCard(
-                                    text:
-                                        'Maintain',
-
-                                    selected:
-                                        tempGoal ==
-                                            'Maintain weight',
-
-                                    onTap:
-                                        () {
-                                      setSheetState(
-                                        () {
-                                          tempGoal =
-                                              'Maintain weight';
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  width:
-                                      8,
-                                ),
-
-                                Expanded(
-                                  child:
-                                      _MiniChoiceCard(
-                                    text:
-                                        'Gain',
-
-                                    selected:
-                                        tempGoal ==
-                                            'Gain weight',
-
-                                    onTap:
-                                        () {
-                                      setSheetState(
-                                        () {
-                                          tempGoal =
-                                              'Gain weight';
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  24,
-                            ),
-
-                            // =============================
-                            // GENDER
-                            // =============================
-
-                            const Text(
-                              'Gender',
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    darkPurple,
-
-                                fontSize:
-                                    17,
-
-                                fontWeight:
-                                    FontWeight.w800,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  10,
-                            ),
-
-                            Row(
-                              children: [
-                                // ==========================
-                                // MALE
-                                // ==========================
-
-                                Expanded(
-                                  child:
-                                      _GenderChoiceCard(
-                                    text:
-                                        'Male',
-
-                                    icon:
-                                        Icons.male_rounded,
-
-                                    selected:
-                                        tempGender ==
-                                            'Male',
-
-                                    onTap:
-                                        () {
-                                      setSheetState(
-                                        () {
-                                          tempGender =
-                                              'Male';
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  width:
-                                      10,
-                                ),
-
-                                // ==========================
-                                // FEMALE
-                                // ==========================
-
-                                Expanded(
-                                  child:
-                                      _GenderChoiceCard(
-                                    text:
-                                        'Female',
-
-                                    icon:
-                                        Icons.female_rounded,
-
-                                    selected:
-                                        tempGender ==
-                                            'Female',
-
-                                    onTap:
-                                        () {
-                                      setSheetState(
-                                        () {
-                                          tempGender =
-                                              'Female';
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  18,
-                            ),
-
-                            // =============================
-                            // CURRENT WEIGHT + HEIGHT
-                            // =============================
-
-                            Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-
-                              children: [
-                                Expanded(
-                                  child:
-                                      _MeasurementField(
-                                    title:
-                                        'Current weight',
-
-                                    controller:
-                                        weightController,
-
-                                    unit:
-                                        'kg',
-
-                                    onChanged:
-                                        () {
-                                      setSheetState(
-                                        () {},
-                                      );
-                                    },
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  width:
-                                      10,
-                                ),
-
-                                Expanded(
-                                  child:
-                                      _MeasurementField(
-                                    title:
-                                        'Height',
-
-                                    controller:
-                                        heightController,
-
-                                    unit:
-                                        'cm',
-
-                                    onChanged:
-                                        () {
-                                      setSheetState(
-                                        () {},
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  24,
-                            ),
-
-                            // =============================
-                            // ACTIVITY
-                            // =============================
-
-                            const Text(
-                              'Activity level',
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    darkPurple,
-
-                                fontSize:
-                                    17,
-
-                                fontWeight:
-                                    FontWeight.w800,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  10,
-                            ),
-
-                            _ActivitySelector(
-                              activity:
-                                  tempActivity,
-
-                              onTap:
-                                  () async {
-                                final String? result =
-                                    await _showActivityPicker(
-                                  tempActivity,
-                                );
-
-                                if (result !=
-                                        null &&
-                                    mounted) {
-                                  setSheetState(
-                                    () {
-                                      tempActivity =
-                                          result;
-                                    },
-                                  );
-                                }
-                              },
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  10,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(
-                        22,
-                        8,
-                        22,
-                        20,
-                      ),
-
-                      child:
-                          SizedBox(
-                        width:
-                            double.infinity,
-
-                        height:
-                            54,
-
-                        child:
-                            ElevatedButton(
-                          onPressed:
-                              complete
-                                  ? () {
-                                      _weightGoal =
-                                          tempGoal;
-
-                                      _gender =
-                                          tempGender;
-
-                                      _currentWeight =
-                                          double.parse(
-                                        weightController
-                                            .text
-                                            .trim(),
-                                      );
-
-                                      _height =
-                                          double.parse(
-                                        heightController
-                                            .text
-                                            .trim(),
-                                      );
-
-                                      _activityLevel =
-                                          tempActivity;
-
-                                      Navigator.pop(
-                                        sheetContext,
-                                        true,
-                                      );
-                                    }
-                                  : null,
-
-                          style:
-                              ElevatedButton.styleFrom(
-                            backgroundColor:
-                                primaryPurple,
-
-                            foregroundColor:
-                                Colors.white,
-
-                            disabledBackgroundColor:
-                                lightPurple,
-
-                            disabledForegroundColor:
-                                Colors.white,
-
-                            elevation:
-                                0,
-
-                            shape:
-                                RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                18,
-                              ),
-                            ),
-                          ),
-
-                          child:
-                              const Text(
-                            'Complete setup',
-
-                            style:
-                                TextStyle(
-                              fontSize:
-                                  18,
-
-                              fontWeight:
-                                  FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    weightController.dispose();
-
-    heightController.dispose();
-
-    if (completed ==
-            true &&
-        mounted) {
-      setState(() {
-        _weightManagement =
-            true;
-      });
+    if (result == null || !mounted) {
+      return;
     }
-  }
 
-  // =====================================================
-  // ACTIVITY PICKER
-  // =====================================================
-
-  Future<String?>
-      _showActivityPicker(
-    String? current,
-  ) {
-    String? selected =
-        current;
-
-    return showModalBottomSheet<String>(
-      context:
-          context,
-
-      backgroundColor:
-          Colors.transparent,
-
-      isScrollControlled:
-          true,
-
-      builder: (
-        BuildContext sheetContext,
-      ) {
-        return StatefulBuilder(
-          builder: (
-            BuildContext context,
-            StateSetter setSheetState,
-          ) {
-            return SafeArea(
-              top:
-                  false,
-
-              child:
-                  Container(
-                padding:
-                    const EdgeInsets.fromLTRB(
-                  20,
-                  14,
-                  20,
-                  24,
-                ),
-
-                decoration:
-                    const BoxDecoration(
-                  color:
-                      backgroundColor,
-
-                  borderRadius:
-                      BorderRadius.vertical(
-                    top:
-                        Radius.circular(
-                      28,
-                    ),
-                  ),
-                ),
-
-                child:
-                    Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
-
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-
-                  children: [
-                    Center(
-                      child:
-                          Container(
-                        width:
-                            44,
-
-                        height:
-                            5,
-
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              lightPurple,
-
-                          borderRadius:
-                              BorderRadius.circular(
-                            20,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height:
-                          18,
-                    ),
-
-                    const Text(
-                      'Activity level',
-
-                      style:
-                          TextStyle(
-                        color:
-                            darkPurple,
-
-                        fontSize:
-                            22,
-
-                        fontWeight:
-                            FontWeight.w900,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height:
-                          14,
-                    ),
-
-                    _ActivityOption(
-                      icon:
-                          Icons
-                              .self_improvement_rounded,
-
-                      title:
-                          'Sedentary',
-
-                      subtitle:
-                          'Little or no exercise',
-
-                      selected:
-                          selected ==
-                              'Sedentary',
-
-                      onTap:
-                          () {
-                        setSheetState(
-                          () {
-                            selected =
-                                'Sedentary';
-                          },
-                        );
-                      },
-                    ),
-
-                    const SizedBox(
-                      height:
-                          9,
-                    ),
-
-                    _ActivityOption(
-                      icon:
-                          Icons
-                              .directions_walk_rounded,
-
-                      title:
-                          'Lightly active',
-
-                      subtitle:
-                          'Light exercise 1–3 days/week',
-
-                      selected:
-                          selected ==
-                              'Lightly active',
-
-                      onTap:
-                          () {
-                        setSheetState(
-                          () {
-                            selected =
-                                'Lightly active';
-                          },
-                        );
-                      },
-                    ),
-
-                    const SizedBox(
-                      height:
-                          9,
-                    ),
-
-                    _ActivityOption(
-                      icon:
-                          Icons
-                              .directions_run_rounded,
-
-                      title:
-                          'Moderately active',
-
-                      subtitle:
-                          'Moderate exercise 3–5 days/week',
-
-                      selected:
-                          selected ==
-                              'Moderately active',
-
-                      onTap:
-                          () {
-                        setSheetState(
-                          () {
-                            selected =
-                                'Moderately active';
-                          },
-                        );
-                      },
-                    ),
-
-                    const SizedBox(
-                      height:
-                          9,
-                    ),
-
-                    _ActivityOption(
-                      icon:
-                          Icons
-                              .sports_handball_rounded,
-
-                      title:
-                          'Very active',
-
-                      subtitle:
-                          'Hard exercise 6–7 days/week',
-
-                      selected:
-                          selected ==
-                              'Very active',
-
-                      onTap:
-                          () {
-                        setSheetState(
-                          () {
-                            selected =
-                                'Very active';
-                          },
-                        );
-                      },
-                    ),
-
-                    const SizedBox(
-                      height:
-                          16,
-                    ),
-
-                    SizedBox(
-                      width:
-                          double.infinity,
-
-                      height:
-                          52,
-
-                      child:
-                          ElevatedButton(
-                        onPressed:
-                            selected ==
-                                    null
-                                ? null
-                                : () {
-                                    Navigator.pop(
-                                      sheetContext,
-                                      selected,
-                                    );
-                                  },
-
-                        style:
-                            ElevatedButton.styleFrom(
-                          backgroundColor:
-                              primaryPurple,
-
-                          foregroundColor:
-                              Colors.white,
-
-                          disabledBackgroundColor:
-                              lightPurple,
-
-                          disabledForegroundColor:
-                              Colors.white,
-
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              17,
-                            ),
-                          ),
-                        ),
-
-                        child:
-                            const Text(
-                          'Done',
-
-                          style:
-                              TextStyle(
-                            fontSize:
-                                17,
-
-                            fontWeight:
-                                FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+    setState(() {
+      _weightGoal = result.goal;
+      _gender = result.sex;
+      _currentWeight = result.weightKg;
+      _height = result.heightCm;
+      _activityLevel = result.activity;
+      _weightManagement = true;
+    });
   }
 
   // =====================================================
@@ -2403,6 +1452,9 @@ class _HealthConditionsSettingsState
             !_hypertension &&
             !_highCholesterol &&
             !_weightManagement;
+
+    // Saved to Firestore (works offline, sent later).
+    UserProfileService.save(widget.data);
 
     setState(() {
       _originalDiabetes =
@@ -3362,678 +2414,243 @@ class _CholesterolCheckboxOption
 }
 
 // =======================================================
-// WEIGHT GOAL
+// WEIGHT MANAGEMENT SHEET
 // =======================================================
 
-class _MiniChoiceCard
-    extends StatelessWidget {
-  final String text;
+class _WeightSheetResult {
+  final String goal;
+  final String sex;
+  final double weightKg;
+  final double heightCm;
+  final String activity;
 
-  final bool selected;
-
-  final VoidCallback onTap;
-
-  const _MiniChoiceCard({
-    required this.text,
-    required this.selected,
-    required this.onTap,
+  const _WeightSheetResult({
+    required this.goal,
+    required this.sex,
+    required this.weightKg,
+    required this.heightCm,
+    required this.activity,
   });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return InkWell(
-      onTap:
-          onTap,
-
-      borderRadius:
-          BorderRadius.circular(
-        14,
-      ),
-
-      child:
-          AnimatedContainer(
-        duration:
-            const Duration(
-          milliseconds:
-              180,
-        ),
-
-        height:
-            62,
-
-        decoration:
-            BoxDecoration(
-          color:
-              selected
-                  ? const Color(
-                      0xFFF3ECFF,
-                    )
-                  : Colors.white,
-
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
-
-          border:
-              Border.all(
-            color:
-                selected
-                    ? const Color(
-                        0xFF4B2E83,
-                      )
-                    : const Color(
-                        0xFFDCCFF0,
-                      ),
-
-            width:
-                selected
-                    ? 1.6
-                    : 1.2,
-          ),
-        ),
-
-        child:
-            Stack(
-          children: [
-            Center(
-              child:
-                  Text(
-                text,
-
-                style:
-                    TextStyle(
-                  color:
-                      selected
-                          ? const Color(
-                              0xFF38138C,
-                            )
-                          : const Color(
-                              0xFF67558E,
-                            ),
-
-                  fontSize:
-                      15,
-
-                  fontWeight:
-                      selected
-                          ? FontWeight.w800
-                          : FontWeight.w500,
-                ),
-              ),
-            ),
-
-            if (selected)
-              const Positioned(
-                right:
-                    7,
-
-                top:
-                    7,
-
-                child:
-                    CircleAvatar(
-                  radius:
-                      12,
-
-                  backgroundColor:
-                      Color(
-                    0xFF5631AE,
-                  ),
-
-                  child:
-                      Icon(
-                    Icons
-                        .check_rounded,
-
-                    color:
-                        Colors.white,
-
-                    size:
-                        16,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-// =======================================================
-// GENDER
-// =======================================================
-
-class _GenderChoiceCard
-    extends StatelessWidget {
-  final String text;
-
-  final IconData icon;
-
-  final bool selected;
-
-  final VoidCallback onTap;
-
-  const _GenderChoiceCard({
-    required this.text,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return InkWell(
-      onTap:
-          onTap,
-
-      borderRadius:
-          BorderRadius.circular(
-        14,
-      ),
-
-      child:
-          AnimatedContainer(
-        duration:
-            const Duration(
-          milliseconds:
-              180,
-        ),
-
-        height:
-            64,
-
-        decoration:
-            BoxDecoration(
-          color:
-              selected
-                  ? const Color(
-                      0xFF5631AE,
-                    )
-                  : Colors.white,
-
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
-
-          border:
-              Border.all(
-            color:
-                selected
-                    ? const Color(
-                        0xFF5631AE,
-                      )
-                    : const Color(
-                        0xFFDCCFF0,
-                      ),
-
-            width:
-                selected
-                    ? 1.5
-                    : 1.2,
-          ),
-        ),
-
-        child:
-            Row(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
-
-          children: [
-            // =========================================
-            // MALE / FEMALE SYMBOL
-            // =========================================
-
-            Icon(
-              icon,
-
-              color:
-                  selected
-                      ? Colors.white
-                      : const Color(
-                          0xFF4B2E83,
-                        ),
-
-              size:
-                  25,
-            ),
-
-            const SizedBox(
-              width:
-                  8,
-            ),
-
-            Text(
-              text,
-
-              style:
-                  TextStyle(
-                color:
-                    selected
-                        ? Colors.white
-                        : const Color(
-                            0xFF67558E,
-                          ),
-
-                fontSize:
-                    16,
-
-                fontWeight:
-                    selected
-                        ? FontWeight.w800
-                        : FontWeight.w600,
-              ),
-            ),
-
-            if (selected) ...[
-              const SizedBox(
-                width:
-                    9,
-              ),
-
-              Container(
-                width:
-                    24,
-
-                height:
-                    24,
-
-                decoration:
-                    const BoxDecoration(
-                  color:
-                      Colors.white,
-
-                  shape:
-                      BoxShape.circle,
-                ),
-
-                child:
-                    const Icon(
-                  Icons
-                      .check_rounded,
-
-                  color:
-                      Color(
-                    0xFF5631AE,
-                  ),
-
-                  size:
-                      17,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// MEASUREMENT
-// =======================================================
-
-class _MeasurementField
-    extends StatelessWidget {
-  final String title;
-
-  final TextEditingController controller;
-
-  final String unit;
-
-  final VoidCallback onChanged;
-
-  const _MeasurementField({
-    required this.title,
-    required this.controller,
-    required this.unit,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Container(
-      padding:
-          const EdgeInsets.all(
-        12,
-      ),
-
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.white,
-
-        borderRadius:
-            BorderRadius.circular(
-          15,
-        ),
-
-        border:
-            Border.all(
-          color:
-              const Color(
-            0xFFDCCFF0,
-          ),
-        ),
-      ),
-
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-
-        children: [
-          Text(
-            title,
-
-            style:
-                const TextStyle(
-              color:
-                  Color(
-                0xFF38138C,
-              ),
-
-              fontSize:
-                  13,
-
-              fontWeight:
-                  FontWeight.w800,
-            ),
-          ),
-
-          const SizedBox(
-            height:
-                8,
-          ),
-
-          // =========================================
-          // NUMBER + PERMANENT UNIT
-          // =========================================
-
-          Container(
-            height:
-                48,
-
-            padding:
-                const EdgeInsets.only(
-              left:
-                  12,
-
-              right:
-                  12,
-            ),
-
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.white,
-
-              borderRadius:
-                  BorderRadius.circular(
-                10,
-              ),
-
-              border:
-                  Border.all(
-                color:
-                    const Color(
-                  0xFFDCCFF0,
-                ),
-              ),
-            ),
-
-            child:
-                Row(
-              children: [
-                Expanded(
-                  child:
-                      TextField(
-                    controller:
-                        controller,
-
-                    keyboardType:
-                        const TextInputType.numberWithOptions(
-                      decimal:
-                          true,
-                    ),
-
-                    inputFormatters:
-                        [
-                      FilteringTextInputFormatter
-                          .allow(
-                        RegExp(
-                          r'^\d*\.?\d{0,2}',
-                        ),
-                      ),
-                    ],
-
-                    onChanged:
-                        (_) {
-                      onChanged();
-                    },
-
-                    style:
-                        const TextStyle(
-                      color:
-                          Color(
-                        0xFF38138C,
-                      ),
-
-                      fontSize:
-                          18,
-
-                      fontWeight:
-                          FontWeight.w800,
-                    ),
-
-                    decoration:
-                        const InputDecoration(
-                      isDense:
-                          true,
-
-                      border:
-                          InputBorder.none,
-
-                      enabledBorder:
-                          InputBorder.none,
-
-                      focusedBorder:
-                          InputBorder.none,
-
-                      contentPadding:
-                          EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(
-                  width:
-                      8,
-                ),
-
-                // ALWAYS VISIBLE
-                Text(
-                  unit,
-
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(
-                      0xFF67558E,
-                    ),
-
-                    fontSize:
-                        15,
-
-                    fontWeight:
-                        FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =======================================================
-// ACTIVITY SELECTOR
-// =======================================================
-
-class _ActivitySelector
-    extends StatelessWidget {
+class _WeightManagementSheet extends StatefulWidget {
+  final String? goal;
+  final String? sex;
+  final double? weightKg;
+  final double? heightCm;
   final String? activity;
 
-  final VoidCallback onTap;
+  // For the energy guide only.
+  final DateTime? dateOfBirth;
+  final double? providerEnergyKcal;
 
-  const _ActivitySelector({
+  const _WeightManagementSheet({
+    required this.goal,
+    required this.sex,
+    required this.weightKg,
+    required this.heightCm,
     required this.activity,
-    required this.onTap,
+    required this.dateOfBirth,
+    required this.providerEnergyKcal,
   });
 
-  String get _subtitle {
-    switch (activity) {
-      case 'Sedentary':
-        return 'Little or no exercise';
+  @override
+  State<_WeightManagementSheet> createState() => _WeightManagementSheetState();
+}
 
-      case 'Lightly active':
-        return 'Light exercise 1–3 days/week';
+class _WeightManagementSheetState extends State<_WeightManagementSheet> {
+  late String? _goal = widget.goal;
+  late String? _sex = widget.sex;
+  late String? _activity = widget.activity;
 
-      case 'Moderately active':
-        return 'Moderate exercise 3–5 days/week';
+  late final TextEditingController _weightController =
+      TextEditingController(text: WeightPlanOptions.formatNumber(widget.weightKg));
 
-      case 'Very active':
-        return 'Hard exercise 6–7 days/week';
+  late final TextEditingController _heightController =
+      TextEditingController(text: WeightPlanOptions.formatNumber(widget.heightCm));
 
-      default:
-        return 'Select your usual activity level';
-    }
+  @override
+  void dispose() {
+    _weightController.dispose();
+    _heightController.dispose();
+    super.dispose();
+  }
+
+  double? get _weight => WeightPlanOptions.parse(_weightController.text);
+
+  double? get _height => WeightPlanOptions.parse(_heightController.text);
+
+  bool get _complete =>
+      _goal != null &&
+      _sex != null &&
+      _activity != null &&
+      WeightPlanOptions.weightOk(_weight) &&
+      WeightPlanOptions.heightOk(_height);
+
+  DailyTargets? get _targets {
+    if (!_complete) return null;
+
+    return WeightPlanOptions.energyTargets(
+      ProfileSetupData(
+        dateOfBirth: widget.dateOfBirth,
+        weightGoal: _goal,
+        genderForEnergyEstimate: _sex,
+        currentWeight: _weight,
+        height: _height,
+        activityLevel: _activity,
+        providerEnergyKcal: widget.providerEnergyKcal,
+      ),
+    );
+  }
+
+  void _done() {
+    if (!_complete) return;
+
+    Navigator.pop(
+      context,
+      _WeightSheetResult(
+        goal: _goal!,
+        sex: _sex!,
+        weightKg: _weight!,
+        heightCm: _height!,
+        activity: _activity!,
+      ),
+    );
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Material(
-      color:
-          Colors.transparent,
+  Widget build(BuildContext context) {
+    final DailyTargets? targets = _targets;
+    final double keyboard = MediaQuery.viewInsetsOf(context).bottom;
 
-      child:
-          InkWell(
-        onTap:
-            onTap,
-
-        borderRadius:
-            BorderRadius.circular(
-          15,
-        ),
-
-        child:
-            Container(
-          width:
-              double.infinity,
-
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal:
-                16,
-
-            vertical:
-                14,
+    return SafeArea(
+      top: false,
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Container(
+          height: MediaQuery.sizeOf(context).height * 0.9,
+          decoration: const BoxDecoration(
+            color: WeightPlanColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
           ),
-
-          decoration:
-              BoxDecoration(
-            color:
-                Colors.white,
-
-            borderRadius:
-                BorderRadius.circular(
-              15,
-            ),
-
-            border:
-                Border.all(
-              color:
-                  const Color(
-                0xFFDCCFF0,
-              ),
-            ),
-          ),
-
-          child:
-              Row(
+          child: Column(
             children: [
-              Expanded(
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+              const SizedBox(height: 12),
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE4D9F7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
 
+              // ---- header --------------------------------
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
+                child: Row(
                   children: [
-                    Text(
-                      activity ??
-                          'Select activity level',
-
-                      style:
-                          const TextStyle(
-                        color:
-                            Color(
-                          0xFF38138C,
+                    const Expanded(
+                      child: Text(
+                        'Weight management',
+                        style: TextStyle(
+                          color: WeightPlanColors.ink,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
                         ),
-
-                        fontSize:
-                            16,
-
-                        fontWeight:
-                            FontWeight.w800,
                       ),
                     ),
-
-                    const SizedBox(
-                      height:
-                          3,
-                    ),
-
-                    Text(
-                      _subtitle,
-
-                      style:
-                          const TextStyle(
-                        color:
-                            Color(
-                          0xFF67558E,
-                        ),
-
-                        fontSize:
-                            13,
-                      ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded, color: WeightPlanColors.purple, size: 28),
                     ),
                   ],
                 ),
               ),
-
-              const Icon(
-                Icons
-                    .chevron_right_rounded,
-
-                color:
-                    Color(
-                  0xFF4B2E83,
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'NutriPal uses these details to estimate your daily energy needs.',
+                    style: TextStyle(color: WeightPlanColors.muted, fontSize: 14.5, height: 1.4),
+                  ),
                 ),
+              ),
 
-                size:
-                    28,
+              // ---- questions -----------------------------
+              Expanded(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + keyboard),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SheetSectionTitle('Weight goal'),
+                      WeightGoalRow(
+                        selected: _goal,
+                        onChanged: (String v) => setState(() => _goal = v),
+                      ),
+                      const SizedBox(height: 22),
+                      const _SheetSectionTitle('Gender'),
+                      GenderRow(
+                        selected: _sex,
+                        onChanged: (String v) => setState(() => _sex = v),
+                      ),
+                      const SizedBox(height: 18),
+                      MeasurementFields(
+                        weightController: _weightController,
+                        heightController: _heightController,
+                        onWeightChanged: (_) => setState(() {}),
+                        onHeightChanged: (_) => setState(() {}),
+                        // Same wording style as Weight goal,
+                        // Gender and Activity level.
+                        labelsAsSectionTitles: true,
+                      ),
+                      const SizedBox(height: 22),
+                      const _SheetSectionTitle('Activity level'),
+                      ActivityList(
+                        selected: _activity,
+                        onChanged: (String v) => setState(() => _activity = v),
+                      ),
+                      if (targets != null) ...[
+                        const SizedBox(height: 18),
+                        EnergyGuideCard(
+                          kcalText: WeightPlanOptions.kcalText(targets.energyKcal),
+                          note: WeightPlanOptions.energyNote(targets, _goal),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // ---- done ----------------------------------
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: WeightPlanColors.cardBorder)),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: _complete ? _done : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: WeightPlanColors.purple,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFDCD3EC),
+                      disabledForegroundColor: const Color(0xFF4F4268),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    ),
+                    child: Text(
+                      _complete ? 'Done' : 'Complete all details',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -4043,223 +2660,21 @@ class _ActivitySelector
   }
 }
 
-// =======================================================
-// ACTIVITY OPTION
-// =======================================================
+class _SheetSectionTitle extends StatelessWidget {
+  final String text;
 
-class _ActivityOption
-    extends StatelessWidget {
-  final IconData icon;
-
-  final String title;
-
-  final String subtitle;
-
-  final bool selected;
-
-  final VoidCallback onTap;
-
-  const _ActivityOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
+  const _SheetSectionTitle(this.text);
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return InkWell(
-      onTap:
-          onTap,
-
-      borderRadius:
-          BorderRadius.circular(
-        15,
-      ),
-
-      child:
-          Container(
-        width:
-            double.infinity,
-
-        padding:
-            const EdgeInsets.all(
-          14,
-        ),
-
-        decoration:
-            BoxDecoration(
-          color:
-              selected
-                  ? const Color(
-                      0xFFF3ECFF,
-                    )
-                  : Colors.white,
-
-          borderRadius:
-              BorderRadius.circular(
-            15,
-          ),
-
-          border:
-              Border.all(
-            color:
-                selected
-                    ? const Color(
-                        0xFF4B2E83,
-                      )
-                    : const Color(
-                        0xFFDCCFF0,
-                      ),
-          ),
-        ),
-
-        child:
-            Row(
-          children: [
-            Container(
-              width:
-                  43,
-
-              height:
-                  43,
-
-              decoration:
-                  BoxDecoration(
-                color:
-                    selected
-                        ? const Color(
-                            0xFF4B2E83,
-                          )
-                        : const Color(
-                            0xFFF3ECFF,
-                          ),
-
-                borderRadius:
-                    BorderRadius.circular(
-                  12,
-                ),
-              ),
-
-              child:
-                  Icon(
-                icon,
-
-                color:
-                    selected
-                        ? Colors.white
-                        : const Color(
-                            0xFF4B2E83,
-                          ),
-              ),
-            ),
-
-            const SizedBox(
-              width:
-                  12,
-            ),
-
-            Expanded(
-              child:
-                  Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-
-                children: [
-                  Text(
-                    title,
-
-                    style:
-                        const TextStyle(
-                      color:
-                          Color(
-                        0xFF38138C,
-                      ),
-
-                      fontSize:
-                          15,
-
-                      fontWeight:
-                          FontWeight.w800,
-                    ),
-                  ),
-
-                  const SizedBox(
-                    height:
-                        2,
-                  ),
-
-                  Text(
-                    subtitle,
-
-                    style:
-                        const TextStyle(
-                      color:
-                          Color(
-                        0xFF67558E,
-                      ),
-
-                      fontSize:
-                          12.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Container(
-              width:
-                  24,
-
-              height:
-                  24,
-
-              decoration:
-                  BoxDecoration(
-                shape:
-                    BoxShape.circle,
-
-                border:
-                    Border.all(
-                  color:
-                      const Color(
-                    0xFF4B2E83,
-                  ),
-
-                  width:
-                      2,
-                ),
-              ),
-
-              child:
-                  selected
-                      ? Center(
-                          child:
-                              Container(
-                            width:
-                                12,
-
-                            height:
-                                12,
-
-                            decoration:
-                                const BoxDecoration(
-                              shape:
-                                  BoxShape.circle,
-
-                              color:
-                                  Color(
-                                0xFF4B2E83,
-                              ),
-                            ),
-                          ),
-                        )
-                      : null,
-            ),
-          ],
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: WeightPlanColors.ink,
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

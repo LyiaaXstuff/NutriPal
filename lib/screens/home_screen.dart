@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
 import '../models/scan_record.dart';
 import '../services/scan_history_service.dart';
 import '../widgets/navigation_bar.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/scan_record_card.dart';
 import 'compare_screen.dart';
 import 'favourites_screen.dart';
@@ -224,6 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ) {
             return _HomeTab(
               displayName: _displayName,
+              avatarPhoto: _data.avatarPhoto,
               recentScans:
                   _history.recent(_recentCount),
               onProfileTap: () {
@@ -344,6 +348,9 @@ class _HomeScreenState extends State<HomeScreen> {
 class _HomeTab extends StatelessWidget {
   final String displayName;
 
+  // Profile picture (null = NutriPal person icon).
+  final Uint8List? avatarPhoto;
+
   // Latest few scans only; the full list is History.
   final List<ScanRecord> recentScans;
 
@@ -355,6 +362,7 @@ class _HomeTab extends StatelessWidget {
 
   const _HomeTab({
     required this.displayName,
+    required this.avatarPhoto,
     required this.recentScans,
     required this.onProfileTap,
     required this.onScanTap,
@@ -384,6 +392,9 @@ class _HomeTab extends StatelessWidget {
 
   static const Color selectedPurple =
       Color(0xFFF3ECFF);
+
+  // Left/right page padding (the carousel bleeds past it).
+  static const double _pagePadding = 22;
 
   // =====================================================
   // MESSAGE
@@ -421,9 +432,9 @@ class _HomeTab extends StatelessWidget {
           physics: const ClampingScrollPhysics(),
           // Room for the floating navigation bar.
           padding: EdgeInsets.fromLTRB(
+            _pagePadding,
             22,
-            22,
-            22,
+            _pagePadding,
             30 +
                 MediaQuery.paddingOf(
                   context,
@@ -443,24 +454,9 @@ class _HomeTab extends StatelessWidget {
                   // =============================================
                   GestureDetector(
                     onTap: onProfileTap,
-                    child: Container(
-                      width: 58,
-                      height: 58,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: selectedPurple,
-                        border: Border.all(
-                          color: primaryPurple,
-                          width: 2,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        color: Color(
-                          0xFFB79BEA,
-                        ),
-                        size: 40,
-                      ),
+                    child: ProfileAvatar(
+                      photo: avatarPhoto,
+                      size: 58,
                     ),
                   ),
 
@@ -490,18 +486,36 @@ class _HomeTab extends StatelessWidget {
                   // =============================================
                   // NOTIFICATIONS
                   // =============================================
-                  IconButton(
-                    onPressed: () {
-                      _showMessage(
-                        context,
-                        'Notifications will be connected next.',
-                      );
-                    },
-                    icon: const Icon(
-                      Icons
-                          .notifications_none_rounded,
-                      color: darkPurple,
-                      size: 32,
+                  // White round button with a soft
+                  // purple outline.
+                  Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(
+                      side: BorderSide(
+                        color: lightPurple,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () {
+                        _showMessage(
+                          context,
+                          'Notifications will be connected next.',
+                        );
+                      },
+                      constraints:
+                          const BoxConstraints.tightFor(
+                        width: 48,
+                        height: 48,
+                      ),
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(
+                        Icons
+                            .notifications_none_rounded,
+                        color: darkPurple,
+                        size: 25,
+                      ),
                     ),
                   ),
                 ],
@@ -766,42 +780,86 @@ class _HomeTab extends StatelessWidget {
               ),
 
               // =================================================
-              // EMPTY / RECENT LIST
+              // EMPTY / RECENT CAROUSEL
               // =================================================
+              //
+              // Swipe sideways; the row runs to the screen
+              // edges so the next card peeks in.
               if (recent.isEmpty)
                 const _EmptyRecentScans()
               else
-                ...List.generate(
-                  recent.length,
-                  (index) {
-                    final ScanRecord scan =
-                        recent[index];
-
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        bottom:
-                            index ==
-                                    recent.length -
-                                        1
-                                ? 0
-                                : 10,
-                      ),
-                      child:
-                          ScanRecordCard(
-                        record: scan,
-                        onTap: () {
-                          onOpenScan(scan);
-                        },
-                        onFavouriteTap: () {
-                          onFavouriteTap(scan);
-                        },
-                      ),
-                    );
-                  },
+                _RecentScansCarousel(
+                  scans: recent,
+                  sidePadding: _pagePadding,
+                  onOpenScan: onOpenScan,
+                  onFavouriteTap: onFavouriteTap,
                 ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// =======================================================
+// RECENT SCANS CAROUSEL
+// =======================================================
+
+class _RecentScansCarousel extends StatelessWidget {
+  final List<ScanRecord> scans;
+
+  // The page padding, so the row can reach the screen
+  // edges while the first card still lines up with the
+  // title.
+  final double sidePadding;
+
+  final ValueChanged<ScanRecord> onOpenScan;
+  final ValueChanged<ScanRecord> onFavouriteTap;
+
+  const _RecentScansCarousel({
+    required this.scans,
+    required this.sidePadding,
+    required this.onOpenScan,
+    required this.onFavouriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // +2 so the tile's 1 px border is not clipped.
+    const double height = ScanRecordTile.height + 2;
+
+    return SizedBox(
+      height: height,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints box) {
+          final double fullWidth = box.maxWidth + sidePadding * 2;
+
+          return OverflowBox(
+            minWidth: fullWidth,
+            maxWidth: fullWidth,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(
+                horizontal: sidePadding,
+                vertical: 1,
+              ),
+              itemCount: scans.length,
+              separatorBuilder: (BuildContext context, int index) =>
+                  const SizedBox(width: 12),
+              itemBuilder: (BuildContext context, int index) {
+                final ScanRecord scan = scans[index];
+
+                return ScanRecordTile(
+                  record: scan,
+                  onTap: () => onOpenScan(scan),
+                  onFavouriteTap: () => onFavouriteTap(scan),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }

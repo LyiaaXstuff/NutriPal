@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/user_profile_service.dart';
 import 'cholesterol_form.dart';
 import 'weight_management_form.dart';
 import 'home_screen.dart';
@@ -32,6 +33,9 @@ class _DiabetesFormState
   }
 
   void _goToHome() {
+    // Setup finished: save the profile to Firestore.
+    UserProfileService.save(widget.data);
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -236,7 +240,7 @@ class _DiabetesFormState
                     0xFF38138C,
                   ),
                   fontSize:
-                      37,
+                      32,
                   height:
                       1.05,
                   fontWeight:

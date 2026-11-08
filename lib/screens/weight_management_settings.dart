@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/profile_setup_data.dart';
+import '../services/user_profile_service.dart';
 
 class WeightManagementSettings extends StatefulWidget {
   final ProfileSetupData data;
@@ -280,6 +281,13 @@ class _WeightManagementSettingsState
         'Maintain weight',
         'Gain weight',
       ],
+      // Same symbols as setup Step 3.
+      icons:
+          const {
+        'Lose weight': Icons.trending_down_rounded,
+        'Maintain weight': Icons.drag_handle_rounded,
+        'Gain weight': Icons.trending_up_rounded,
+      },
       selected:
           _weightGoal,
       onSelected: (
@@ -308,6 +316,12 @@ class _WeightManagementSettingsState
         'Male',
         'Female',
       ],
+
+      icons:
+          const {
+        'Male': Icons.male_rounded,
+        'Female': Icons.female_rounded,
+      },
 
       selected:
           _gender,
@@ -677,7 +691,10 @@ class _WeightManagementSettingsState
           500,
     );
 
-    controller.dispose();
+    // Not disposed here: the dialog is still fading out
+    // and its text field keeps using the controller for a
+    // few frames (disposing now crashes in debug). It holds
+    // no listeners, so it is simply garbage collected.
 
     if (result != null &&
         mounted) {
@@ -717,7 +734,10 @@ class _WeightManagementSettingsState
           250,
     );
 
-    controller.dispose();
+    // Not disposed here: the dialog is still fading out
+    // and its text field keeps using the controller for a
+    // few frames (disposing now crashes in debug). It holds
+    // no listeners, so it is simply garbage collected.
 
     if (result != null &&
         mounted) {
@@ -989,6 +1009,9 @@ class _WeightManagementSettingsState
 
     widget.data.heightUnit =
         'cm';
+
+    // Saved to Firestore (works offline, sent later).
+    UserProfileService.save(widget.data);
 
     setState(() {
       _originalWeightGoal =
@@ -1341,6 +1364,14 @@ class _WeightManagementSettingsState
                         'Weight goal',
                     value:
                         _weightGoal,
+                    valueIcon:
+                        _weightGoal == 'Lose weight'
+                            ? Icons.trending_down_rounded
+                            : _weightGoal == 'Maintain weight'
+                                ? Icons.drag_handle_rounded
+                                : _weightGoal == 'Gain weight'
+                                    ? Icons.trending_up_rounded
+                                    : null,
                     onTap:
                         _editWeightGoal,
                   ),
@@ -1373,6 +1404,12 @@ class _WeightManagementSettingsState
                         'Gender',
                     value:
                         _gender,
+                    valueIcon:
+                        _gender == 'Male'
+                            ? Icons.male_rounded
+                            : _gender == 'Female'
+                                ? Icons.female_rounded
+                                : null,
                     onTap:
                         _editGender,
                   ),

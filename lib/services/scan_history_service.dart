@@ -11,12 +11,17 @@
 //                      90-day clean-up.
 //   cleanUpExpired()   applies HistoryRetentionPolicy.
 //
-// CLEAN-UP STRATEGY (local, on use): expired records are
-// removed when history is loaded (Home opens), when a scan
-// is recorded and when History / Favourites open. There is
-// no backend yet, so nothing runs in the background; with
-// Firestore later, a scheduled Cloud Function or a
-// Firestore TTL policy can run the same rule server-side.
+// STORAGE: signed-in users' scans are saved in Cloud
+// Firestore (users/{uid}/scans, see
+// FirestoreScanHistoryRepository), so history and
+// favourites follow the account to any phone.
+//
+// CLEAN-UP STRATEGY: expired records are removed when
+// history is loaded (Home opens), when a scan is recorded
+// and when History / Favourites open. Each Firestore scan
+// also carries expiresAt (null for favourites), so a
+// Firestore TTL policy can remove expired scans
+// server-side even if the app is never opened.
 //
 // Screens listen with ListenableBuilder(listenable:
 // ScanHistoryService.instance, ...).
@@ -32,6 +37,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
 import '../models/scan_record.dart';
+import 'firestore_scan_history_repository.dart';
 import 'history_retention_policy.dart';
 import 'nutrition_analysis_service.dart';
 import 'scan_history_repository.dart';
@@ -118,8 +124,26 @@ class ScanHistoryService extends ChangeNotifier {
     return 'guest';
   }
 
-  ScanHistoryRepository _repositoryFor(String userId) =>
-      LocalScanHistoryRepository(userId: userId);
+  /// Signed-in users: Cloud Firestore (same history on
+  /// every phone; scans kept on this phone before are moved
+  /// up once). No Firebase / guest: this phone only.
+  ScanHistoryRepository _repositoryFor(String userId) {
+    if (userId != 'guest' && Firebase.apps.isNotEmpty) {
+      return FirestoreScanHistoryRepository(
+        userId: userId,
+        moveFrom: LocalScanHistoryRepository(userId: userId),
+        policy: policy,
+      );
+    }
+
+    return LocalScanHistoryRepository(userId: userId);
+  }
+
+  /// True when the last load failed (for example offline
+  /// on a new phone). The next load() tries again.
+  bool get loadFailed => _loadFailed;
+
+  bool _loadFailed = false;
 
   /// Loads the signed-in user's history (again if the user
   /// changed) and removes expired scans.
@@ -133,8 +157,24 @@ class ScanHistoryService extends ChangeNotifier {
       }
     }
 
-    final List<ScanRecord> stored = await _repository!.loadAll();
+    final List<ScanRecord> stored;
 
+    try {
+      stored = await _repository!.loadAll();
+    } catch (error) {
+      if (kDebugMode) debugPrint('[NutriPal history] load failed: $error');
+
+      // Show an empty list instead of a spinner forever.
+      // Nothing stored is deleted: the repository only
+      // removes scans it has loaded.
+      _records = <ScanRecord>[];
+      _loaded = true;
+      _loadFailed = true;
+      notifyListeners();
+      return;
+    }
+
+    _loadFailed = false;
     _records = policy.apply(stored, now);
     _loaded = true;
 
@@ -175,10 +215,15 @@ class ScanHistoryService extends ChangeNotifier {
   /// record. Scanning a product that is already in history
   /// (same barcode or same label values) updates it and
   /// keeps its favourite state.
+  ///
+  /// [keepExistingName]: [productName] was found
+  /// automatically, so a name already saved for this
+  /// product (for example one the user typed) is kept.
   Future<ScanRecord> recordScan({
     required NutritionLabelData label,
     required String productName,
     String? imagePath,
+    bool keepExistingName = false,
   }) async {
     await _ensureLoaded();
 
@@ -193,8 +238,11 @@ class ScanHistoryService extends ChangeNotifier {
     if (existing >= 0) {
       final ScanRecord old = _records.removeAt(existing);
 
+      final bool keepOld = productName == 'Scanned product' ||
+          (keepExistingName && old.productName != 'Scanned product');
+
       record = old.copyWith(
-        productName: productName == 'Scanned product' ? old.productName : productName,
+        productName: keepOld ? old.productName : productName,
         scannedAt: time,
         label: _stripRaw(label),
         summaryBasis: summary.basis,

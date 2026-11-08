@@ -103,17 +103,41 @@ class _HistoryScreenState extends State<HistoryScreen> {
             final List<ScanRecord> records = _history.history;
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
               children: [
-                NpTopBar(
-                  title: 'Scan history',
-                  leading: NpCircleButton(
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: 'Back',
-                    onPressed: () => Navigator.pop(context),
+                // Same header as My Account and Security:
+                // back arrow on the left, title centred.
+                SizedBox(
+                  height: 46,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          tooltip: 'Back',
+                          onPressed: () => Navigator.pop(context),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: Color(0xFF38138C),
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      const Text(
+                        'Scan History',
+                        style: TextStyle(
+                          color: Color(0xFF38138C),
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 28),
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(

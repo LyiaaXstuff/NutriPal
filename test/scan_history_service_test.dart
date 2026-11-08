@@ -109,6 +109,31 @@ void main() {
       expect(again.scannedAt, now);
     });
 
+    test('a name found automatically never replaces a saved name', () async {
+      final ScanRecord first = await service.recordScan(label: homesoy(), productName: 'Scanned product');
+      await service.updateScan(first.id, productName: 'My soy milk');
+
+      final ScanRecord again = await service.recordScan(
+        label: homesoy(),
+        productName: 'Homesoy Soya Bean Drink',
+        keepExistingName: true,
+      );
+
+      expect(again.productName, 'My soy milk');
+    });
+
+    test('a name found automatically replaces "Scanned product"', () async {
+      await service.recordScan(label: homesoy(), productName: 'Scanned product');
+
+      final ScanRecord again = await service.recordScan(
+        label: homesoy(),
+        productName: 'Homesoy Soya Bean Drink',
+        keepExistingName: true,
+      );
+
+      expect(again.productName, 'Homesoy Soya Bean Drink');
+    });
+
     test('same barcode = same product', () {
       final NutritionLabelData a = homesoy().copyWith(barcode: '9556041600013');
       final NutritionLabelData b = homesoy().copyWith(barcode: '9556041600013', servingSizeAmount: 250);

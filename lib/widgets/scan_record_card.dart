@@ -58,6 +58,16 @@ class ScanRecordCard extends StatelessWidget {
     return '${date.day} ${months[date.month - 1]} ${date.year}, $hour:$minute $period';
   }
 
+  /// "9 Nov, 12:38 AM": the year only when it is not this year.
+  static String formatShortDate(DateTime date, {DateTime? now}) {
+    final String full = formatDate(date);
+    final int year = (now ?? DateTime.now()).year;
+
+    if (date.year != year) return full;
+
+    return full.replaceFirst(' ${date.year},', ',');
+  }
+
   String? get _summary {
     final List<String> parts = <String>[
       if (record.energyKcal != null)
@@ -160,8 +170,18 @@ class ScanRecordCard extends StatelessWidget {
 
 class _Thumbnail extends StatelessWidget {
   final ScanRecord record;
+  final double? width;
+  final double height;
+  final double radius;
+  final double iconSize;
 
-  const _Thumbnail({required this.record});
+  const _Thumbnail({
+    required this.record,
+    this.width = 54,
+    this.height = 54,
+    this.radius = 13,
+    this.iconSize = 30,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -170,15 +190,15 @@ class _Thumbnail extends StatelessWidget {
     final Widget fallback = Icon(
       record.isBarcodeScan ? Icons.qr_code_2_rounded : Icons.inventory_2_rounded,
       color: ScanRecordCard._purple,
-      size: 30,
+      size: iconSize,
     );
 
     return Container(
-      width: 54,
-      height: 54,
+      width: width,
+      height: height,
       decoration: BoxDecoration(
         color: ScanRecordCard._lilac,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(radius),
       ),
       clipBehavior: Clip.antiAlias,
       child: path == null
@@ -186,9 +206,122 @@ class _Thumbnail extends StatelessWidget {
           : Image.file(
               File(path),
               fit: BoxFit.cover,
-              cacheWidth: 160,
+              cacheWidth: 320,
               errorBuilder: (BuildContext context, Object error, StackTrace? stack) => fallback,
             ),
+    );
+  }
+}
+
+// =======================================================
+// SCAN RECORD TILE
+// =======================================================
+//
+// Compact card for the Recent scans carousel on Home:
+// photo on top, name and date below, heart on the photo.
+// =======================================================
+
+class ScanRecordTile extends StatelessWidget {
+  final ScanRecord record;
+  final VoidCallback? onTap;
+  final VoidCallback? onFavouriteTap;
+
+  // Tile size; the Home carousel uses the same values.
+  static const double width = 152;
+  static const double height = 200;
+
+  const ScanRecordTile({
+    super.key,
+    required this.record,
+    this.onTap,
+    this.onFavouriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: ScanRecordCard._border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  children: [
+                    _Thumbnail(
+                      record: record,
+                      width: double.infinity,
+                      height: 100,
+                      radius: 12,
+                      iconSize: 36,
+                    ),
+                    if (onFavouriteTap != null)
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Material(
+                          color: Colors.white,
+                          shape: const CircleBorder(),
+                          elevation: 1,
+                          shadowColor: const Color(0x334B2E83),
+                          child: IconButton(
+                            tooltip: record.isFavourite
+                                ? 'Remove from favourites'
+                                : 'Add to favourites',
+                            onPressed: onFavouriteTap,
+                            constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+                            padding: EdgeInsets.zero,
+                            iconSize: 21,
+                            icon: Icon(
+                              record.isFavourite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              color: record.isFavourite
+                                  ? ScanRecordCard._heart
+                                  : ScanRecordCard._purple,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  record.productName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ScanRecordCard._ink,
+                    fontSize: 15,
+                    height: 1.2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  ScanRecordCard.formatShortDate(record.scannedAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ScanRecordCard._muted,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
