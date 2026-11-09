@@ -302,6 +302,10 @@ class NutritionLabelData {
 
   final String? barcode;
 
+  // Front-of-pack photo from Open Food Facts (barcode
+  // scans only; null when the database has none).
+  final String? productImageUrl;
+
   const NutritionLabelData({
     this.servingSizeAmount,
     this.servingSizeUnit,
@@ -317,6 +321,7 @@ class NutritionLabelData {
     this.productName,
     this.productBrand,
     this.barcode,
+    this.productImageUrl,
   });
 
   // =====================================================
@@ -338,6 +343,7 @@ class NutritionLabelData {
     String? productName,
     String? productBrand,
     String? barcode,
+    String? productImageUrl,
   }) {
     return NutritionLabelData(
       servingSizeAmount: servingSizeAmount ?? this.servingSizeAmount,
@@ -354,6 +360,7 @@ class NutritionLabelData {
       productName: productName ?? this.productName,
       productBrand: productBrand ?? this.productBrand,
       barcode: barcode ?? this.barcode,
+      productImageUrl: productImageUrl ?? this.productImageUrl,
     );
   }
 

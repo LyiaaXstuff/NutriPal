@@ -61,6 +61,23 @@ class _Field {
 }
 
 class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
+  // Boxed text field for the Add a nutrient popup.
+  static InputDecoration _boxDecoration({required String hint}) => InputDecoration(
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: const Color(0xFFEDE4F9),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: NpColors.purple, width: 1.4),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0xFF38138C), width: 2),
+        ),
+      );
+
   static const List<String> _units = <String>['g', 'mg', 'µg', 'kcal', 'kJ', 'ml', 'IU', '%'];
 
   late NutritionLabelData _working;
@@ -163,52 +180,117 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
     final TextEditingController amount = TextEditingController();
     String unit = 'g';
 
+    // Same look as the Product name popup: light purple
+    // card, boxed fields; tapping outside only hides the
+    // keyboard.
     final bool? ok = await showDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setLocal) => AlertDialog(
-          title: Text('Add a nutrient (${_columnTitle(_column).toLowerCase()})'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                autofocus: true,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Name on the label'),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: amount,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Value'),
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(dialogContext).unfocus(),
+        child: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setLocal) => AlertDialog(
+            backgroundColor: const Color(0xFFF8F4FD),
+            surfaceTintColor: Colors.transparent,
+            titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
+            contentPadding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Add a nutrient',
+                  style: TextStyle(
+                    color: NpColors.purple,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _columnTitle(_column),
+                  style: const TextStyle(color: NpColors.muted, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _FieldLabel('Name on the label'),
+                TextField(
+                  controller: name,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: _boxDecoration(hint: 'e.g. Vitamin C'),
+                ),
+                const SizedBox(height: 12),
+                const _FieldLabel('Value'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: amount,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: _boxDecoration(hint: 'Amount'),
+                      ),
                     ),
+                    const SizedBox(width: 10),
+                    // Unit picker in a matching box.
+                    Container(
+                      height: 50,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEDE4F9),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: NpColors.purple, width: 1.4),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: unit,
+                          borderRadius: BorderRadius.circular(14),
+                          dropdownColor: const Color(0xFFF8F4FD),
+                          icon: const Icon(Icons.expand_more_rounded, color: NpColors.purple),
+                          style: const TextStyle(
+                            color: NpColors.purple,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          items: <DropdownMenuItem<String>>[
+                            for (final String u in _units) DropdownMenuItem<String>(value: u, child: Text(u)),
+                          ],
+                          onChanged: (String? u) => setLocal(() => unit = u ?? unit),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Padding(
+                  padding: EdgeInsets.only(left: 2),
+                  child: Text(
+                    'Copy the name and value from the pack.',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: NpColors.muted, fontSize: 12.5),
                   ),
-                  const SizedBox(width: 12),
-                  DropdownButton<String>(
-                    value: unit,
-                    items: <DropdownMenuItem<String>>[
-                      for (final String u in _units) DropdownMenuItem<String>(value: u, child: Text(u)),
-                    ],
-                    onChanged: (String? u) => setLocal(() => unit = u ?? unit),
-                  ),
-                ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: NpColors.purple),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Add'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: NpColors.purple),
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Add'),
-            ),
-          ],
         ),
       ),
     );
@@ -216,8 +298,10 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
     final String label = name.text.trim();
     final double? value = double.tryParse(amount.text.trim().replaceAll(',', '.'));
 
-    name.dispose();
-    amount.dispose();
+    // Not disposed here: the dialog is still fading out and
+    // its text fields keep using the controllers for a few
+    // frames (disposing now crashes in debug). They hold no
+    // listeners, so they are simply garbage collected.
 
     if (ok != true || label.isEmpty || value == null || !mounted) return;
 
@@ -572,6 +656,24 @@ class _RowEditor extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Small label above a boxed field.
+class _FieldLabel extends StatelessWidget {
+  final String text;
+
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(color: NpColors.bodyInk, fontSize: 13, fontWeight: FontWeight.w700),
       ),
     );
   }

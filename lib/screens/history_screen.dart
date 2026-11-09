@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
 import '../models/scan_record.dart';
+import '../services/scan_filter.dart';
 import '../services/scan_history_service.dart';
 import '../widgets/nutripal_ui.dart';
 import '../widgets/scan_record_card.dart';
+import '../widgets/scan_search_bar.dart';
 import 'saved_scan_navigation.dart';
 
 // =======================================================
@@ -31,20 +33,29 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final ScanHistoryService _history = ScanHistoryService.instance;
 
+  // Search and filter.
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+  ScanPeriod _period = ScanPeriod.all;
+
   @override
   void initState() {
     super.initState();
     _history.cleanUpExpired();
   }
 
-  String _note(ScanRecord r) {
-    if (r.isFavourite) return 'Favourite · kept until you remove it';
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
-    final int days = _history.policy.daysLeft(r, _history.now) ?? 0;
-
-    if (days <= 1) return 'Removed from history tomorrow';
-
-    return 'Kept for $days more days';
+  void _clearFilters() {
+    _search.clear();
+    setState(() {
+      _query = '';
+      _period = ScanPeriod.all;
+    });
   }
 
   void _message(String text, {SnackBarAction? action}) {
@@ -101,6 +112,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
           listenable: _history,
           builder: (BuildContext context, Widget? child) {
             final List<ScanRecord> records = _history.history;
+            final List<ScanRecord> shown = ScanFilter.apply(
+              records,
+              query: _query,
+              period: _period,
+              now: _history.now,
+            );
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
@@ -122,7 +139,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           icon: const Icon(
                             Icons.arrow_back_ios_new_rounded,
                             color: Color(0xFF38138C),
-                            size: 24,
+                            size: 21,
                           ),
                         ),
                       ),
@@ -130,14 +147,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         'Scan History',
                         style: TextStyle(
                           color: Color(0xFF38138C),
-                          fontSize: 25,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -166,8 +183,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   )
                 else if (records.isEmpty)
                   const _EmptyHistory()
-                else
-                  for (final ScanRecord r in records)
+                else ...[
+                  ScanSearchBar<ScanPeriod>(
+                    controller: _search,
+                    options: ScanPeriod.values,
+                    selected: _period,
+                    labelOf: (ScanPeriod p) => p.label,
+                    iconOf: ScanSearchBar.periodIcon,
+                    onQueryChanged: (String q) => setState(() => _query = q),
+                    onSelected: (ScanPeriod p) => setState(() => _period = p),
+                  ),
+                  const SizedBox(height: 14),
+                  if (shown.isEmpty) ScanNoMatches(onClear: _clearFilters),
+                  for (final ScanRecord r in shown)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Dismissible(
@@ -186,17 +214,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         child: ScanRecordCard(
                           record: r,
-                          note: _note(r),
                           onTap: () => openSavedScan(context, record: r, profile: widget.profile),
                           onFavouriteTap: () => _toggleFavourite(r),
                         ),
                       ),
                     ),
-                if (records.isNotEmpty)
+                ],
+                if (shown.isNotEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 6),
                     child: Text(
-                      'Swipe left to remove a scan. Favourites stay until you un-favourite them.',
+                      'Swipe left to remove a product.\n'
+                      'Favourites are kept until you tap the heart to remove them.',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12, color: NpColors.muted),
                     ),

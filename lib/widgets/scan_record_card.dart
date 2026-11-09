@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../models/nutrition_analysis.dart';
 import '../models/scan_record.dart';
 import '../services/nutrition_analysis_service.dart';
 
@@ -44,6 +45,25 @@ class ScanRecordCard extends StatelessWidget {
   static const Color _border = Color(0xFFDCCFF0);
   static const Color _lilac = Color(0xFFF3ECFF);
   static const Color _heart = Color(0xFFD2453B);
+
+  /// "236 ml (1 cup) per serving", "30 g (3 biscuits) per
+  /// serving"; the everyday measure only when the label
+  /// prints one. Null when the label has no serving size.
+  static String? servingLine(ScanRecord record) {
+    final String? base = record.servingText;
+
+    if (base == null) return null;
+
+    final HouseholdMeasure? m = NutritionAnalysisService.householdMeasure(record.label);
+
+    if (m == null) return base;
+
+    return base.replaceFirst(' per serving', ' (${m.label(m.perServing)}) per serving');
+  }
+
+  /// Shorter, for the small Home cards: "236 ml (1 cup)".
+  static String? servingShort(ScanRecord record) =>
+      servingLine(record)?.replaceFirst(' per serving', '');
 
   static String formatDate(DateTime date) {
     const List<String> months = <String>[
@@ -96,11 +116,16 @@ class ScanRecordCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
+        // Same height for every card in Scan History and
+        // Favourites (room for a 2-line name, the serving size
+        // and the date), so the list looks even.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: showSummary ? 0 : 104),
+          child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
             children: [
-              _Thumbnail(record: record),
+              _Thumbnail(record: record, width: 64, height: 64, radius: 14, iconSize: 32),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -117,14 +142,27 @@ class ScanRecordCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
+                    // Lists (History, Favourites): serving size,
+                    // then the scan date and time.
+                    if (!showSummary && ScanRecordCard.servingLine(record) != null) ...[
+                      Text(
+                        ScanRecordCard.servingLine(record)!,
+                        style: const TextStyle(
+                          color: _purple,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                    ],
                     Text(
                       formatDate(record.scannedAt),
-                      style: const TextStyle(color: _muted, fontSize: 13.5),
+                      style: const TextStyle(color: _muted, fontSize: 13),
                     ),
-                    if (record.servingText != null && showSummary) ...[
+                    if (ScanRecordCard.servingLine(record) != null && showSummary) ...[
                       const SizedBox(height: 2),
                       Text(
-                        record.servingText!,
+                        ScanRecordCard.servingLine(record)!,
                         style: const TextStyle(color: _muted, fontSize: 12.5),
                       ),
                     ],
@@ -161,6 +199,7 @@ class ScanRecordCard extends StatelessWidget {
               else
                 const Icon(Icons.chevron_right_rounded, color: _purple),
             ],
+          ),
           ),
         ),
       ),
@@ -201,14 +240,30 @@ class _Thumbnail extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
       ),
       clipBehavior: Clip.antiAlias,
-      child: path == null
-          ? fallback
-          : Image.file(
+      child: path != null
+          ? Image.file(
               File(path),
               fit: BoxFit.cover,
               cacheWidth: 320,
-              errorBuilder: (BuildContext context, Object error, StackTrace? stack) => fallback,
-            ),
+              errorBuilder: (BuildContext context, Object error, StackTrace? stack) =>
+                  _database(fallback),
+            )
+          : _database(fallback),
+    );
+  }
+
+  // Barcode scans without the user's own photo: the Open
+  // Food Facts front photo, when the database has one.
+  Widget _database(Widget fallback) {
+    final String? url = record.label.productImageUrl;
+
+    if (url == null) return fallback;
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      cacheWidth: 320,
+      errorBuilder: (BuildContext context, Object error, StackTrace? stack) => fallback,
     );
   }
 }
@@ -228,7 +283,7 @@ class ScanRecordTile extends StatelessWidget {
 
   // Tile size; the Home carousel uses the same values.
   static const double width = 152;
-  static const double height = 200;
+  static const double height = 216;
 
   const ScanRecordTile({
     super.key,
@@ -308,6 +363,18 @@ class ScanRecordTile extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                // Serving size, then date and time.
+                if (ScanRecordCard.servingShort(record) != null)
+                  Text(
+                    ScanRecordCard.servingShort(record)!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: ScanRecordCard._purple,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 Text(
                   ScanRecordCard.formatShortDate(record.scannedAt),
                   maxLines: 1,

@@ -156,7 +156,7 @@ class _CompareScreenState extends State<CompareScreen> {
               children: [
                 const Text(
                   'Compare',
-                  style: TextStyle(color: _ink, fontSize: 26, fontWeight: FontWeight.w900),
+                  style: TextStyle(color: _ink, fontSize: 22, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 4),
                 const Text(

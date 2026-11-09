@@ -218,7 +218,7 @@ class ExtractedNutritionReviewScreen
                           color:
                               primaryPurple,
                           size:
-                              25,
+                              21,
                         ),
                       ),
                     ),
@@ -234,7 +234,7 @@ class ExtractedNutritionReviewScreen
                           color:
                               darkPurple,
                           fontSize:
-                              23,
+                              22,
                           fontWeight:
                               FontWeight.w900,
                         ),

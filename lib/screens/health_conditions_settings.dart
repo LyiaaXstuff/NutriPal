@@ -1586,13 +1586,13 @@ class _HealthConditionsSettingsState
                         icon:
                             const Icon(
                           Icons
-                              .arrow_back_rounded,
+                              .arrow_back_ios_new_rounded,
 
                           color:
-                              primaryPurple,
+                              darkPurple,
 
                           size:
-                              31,
+                              21,
                         ),
                       ),
                     ),
@@ -1606,7 +1606,7 @@ class _HealthConditionsSettingsState
                             darkPurple,
 
                         fontSize:
-                            25,
+                            22,
 
                         fontWeight:
                             FontWeight.w900,
@@ -1646,6 +1646,9 @@ class _HealthConditionsSettingsState
                 title:
                     'Diabetes or prediabetes',
 
+                icon:
+                    Icons.water_drop_outlined,
+
                 subtitle:
                     _diabetesSubtitle,
 
@@ -1670,6 +1673,9 @@ class _HealthConditionsSettingsState
                 title:
                     'Hypertension',
 
+                icon:
+                    Icons.monitor_heart_outlined,
+
                 selected:
                     _hypertension,
 
@@ -1685,6 +1691,9 @@ class _HealthConditionsSettingsState
               _ConditionCard(
                 title:
                     'High cholesterol',
+
+                icon:
+                    Icons.favorite_border_rounded,
 
                 subtitle:
                     _cholesterolSubtitle,
@@ -1709,6 +1718,9 @@ class _HealthConditionsSettingsState
               _ConditionCard(
                 title:
                     'Weight management',
+
+                icon:
+                    Icons.monitor_weight_outlined,
 
                 subtitle:
                     _weightSubtitle,
@@ -1816,6 +1828,9 @@ class _ConditionCard
     extends StatelessWidget {
   final String title;
 
+  // Symbol on the left (same ones as the Profile chips).
+  final IconData icon;
+
   final String? subtitle;
 
   final bool selected;
@@ -1826,6 +1841,7 @@ class _ConditionCard
 
   const _ConditionCard({
     required this.title,
+    required this.icon,
     this.subtitle,
     required this.selected,
     required this.onTap,
@@ -1903,7 +1919,7 @@ class _ConditionCard
               Padding(
             padding:
                 const EdgeInsets.fromLTRB(
-              20,
+              16,
               18,
               18,
               18,
@@ -1912,6 +1928,51 @@ class _ConditionCard
             child:
                 Row(
               children: [
+                // Symbol: purple tile when selected.
+                AnimatedContainer(
+                  duration:
+                      const Duration(
+                    milliseconds:
+                        180,
+                  ),
+                  width:
+                      46,
+                  height:
+                      46,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        selected
+                            ? const Color(
+                                0xFF4B2E83,
+                              )
+                            : const Color(
+                                0xFFF3ECFF,
+                              ),
+                    borderRadius:
+                        BorderRadius.circular(
+                      14,
+                    ),
+                  ),
+                  child:
+                      Icon(
+                    icon,
+                    size:
+                        24,
+                    color:
+                        selected
+                            ? Colors.white
+                            : const Color(
+                                0xFF4B2E83,
+                              ),
+                  ),
+                ),
+
+                const SizedBox(
+                  width:
+                      14,
+                ),
+
                 Expanded(
                   child:
                       Column(

@@ -1282,7 +1282,7 @@ class _ScanScreenState extends State<ScanScreen>
                             color:
                                 Colors.white,
                             size:
-                                27,
+                                21,
                           ),
                         ),
                       ),
@@ -1515,6 +1515,8 @@ class _ScanScreenState extends State<ScanScreen>
                                   .arrow_back_ios_new_rounded,
                               color:
                                   Colors.white,
+                              size:
+                                  21,
                             ),
                           ),
                         ),

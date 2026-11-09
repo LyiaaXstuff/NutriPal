@@ -380,28 +380,58 @@ class NutritionAnalysisService {
     final double? size = data.servingSizeAmount;
     final String unit = _portionUnit(data);
     final double? servings = data.servingsPerPackage;
+    final HouseholdMeasure? measure = householdMeasure(data);
+
+    // "1 cup (236 ml)" on the label: the serving IS one cup,
+    // so the choices are named in cups. "3 biscuits (30 g)":
+    // the serving stays, with the count shown underneath.
+    final bool oneEach = measure != null && (measure.perServing - 1).abs() < 1e-6;
+
+    // One serving per pack and no measure: say "pack".
+    final bool singlePack = measure == null && servings != null && (servings - 1).abs() < 1e-6;
+
+    String nameFor(double s, String fallback) {
+      if (oneEach) return measure.label(s);
+      if (singlePack) {
+        if (s == 0.5) return '½ pack';
+        if (s == 1) return 'Whole pack';
+        if (s == 2) return '2 packs';
+      }
+
+      return fallback;
+    }
+
+    String subFor(double s) {
+      final String amount = '${formatAmount(size! * s, unit)} $unit';
+
+      if (measure != null && !oneEach && measure.readsNaturally(s)) {
+        return '${measure.label(measure.countFor(s))} · $amount';
+      }
+
+      return amount;
+    }
 
     final List<PortionOption> options = <PortionOption>[];
 
     if (size != null && size > 0) {
       options.add(PortionOption(
-        label: '½ serving',
-        sub: '${formatAmount(size / 2, unit)} $unit',
+        label: nameFor(0.5, '½ serving'),
+        sub: subFor(0.5),
         portion: const Portion.servings(0.5),
       ));
       options.add(PortionOption(
-        label: '1 serving',
-        sub: '${formatAmount(size, unit)} $unit',
+        label: nameFor(1, '1 serving'),
+        sub: subFor(1),
         portion: const Portion.servings(1),
       ));
 
-      if (servings == null || servings >= 2) {
-        options.add(PortionOption(
-          label: '2 servings',
-          sub: '${formatAmount(size * 2, unit)} $unit',
-          portion: const Portion.servings(2),
-        ));
-      }
+      // Always offered, even for a one-serving pack: the
+      // user may have two cans.
+      options.add(PortionOption(
+        label: nameFor(2, '2 servings'),
+        sub: subFor(2),
+        portion: const Portion.servings(2),
+      ));
 
       if (servings != null && servings > 2.05) {
         options.add(PortionOption(
@@ -423,7 +453,9 @@ class NutritionAnalysisService {
       ));
     }
 
-    if (data.hasPer100gColumn || data.hasPer100mlColumn) {
+    // 100 g / 100 ml only when the label gives no serving
+    // to choose from (then it is the starting portion).
+    if (options.isEmpty && (data.hasPer100gColumn || data.hasPer100mlColumn)) {
       options.add(PortionOption(
         label: '100 $unit',
         sub: 'label reference',
@@ -432,6 +464,68 @@ class NutritionAnalysisService {
     }
 
     return options;
+  }
+
+  // =====================================================
+  // HOUSEHOLD MEASURE ("1 cup", "3 biscuits")
+  // =====================================================
+
+  // Words that are not an everyday measure.
+  static const Set<String> _notAMeasure = <String>{
+    'serving', 'servings', 'serve', 'hidangan', 'sajian', 'portion',
+    'portions', 'g', 'ml', 'gram', 'grams', 'gm', 'l', 'kg',
+  };
+
+  static const Map<String, String> _singular = <String, String>{
+    'pcs': 'piece',
+    'pc': 'piece',
+    'pieces': 'piece',
+    'glasses': 'glass',
+    'boxes': 'box',
+    'pouches': 'pouch',
+    'sandwiches': 'sandwich',
+    'patties': 'patty',
+  };
+
+  /// The label's own everyday measure, or null when the
+  /// label does not print one (then only servings, the
+  /// pack and grams / ml are offered).
+  static HouseholdMeasure? householdMeasure(NutritionLabelData data) {
+    final double? size = data.servingSizeAmount;
+    final double? count = data.servingUnitAmount;
+    final String raw =
+        (data.servingUnitName ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+    if (size == null || size <= 0 || count == null || count <= 0 || raw.isEmpty) {
+      return null;
+    }
+
+    if (_notAMeasure.contains(raw) || RegExp(r'\d').hasMatch(raw)) return null;
+
+    String name = _singular[raw] ?? raw;
+
+    // "chips" -> "chip", "biscuits" -> "biscuit"; not
+    // "glass".
+    if (name == raw && name.length > 3 && name.endsWith('s') && !name.endsWith('ss')) {
+      name = name.substring(0, name.length - 1);
+    }
+
+    return HouseholdMeasure(
+      name: name,
+      perServing: count,
+      amountEach: size / count,
+      unit: _portionUnit(data),
+    );
+  }
+
+  /// "½ cup" or "3 biscuits" for [servings], when it reads
+  /// naturally; otherwise null.
+  static String? householdText(NutritionLabelData data, double servings) {
+    final HouseholdMeasure? m = householdMeasure(data);
+
+    if (m == null || !m.readsNaturally(servings)) return null;
+
+    return m.label(m.countFor(servings));
   }
 
   /// The portion shown first: one serving when the label

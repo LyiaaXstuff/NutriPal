@@ -310,6 +310,42 @@ class ScanHistoryService extends ChangeNotifier {
   }
 
   // =====================================================
+  // PRODUCT PHOTO (added by the user)
+  // =====================================================
+
+  /// Saves [imagePath] as the product's photo, replacing
+  /// any earlier one; null removes the user's photo (an
+  /// Open Food Facts photo, if any, shows again).
+  Future<ScanRecord?> setPhoto(String id, String? imagePath) async {
+    await _ensureLoaded();
+
+    final int i = _records.indexWhere((ScanRecord r) => r.id == id);
+
+    if (i < 0) return null;
+
+    final ScanRecord old = _records[i];
+
+    String? path;
+
+    if (imagePath != null) {
+      // A new file name each time, so the new photo is not
+      // hidden by the old one in Flutter's image cache.
+      path = await _copyThumbnail(imagePath, '$id-${now.millisecondsSinceEpoch}');
+
+      if (path == null) return null;
+    }
+
+    _records[i] = path == null
+        ? old.copyWith(clearThumbnail: true)
+        : old.copyWith(thumbnailPath: path);
+
+    await _save();
+    await _deleteThumbnails(<ScanRecord>[old]);
+
+    return _records[i];
+  }
+
+  // =====================================================
   // FAVOURITES
   // =====================================================
 

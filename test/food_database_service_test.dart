@@ -151,4 +151,62 @@ void main() {
       );
     });
   });
+
+  group('household measure from the serving size', () {
+    Map<String, dynamic> withServing(String text, double quantity, String unit) =>
+        <String, dynamic>{
+          ..._soyDrink(),
+          'serving_size': text,
+          'serving_quantity': quantity,
+          'serving_quantity_unit': unit,
+        };
+
+    test('"1 glass (200 ml)" gives 1 glass', () {
+      final NutritionLabelData data = FoodDatabaseService.fromOpenFoodFacts(
+        withServing('1 glass (200 ml)', 200, 'ml'),
+        barcode: '9556001234567',
+      );
+
+      expect(data.servingUnitAmount, 1);
+      expect(data.servingUnitName, 'glass');
+    });
+
+    test('"2 biscuits (25 g)" gives 2 biscuits', () {
+      final NutritionLabelData data = FoodDatabaseService.fromOpenFoodFacts(
+        withServing('2 biscuits (25 g)', 25, 'g'),
+        barcode: '9556001234567',
+      );
+
+      expect(data.servingUnitAmount, 2);
+      expect(data.servingUnitName, 'biscuits');
+    });
+
+    test('plain "30 g" or "1 portion (250 ml)" gives none', () {
+      for (final String text in <String>['30 g', '1 portion (250 ml)']) {
+        final NutritionLabelData data = FoodDatabaseService.fromOpenFoodFacts(
+          withServing(text, 30, 'g'),
+          barcode: '9556001234567',
+        );
+
+        expect(data.servingUnitName, isNull, reason: text);
+      }
+    });
+  });
+
+  test('front photo link from Open Food Facts (https only)', () {
+    NutritionLabelData withImage(String url) => FoodDatabaseService.fromOpenFoodFacts(
+          <String, dynamic>{..._soyDrink(), 'image_front_url': url},
+          barcode: '9556001234567',
+        );
+
+    expect(
+      withImage('https://images.openfoodfacts.org/images/products/front.400.jpg').productImageUrl,
+      'https://images.openfoodfacts.org/images/products/front.400.jpg',
+    );
+    expect(withImage('http://example.com/front.jpg').productImageUrl, isNull);
+    expect(
+      FoodDatabaseService.fromOpenFoodFacts(_soyDrink(), barcode: '9556001234567').productImageUrl,
+      isNull,
+    );
+  });
 }

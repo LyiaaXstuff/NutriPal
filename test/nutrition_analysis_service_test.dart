@@ -296,7 +296,6 @@ void main() {
         '1 serving',
         '2 servings',
         'Whole pack',
-        '100 ml',
       ]);
       expect(options[3].sub, '944 ml');
     });
@@ -382,6 +381,83 @@ void main() {
     test('formatShare', () {
       expect(NutritionAnalysisService.formatShare(0.0757), '8%');
       expect(NutritionAnalysisService.formatShare(0.004), '<1%');
+    });
+  });
+
+  group('Household measure (only when the label prints one)', () {
+    test('"236 ml (1 cup)": choices are named in cups', () {
+      final NutritionLabelData data =
+          homesoy().copyWith(servingUnitAmount: 1, servingUnitName: 'cup');
+
+      final List<PortionOption> options = NutritionAnalysisService.portionOptions(data);
+
+      expect(options.map((PortionOption o) => o.label), <String>[
+        '½ cup',
+        '1 cup',
+        '2 cups',
+        'Whole pack',
+      ]);
+      expect(options[0].sub, '118 ml');
+      expect(options[1].portion, const Portion.servings(1));
+    });
+
+    test('"30 g (3 biscuits)": one biscuit is 10 g, counts read naturally', () {
+      final NutritionLabelData data = homesoy().copyWith(
+        servingSizeAmount: 30,
+        servingSizeUnit: 'g',
+        servingsPerPackage: 10,
+        servingUnitAmount: 3,
+        servingUnitName: 'biscuits',
+      );
+
+      final HouseholdMeasure m = NutritionAnalysisService.householdMeasure(data)!;
+
+      expect(m.name, 'biscuit');
+      expect(m.amountEach, 10);
+      expect(m.label(1), '1 biscuit');
+      expect(m.label(4), '4 biscuits');
+      expect(m.servingsFor(4), closeTo(4 / 3, 1e-9));
+
+      final List<PortionOption> options = NutritionAnalysisService.portionOptions(data);
+
+      expect(options[0].label, '½ serving');
+      expect(options[0].sub, '1½ biscuits · 15 g');
+      expect(options[1].sub, '3 biscuits · 30 g');
+      expect(NutritionAnalysisService.householdText(data, 2 / 3), '2 biscuits');
+      expect(NutritionAnalysisService.householdText(data, 0.7), isNull);
+    });
+
+    test('no measure on the label: nothing is guessed', () {
+      expect(NutritionAnalysisService.householdMeasure(homesoy()), isNull);
+      expect(
+        NutritionAnalysisService.householdMeasure(
+          homesoy().copyWith(servingUnitAmount: 1, servingUnitName: 'serving'),
+        ),
+        isNull,
+      );
+    });
+
+    test('one serving per pack and no measure: half, whole or 2 packs', () {
+      final List<PortionOption> options =
+          NutritionAnalysisService.portionOptions(homesoy().copyWith(servingsPerPackage: 1));
+
+      expect(options.map((PortionOption o) => o.label), <String>[
+        '½ pack',
+        'Whole pack',
+        '2 packs',
+      ]);
+    });
+
+    test('Malay measures keep their form; English ones get a plural', () {
+      const HouseholdMeasure keping =
+          HouseholdMeasure(name: 'keping', perServing: 2, amountEach: 12, unit: 'g');
+      const HouseholdMeasure glass =
+          HouseholdMeasure(name: 'glass', perServing: 1, amountEach: 200, unit: 'ml');
+
+      expect(keping.label(3), '3 keping');
+      expect(glass.label(2), '2 glasses');
+      expect(glass.label(0.5), '½ glass');
+      expect(HouseholdMeasure.countText(1.5), '1½');
     });
   });
 }

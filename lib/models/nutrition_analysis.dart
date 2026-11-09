@@ -87,6 +87,95 @@ class Portion {
   int get hashCode => Object.hash(servings, amount, unit);
 }
 
+// =======================================================
+// HOUSEHOLD MEASURE
+// =======================================================
+//
+// The everyday measure printed next to the serving size,
+// e.g. "236 ml (1 cup)" or "30 g (3 biscuits)". Only built
+// when the label states it; NutriPal never guesses the
+// size of a cup or a biscuit.
+
+class HouseholdMeasure {
+  /// Singular name as on the label ("cup", "biscuit",
+  /// "keping").
+  final String name;
+
+  /// How many make one serving (3 for "3 biscuits").
+  final double perServing;
+
+  /// Weight or volume of one (10 for one 10 g biscuit).
+  final double amountEach;
+
+  /// 'g' or 'ml'.
+  final String unit;
+
+  const HouseholdMeasure({
+    required this.name,
+    required this.perServing,
+    required this.amountEach,
+    required this.unit,
+  });
+
+  // Malay measures and abbreviations have no plural form.
+  static const Set<String> _samePlural = <String>{
+    'keping', 'biji', 'paket', 'uncang', 'cawan', 'botol', 'tin',
+    'bungkus', 'batang', 'sudu', 'sudu besar', 'sudu teh', 'pek',
+    'kotak', 'tbsp', 'tsp',
+  };
+
+  /// "cup" / "cups", "glass" / "glasses", "keping" / "keping".
+  String nameFor(double count) {
+    if (count <= 1 || _samePlural.contains(name)) return name;
+
+    if (RegExp(r'(s|x|ch|sh)$').hasMatch(name)) return '${name}es';
+    if (RegExp(r'[^aeiou]y$').hasMatch(name)) {
+      return '${name.substring(0, name.length - 1)}ies';
+    }
+
+    return '${name}s';
+  }
+
+  /// "½", "1", "1½", "2.4".
+  static String countText(double count) {
+    final double whole = count.floorToDouble();
+    final double rest = count - whole;
+
+    String fraction(double r) {
+      if ((r - 0.5).abs() < 1e-6) return '½';
+      if ((r - 0.25).abs() < 1e-6) return '¼';
+      if ((r - 0.75).abs() < 1e-6) return '¾';
+
+      return '';
+    }
+
+    if (rest.abs() < 1e-6) return whole.toInt().toString();
+
+    final String f = fraction(rest);
+
+    if (f.isNotEmpty) return whole == 0 ? f : '${whole.toInt()}$f';
+
+    return count.toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '');
+  }
+
+  /// "½ cup", "3 biscuits".
+  String label(double count) => '${countText(count)} ${nameFor(count)}';
+
+  /// Servings for [count] of them (1 biscuit = 1/3 serving).
+  double servingsFor(double count) => count / perServing;
+
+  /// How many of them [servings] is (1/3 serving = 1).
+  double countFor(double servings) => servings * perServing;
+
+  /// True when [servings] is a whole number of them, or a
+  /// half, so it reads naturally ("2 biscuits", "½ cup").
+  bool readsNaturally(double servings) {
+    final double c = countFor(servings);
+
+    return ((c * 2) - (c * 2).roundToDouble()).abs() < 1e-6 && c > 0;
+  }
+}
+
 /// A ready-made choice for the "How much will you have?"
 /// picker.
 class PortionOption {

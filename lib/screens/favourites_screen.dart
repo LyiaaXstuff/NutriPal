@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
 import '../models/scan_record.dart';
+import '../services/scan_filter.dart';
 import '../services/scan_history_service.dart';
 import '../widgets/scan_record_card.dart';
+import '../widgets/scan_search_bar.dart';
 import 'saved_scan_navigation.dart';
 
 // =======================================================
@@ -32,10 +34,29 @@ class _FavouritesScreenState extends State<FavouritesScreen> {
 
   final ScanHistoryService _history = ScanHistoryService.instance;
 
+  // Search and filter.
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+  ScanKind _kind = ScanKind.all;
+
   @override
   void initState() {
     super.initState();
     _history.cleanUpExpired();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _clearFilters() {
+    _search.clear();
+    setState(() {
+      _query = '';
+      _kind = ScanKind.all;
+    });
   }
 
   Future<void> _unfavourite(ScanRecord r) async {
@@ -77,6 +98,8 @@ class _FavouritesScreenState extends State<FavouritesScreen> {
           listenable: _history,
           builder: (BuildContext context, Widget? child) {
             final List<ScanRecord> favourites = _history.favourites;
+            final List<ScanRecord> shown =
+                ScanFilter.apply(favourites, query: _query, kind: _kind);
 
             return ListView(
               // Room for the floating navigation bar.
@@ -89,7 +112,7 @@ class _FavouritesScreenState extends State<FavouritesScreen> {
               children: [
                 const Text(
                   'Favourites',
-                  style: TextStyle(color: _ink, fontSize: 26, fontWeight: FontWeight.w900),
+                  style: TextStyle(color: _ink, fontSize: 22, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -104,17 +127,28 @@ class _FavouritesScreenState extends State<FavouritesScreen> {
                   )
                 else if (favourites.isEmpty)
                   const _EmptyFavourites()
-                else
-                  for (final ScanRecord r in favourites)
+                else ...[
+                  ScanSearchBar<ScanKind>(
+                    controller: _search,
+                    options: ScanKind.values,
+                    selected: _kind,
+                    labelOf: (ScanKind k) => k.label,
+                    iconOf: ScanSearchBar.kindIcon,
+                    onQueryChanged: (String q) => setState(() => _query = q),
+                    onSelected: (ScanKind k) => setState(() => _kind = k),
+                  ),
+                  const SizedBox(height: 14),
+                  if (shown.isEmpty) ScanNoMatches(onClear: _clearFilters),
+                  for (final ScanRecord r in shown)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: ScanRecordCard(
                         record: r,
-                        showSummary: true,
                         onTap: () => openSavedScan(context, record: r, profile: widget.profile),
                         onFavouriteTap: () => _unfavourite(r),
                       ),
                     ),
+                ],
               ],
             );
           },

@@ -606,7 +606,7 @@ class _UserAccountState extends State<UserAccount> {
                                 .arrow_back_ios_new_rounded,
                             color:
                                 darkPurple,
-                            size: 24,
+                            size: 21,
                           ),
                         ),
                       ),
@@ -617,7 +617,7 @@ class _UserAccountState extends State<UserAccount> {
                             TextStyle(
                           color:
                               darkPurple,
-                          fontSize: 25,
+                          fontSize: 22,
                           fontWeight:
                               FontWeight.w900,
                         ),

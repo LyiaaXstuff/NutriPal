@@ -41,6 +41,54 @@ class AreaText {
   });
 }
 
+/// One nutrient line on a health area card, e.g.
+/// "Sugar 14.7 g" · "almost half your sugar for the day (40%)".
+class PlainFact {
+  // Canonical nutrient name ('Total Sugars'), for the icon.
+  final String nutrient;
+  final String label;
+  final String amount;
+  final String meaning;
+
+  const PlainFact({
+    required this.nutrient,
+    required this.label,
+    required this.amount,
+    required this.meaning,
+  });
+}
+
+/// A health area card in plain words ("plain answer first").
+class PlainAreaText {
+  /// One-line answer: "A lot of sugar for you in this portion".
+  final String headline;
+
+  /// Where the marker sits on the Low | Moderate | High bar,
+  /// 0..1. Null when the area cannot be judged.
+  final double? marker;
+
+  final List<PlainFact> facts;
+
+  /// What to try next (moderate or high only).
+  final String? tip;
+
+  /// Fibre, when the portion gives a useful amount.
+  final String? goodNews;
+
+  /// Small extra line: why the product is rated higher than
+  /// the portion alone, or what the label does not show.
+  final String? note;
+
+  const PlainAreaText({
+    required this.headline,
+    required this.marker,
+    required this.facts,
+    this.tip,
+    this.goodNews,
+    this.note,
+  });
+}
+
 class ProductTip {
   final bool ok;
   final String text;
@@ -55,6 +103,16 @@ class InsightTextService {
       NutritionAnalysisService.formatAmount(v, unit);
 
   static String _pct(double share) => NutritionAnalysisService.formatShare(share);
+
+  // Up to 2 decimals, no rounding to 1 place: 0.75 -> "0.75",
+  // 1.5 -> "1.5", 120 -> "120".
+  static String _exact(double v) {
+    final String text = v.toStringAsFixed(v.abs() >= 100 ? 0 : 2);
+
+    if (!text.contains('.')) return text;
+
+    return text.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  }
 
   // 2000 -> "2,000"
   static String _big(double v, String unit) {
@@ -82,14 +140,28 @@ class InsightTextService {
   // OVERALL VERDICT
   // =====================================================
 
-  static OverallText overall(NutritionAnalysis a) {
+  /// [weightGoal] ('lose' | 'maintain' | 'gain') names the
+  /// weight area by the user's own goal, e.g. "your
+  /// weight-loss goal" instead of "weight".
+  static OverallText overall(NutritionAnalysis a, {String? weightGoal}) {
     final List<AreaAssessment> judged =
         a.areas.where((AreaAssessment x) => x.level != null).toList();
+
+    String nameOf(HealthArea area) {
+      if (area != HealthArea.weight) return area.title.toLowerCase();
+
+      return switch (weightGoal) {
+        'lose' => 'your weight-loss goal',
+        'maintain' => 'your weight-maintenance goal',
+        'gain' => 'your weight-gain goal',
+        _ => 'weight',
+      };
+    }
 
     String names(NutrientLevel level) {
       final List<String> list = <String>[
         for (final AreaAssessment x in judged)
-          if (x.level == level) x.area.title.toLowerCase(),
+          if (x.level == level) nameOf(x.area),
       ];
 
       if (list.length <= 1) return list.join();
@@ -124,6 +196,213 @@ class InsightTextService {
               'health areas.',
         );
     }
+  }
+
+  // =====================================================
+  // ONE HEALTH AREA CARD, PLAIN WORDS
+  // =====================================================
+  //
+  // Same numbers as [area], said the way people talk:
+  // a 24 % share becomes "about a quarter". Fixed rules,
+  // no AI.
+
+  /// "about a quarter", "almost half"... for a share.
+  static String fraction(double share) {
+    if (share < 0.05) return 'a tiny part';
+    if (share < 0.15) return 'a small part';
+    if (share < 0.22) return 'about a fifth';
+    if (share < 0.29) return 'about a quarter';
+    if (share < 0.38) return 'about a third';
+    if (share < 0.46) return 'almost half';
+    if (share < 0.56) return 'about half';
+    if (share < 0.75) return 'more than half';
+    if (share < 0.95) return 'most';
+
+    return 'nearly all';
+  }
+
+  static String _plainName(String nutrient) => switch (nutrient) {
+        'Carbohydrate' => 'carbs',
+        'Total Sugars' => 'sugar',
+        'Sodium' => 'sodium (salt)',
+        'Saturated Fat' => 'saturated fat',
+        'Trans Fat' => 'trans fat',
+        'Total Fat' => 'fat',
+        'Energy' => 'energy',
+        _ => nutrient.toLowerCase(),
+      };
+
+  static String _label(String nutrient) => switch (nutrient) {
+        'Carbohydrate' => 'Carbs',
+        'Total Sugars' => 'Sugar',
+        'Sodium' => 'Sodium',
+        'Saturated Fat' => 'Saturated fat',
+        'Trans Fat' => 'Trans fat',
+        'Total Fat' => 'Fat',
+        'Energy' => 'Energy',
+        _ => nutrient,
+      };
+
+  static String _meaning(NutrientAssessment n) {
+    final double share = n.share ?? 0;
+    final String pct = _pct(share);
+
+    if (n.name == 'Carbohydrate') {
+      if (share > 1.05) return 'more than one meal should have ($pct)';
+
+      return '${fraction(share)} of what one meal should have ($pct)';
+    }
+
+    final String what = n.name == 'Energy' ? 'energy' : _plainName(n.name);
+
+    if (share > 1.05) return "more than your whole day's $what ($pct)";
+
+    return '${fraction(share)} of your $what for the day ($pct)';
+  }
+
+  /// 0..1 on the Low | Moderate | High bar: inside the
+  /// level's third, by how big the share is.
+  static double _marker(NutrientLevel level, double share) {
+    final NutrientLevel byShare = NutritionAnalysisService.shareLevel(share);
+
+    // Rated higher because of the product itself: middle of
+    // that level.
+    if (byShare != level) return (level.index + 0.5) / 3;
+
+    final double low = AnalysisRules.lowShare;
+    final double high = AnalysisRules.highShare;
+
+    final double t = switch (level) {
+      NutrientLevel.low => (share / low),
+      NutrientLevel.moderate => (share - low) / (high - low),
+      NutrientLevel.high => (share - high) / high,
+    };
+
+    return ((level.index + t.clamp(0.08, 0.92)) / 3).clamp(0.03, 0.97);
+  }
+
+  static PlainAreaText plainArea(
+    AreaAssessment area,
+    NutritionAnalysis a, {
+    String? weightGoal,
+  }) {
+    final NutrientLevel? level = area.level;
+
+    if (level == null) {
+      final String missing = area.missing.isEmpty
+          ? 'the nutrients it needs'
+          : area.missing.map(_lower).join(' or ');
+
+      return PlainAreaText(
+        headline: 'Not enough information',
+        marker: null,
+        facts: const <PlainFact>[],
+        note: 'This label does not show $missing, so NutriPal cannot judge this area.',
+      );
+    }
+
+    final String decider = _plainName(area.decidedBy ?? '');
+
+    // ---- headline ---------------------------------------
+    final String headline = switch (level) {
+      NutrientLevel.high => 'A lot of $decider for you in this portion',
+      NutrientLevel.moderate => switch (area.area) {
+          HealthArea.diabetes => 'Okay if you count it in your meal',
+          HealthArea.bloodPressure => 'Some salt, so go easy on salty food today',
+          HealthArea.cholesterol => 'Some $decider, fine now and then',
+          HealthArea.weight => 'Okay if you keep to this portion',
+        },
+      NutrientLevel.low => switch (area.area) {
+          HealthArea.diabetes => 'Easy on your blood sugar',
+          HealthArea.bloodPressure => 'Low in salt for you',
+          HealthArea.cholesterol => 'Kind to your cholesterol',
+          HealthArea.weight => switch (weightGoal) {
+              'lose' => 'Fits your weight-loss goal',
+              'gain' => 'Light, so add more to reach your weight-gain goal',
+              _ => 'Fits your weight goal',
+            },
+        },
+    };
+
+    // ---- facts: the deciding nutrient first -------------
+    final List<NutrientAssessment> rated = <NutrientAssessment>[...area.nutrients]
+      ..sort((NutrientAssessment x, NutrientAssessment y) {
+        if (x.name == area.decidedBy) return -1;
+        if (y.name == area.decidedBy) return 1;
+
+        return 0;
+      });
+
+    final List<PlainFact> facts = <PlainFact>[
+      for (final NutrientAssessment n in rated)
+        if (n.share != null)
+          PlainFact(
+            nutrient: n.name,
+            label: _label(n.name),
+            amount: '${_f(n.amount, n.unit)} ${n.unit}',
+            meaning: _meaning(n),
+          ),
+    ];
+
+    // ---- marker -----------------------------------------
+    final NutrientAssessment? main = a.nutrients[area.decidedBy] ?? _mainNutrient(area, a);
+    final double marker = _marker(level, main?.share ?? 0);
+
+    // ---- tip --------------------------------------------
+    final String? tip = switch (level) {
+      NutrientLevel.high => 'Try half this portion, or a product with less $decider.',
+      NutrientLevel.moderate => switch (area.area) {
+          HealthArea.diabetes => 'Count it as part of your meal.',
+          HealthArea.bloodPressure => 'Keep your other meals today less salty.',
+          HealthArea.cholesterol => 'Enjoy it now and then, not every day.',
+          HealthArea.weight => 'Keep to this portion.',
+        },
+      NutrientLevel.low => null,
+    };
+
+    // ---- good news: fibre -------------------------------
+    String? goodNews;
+    final NutrientAssessment? fibre = area.benefit;
+
+    if (fibre != null && (fibre.share ?? 0) > 0.10) {
+      final String helps = switch (area.area) {
+        HealthArea.diabetes => 'Fibre helps keep blood sugar steady.',
+        HealthArea.cholesterol => 'Fibre can help lower cholesterol.',
+        HealthArea.weight => 'Fibre helps you feel full for longer.',
+        HealthArea.bloodPressure => 'Fibre is good for you.',
+      };
+
+      goodNews = 'It has ${_f(fibre.amount, 'g')} g of fibre, '
+          '${fraction(fibre.share!)} of what you need each day. $helps';
+    }
+
+    // ---- note -------------------------------------------
+    final List<String> notes = <String>[];
+
+    final NutrientAssessment? d = area.decidedBy == null ? null : a.nutrients[area.decidedBy];
+
+    if (d != null &&
+        d.productLevel == level &&
+        NutritionAnalysisService.shareLevel(d.share ?? 0).index < level.index &&
+        d.per100 != null) {
+      notes.add(
+        'The product itself is ${level.label.toLowerCase()} in ${_lower(d.name)} '
+        '(${_f(d.per100!, d.unit)} ${d.unit} ${a.per100Label}).',
+      );
+    }
+
+    if (area.missing.isNotEmpty) {
+      notes.add('Not on the label: ${area.missing.map(_lower).join(', ')}.');
+    }
+
+    return PlainAreaText(
+      headline: headline,
+      marker: marker,
+      facts: facts,
+      tip: tip,
+      goodNews: goodNews,
+      note: notes.isEmpty ? null : notes.join(' '),
+    );
   }
 
   // =====================================================
@@ -211,10 +490,18 @@ class InsightTextService {
     // Fibre bonus.
     final NutrientAssessment? fibre = area.benefit;
 
+    // Plain words: what fibre does for this health area.
     if (fibre != null && (fibre.share ?? 0) > 0.10) {
+      final String helps = switch (area.area) {
+        HealthArea.diabetes => 'Fibre helps keep blood sugar steady.',
+        HealthArea.cholesterol => 'Fibre can help lower cholesterol.',
+        HealthArea.weight => 'Fibre helps you feel full for longer.',
+        HealthArea.bloodPressure => 'Fibre is good for you.',
+      };
+
       why.add(
-        'Bonus: ${_f(fibre.amount, 'g')} g fibre '
-        '(${_pct(fibre.share!)} of your daily ${_f(fibre.target!, 'g')} g).',
+        'Good news: it has ${_f(fibre.amount, 'g')} g of fibre, about '
+        '${_pct(fibre.share!)} of what you need each day. $helps',
       );
     }
 
@@ -376,13 +663,18 @@ class InsightTextService {
       final bool ok = n!.per100! <= limit;
       final String what = _lower(name);
 
+      // Exact numbers (0.75, not 0.8), so the limit and the
+      // product's value read the same way as the rule.
+      final String max = _exact(limit);
+      final String has = _exact(n.per100!);
+
       tips.add(ProductTip(
         ok,
         ok
-            ? 'Pick products with up to ${_f(limit, unit)} $unit $what ${a.per100Label}. '
-                'This one has ${_f(n.per100!, unit)} $unit.'
-            : 'For less $what, look for up to ${_f(limit, unit)} $unit ${a.per100Label}. '
-                'This one has ${_f(n.per100!, unit)} $unit.',
+            ? 'Pick products with up to $max $unit $what ${a.per100Label}. '
+                'This one has $has $unit.'
+            : 'For less $what, look for up to $max $unit ${a.per100Label}. '
+                'This one has $has $unit.',
       ));
     }
 

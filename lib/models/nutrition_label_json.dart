@@ -54,6 +54,7 @@ class NutritionLabelJson {
         'productName': d.productName,
         'productBrand': d.productBrand,
         'barcode': d.barcode,
+        'productImageUrl': d.productImageUrl,
       };
 
   static NutritionLabelData fromJson(Map<String, dynamic> j) {
@@ -122,6 +123,7 @@ class NutritionLabelJson {
       ],
       productName: j['productName'] as String?,
       productBrand: j['productBrand'] as String?,
+      productImageUrl: j['productImageUrl'] as String?,
       barcode: j['barcode'] as String?,
     );
   }

@@ -139,10 +139,17 @@ class _AskNutriPalScreenState extends State<AskNutriPalScreen> {
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
               child: Row(
                 children: [
-                  NpCircleButton(
-                    icon: Icons.arrow_back_rounded,
+                  // Same thin "<" back arrow as the other screens.
+                  IconButton(
                     tooltip: 'Back',
                     onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 44),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Color(0xFF38138C),
+                      size: 21,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Image.asset('assets/images/NutriPal Mascot7.png', width: 40, height: 40),

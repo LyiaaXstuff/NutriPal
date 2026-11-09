@@ -54,6 +54,7 @@ class FoodDatabaseService {
     'serving_quantity_unit',
     'nutrition_data_per',
     'nutriments',
+    'image_front_url',
   ];
 
   // =====================================================
@@ -130,6 +131,10 @@ class FoodDatabaseService {
     final bool liquid = _isLiquid(product);
 
     final _Serving? serving = _servingOf(product, liquid: liquid);
+
+    // "1 glass (200 ml)", "2 biscuits (25 g)": the everyday
+    // measure, when the entry has one.
+    final _Household? household = serving == null ? null : _householdOf(product['serving_size']);
 
     // Nutrient keys present ("proteins", "vitamin-c", ...).
     final Set<String> keys = <String>{};
@@ -246,6 +251,8 @@ class FoodDatabaseService {
     return NutritionLabelData(
       servingSizeAmount: serving?.amount,
       servingSizeUnit: serving?.unit,
+      servingUnitAmount: household?.amount,
+      servingUnitName: household?.name,
       columns: columns,
       nutrients: rows,
       rawText: '',
@@ -253,6 +260,7 @@ class FoodDatabaseService {
       productName: _productName(product),
       productBrand: _firstBrand(product['brands']),
       barcode: barcode,
+      productImageUrl: _imageUrl(product['image_front_url']),
       notes: const <String>[
         'Nutrition values come from Open Food Facts, a community food '
             'database. Please compare them with the label on the pack.',
@@ -461,6 +469,41 @@ class FoodDatabaseService {
     return _Serving(amount, m.group(2)!.toLowerCase());
   }
 
+  /// The everyday measure in an Open Food Facts serving
+  /// size such as "1 glass (200 ml)"; null for "30 g" or
+  /// "1 portion (250 ml)".
+  static _Household? _householdOf(Object? servingSize) {
+    final RegExpMatch? m = RegExp(
+      r'^\s*(\d+(?:[.,]\d+)?|½|¼|1/2|1/4)\s*([a-zA-Z][a-zA-Z ]{1,24}?)\s*\(\s*\d',
+    ).firstMatch('${servingSize ?? ''}');
+
+    if (m == null) return null;
+
+    final String n = m.group(1)!;
+    final double? amount = switch (n) {
+      '½' || '1/2' => 0.5,
+      '¼' || '1/4' => 0.25,
+      _ => double.tryParse(n.replaceAll(',', '.')),
+    };
+
+    final String name = m.group(2)!.trim().toLowerCase();
+
+    const Set<String> generic = <String>{
+      'portion', 'portions', 'serving', 'servings', 'serve', 'g', 'ml', 'gram', 'grams',
+    };
+
+    if (amount == null || amount <= 0 || generic.contains(name)) return null;
+
+    return _Household(amount, name);
+  }
+
+  /// The front-of-pack photo, only as an https link.
+  static String? _imageUrl(Object? value) {
+    final String url = '${value ?? ''}'.trim();
+
+    return url.startsWith('https://') ? url : null;
+  }
+
   static String? _productName(Map<String, dynamic> product) {
     for (final String key in <String>[
       'product_name',
@@ -511,4 +554,11 @@ class _Serving {
   final String unit;
 
   const _Serving(this.amount, this.unit);
+}
+
+class _Household {
+  final double amount;
+  final String name;
+
+  const _Household(this.amount, this.name);
 }

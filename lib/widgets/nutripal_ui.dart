@@ -116,10 +116,13 @@ class NpTopBar extends StatelessWidget {
           child: Text(
             title,
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            // Same title style as every other screen.
             style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: NpColors.ink,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF38138C),
             ),
           ),
         ),
@@ -224,17 +227,23 @@ class NpPrimaryButton extends StatelessWidget {
           disabledBackgroundColor: color.withValues(alpha: 0.4),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
         onPressed: onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 20),
-              const SizedBox(width: 8),
+        // Shrinks slightly in a narrow button instead of
+        // cutting the label off with "...".
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 20),
+                const SizedBox(width: 8),
+              ],
+              Text(label, maxLines: 1),
             ],
-            Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
-          ],
+          ),
         ),
       ),
     );

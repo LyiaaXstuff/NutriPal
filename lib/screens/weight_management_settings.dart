@@ -1085,7 +1085,7 @@ class _WeightManagementSettingsState
                           color:
                               primaryPurple,
                           size:
-                              25,
+                              21,
                         ),
                       ),
                     ),
@@ -1097,7 +1097,7 @@ class _WeightManagementSettingsState
                         color:
                             darkPurple,
                         fontSize:
-                            24,
+                            22,
                         fontWeight:
                             FontWeight.w900,
                       ),
@@ -1295,7 +1295,7 @@ class _WeightManagementSettingsState
                           color:
                               primaryPurple,
                           size:
-                              25,
+                              21,
                         ),
                       ),
                     ),
@@ -1307,7 +1307,7 @@ class _WeightManagementSettingsState
                         color:
                             darkPurple,
                         fontSize:
-                            24,
+                            22,
                         fontWeight:
                             FontWeight.w900,
                       ),

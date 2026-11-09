@@ -146,6 +146,7 @@ class NutritionLabelEditor {
       productName: data.productName,
       productBrand: data.productBrand,
       barcode: data.barcode,
+      productImageUrl: data.productImageUrl,
     );
   }
 
