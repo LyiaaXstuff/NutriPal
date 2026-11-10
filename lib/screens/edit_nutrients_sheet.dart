@@ -10,8 +10,10 @@ import '../widgets/nutripal_ui.dart';
 // 5 · EDIT NUTRIENTS (bottom sheet)
 // =======================================================
 //
-// Lets the user correct the serving size and any value,
-// column by column, or add a nutrient the reading missed.
+// Lets the user correct the serving size (and its
+// everyday measure, e.g. 1 cup), any value column by
+// column, add a nutrient the reading missed, or remove one
+// that is not on the pack.
 // Returns the corrected NutritionLabelData (null = no
 // change); the result screen then re-runs the analysis.
 //
@@ -85,6 +87,14 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
   late final TextEditingController _servingSize;
   late final TextEditingController _servings;
 
+  // Everyday measure: "1" + "cup", "3" + "biscuits".
+  late final TextEditingController _measureCount;
+  late final TextEditingController _measureName;
+
+  // Rows the user removed (applied on save, so the row
+  // numbers used by _fields stay valid while editing).
+  final Set<int> _removed = <int>{};
+
   late int _column;
 
   // "row:column:index" -> field. index "n" = new value.
@@ -109,6 +119,13 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
           : NutritionAnalysisService.formatAmount(_working.servingsPerPackage!, 'g'),
     );
 
+    _measureCount = TextEditingController(
+      text: _working.servingUnitAmount == null
+          ? ''
+          : NutritionAnalysisService.formatAmount(_working.servingUnitAmount!, 'g'),
+    );
+    _measureName = TextEditingController(text: _working.servingUnitName ?? '');
+
     final int ps = _working.columnIndexFor(NutritionColumnBasis.perServing);
 
     _column = ps >= 0 ? ps : 0;
@@ -118,6 +135,8 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
   void dispose() {
     _servingSize.dispose();
     _servings.dispose();
+    _measureCount.dispose();
+    _measureName.dispose();
 
     for (final _Field f in _fields.values) {
       f.controller.dispose();
@@ -349,6 +368,33 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
       );
     }
 
+    // ---- everyday measure (1 cup, 3 biscuits) ------------
+    final String countText = _measureCount.text.trim().replaceAll(',', '.');
+    final String measureName = _measureName.text.trim();
+    final double? count = countText.isEmpty ? null : double.tryParse(countText);
+
+    if (countText.isNotEmpty && (count == null || count <= 0)) {
+      setState(() => _error = 'The measure needs a number, e.g. 1 cup or 3 biscuits.');
+      return;
+    }
+
+    if ((countText.isEmpty) != (measureName.isEmpty)) {
+      setState(() => _error = 'Enter both the number and the measure, e.g. 1 and cup.');
+      return;
+    }
+
+    final String countShown = result.servingUnitAmount == null
+        ? ''
+        : NutritionAnalysisService.formatAmount(result.servingUnitAmount!, 'g');
+
+    if (countText != countShown || measureName != (result.servingUnitName ?? '')) {
+      result = NutritionLabelEditor.setHouseholdMeasure(
+        result,
+        amount: countText == countShown ? result.servingUnitAmount : count,
+        name: measureName,
+      );
+    }
+
     // ---- values -----------------------------------------
     final Map<int, Set<int>> editedColumns = <int, Set<int>>{};
 
@@ -357,6 +403,9 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
       final int row = int.parse(key[0]);
       final int column = int.parse(key[1]);
       final _Field f = e.value;
+
+      // Removed: its values do not matter.
+      if (_removed.contains(row)) continue;
 
       final String text = f.controller.text.trim().replaceAll(',', '.');
 
@@ -403,6 +452,10 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
         );
       }
     }
+
+    // ---- removed nutrients (last, so row numbers above
+    // still pointed at the right rows) --------------------
+    result = NutritionLabelEditor.removeNutrients(result, _removed);
 
     final bool changed = !identical(result, widget.data);
 
@@ -484,6 +537,51 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  // Everyday measure printed with the serving
+                  // size, e.g. "300 ml (1 can)".
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 96,
+                        child: _NumberField(
+                          controller: _measureCount,
+                          label: 'Number',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _measureName,
+                          textCapitalization: TextCapitalization.none,
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: NpColors.ink),
+                          decoration: InputDecoration(
+                            labelText: 'Measure (optional)',
+                            hintText: 'cup, can, biscuits, keping…',
+                            filled: true,
+                            fillColor: Colors.white,
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: Color(0xFFDCCFF0)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: NpColors.teal, width: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, top: 6),
+                    child: Text(
+                      'Only if the pack shows one, e.g. 300 ml (1 can).',
+                      style: TextStyle(fontSize: 12, color: NpColors.muted),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   if (columns.length > 1)
                     SegmentedButton<int>(
@@ -501,12 +599,19 @@ class _EditNutrientsSheetState extends State<_EditNutrientsSheet> {
                     ),
                   const SizedBox(height: 12),
                   for (int r = 0; r < _working.nutrients.length; r++)
-                    _RowEditor(
-                      name: _working.nutrients[r].name,
-                      fields: _fieldsFor(r),
-                      units: _units,
-                      onUnitChanged: () => setState(() {}),
-                    ),
+                    if (_removed.contains(r))
+                      _RemovedRow(
+                        name: _working.nutrients[r].name,
+                        onUndo: () => setState(() => _removed.remove(r)),
+                      )
+                    else
+                      _RowEditor(
+                        name: _working.nutrients[r].name,
+                        fields: _fieldsFor(r),
+                        units: _units,
+                        onUnitChanged: () => setState(() {}),
+                        onRemove: () => setState(() => _removed.add(r)),
+                      ),
                   const SizedBox(height: 8),
                   TextButton.icon(
                     onPressed: _addNutrient,
@@ -577,11 +682,15 @@ class _RowEditor extends StatelessWidget {
   final List<String> units;
   final VoidCallback onUnitChanged;
 
+  // Not on the pack: take it out of the table.
+  final VoidCallback onRemove;
+
   const _RowEditor({
     required this.name,
     required this.fields,
     required this.units,
     required this.onUnitChanged,
+    required this.onRemove,
   });
 
   @override
@@ -590,15 +699,21 @@ class _RowEditor extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
+          // Half the width for the name, so long names like
+          // "Monounsaturated Fat" wrap between words, never
+          // inside one.
           Expanded(
-            flex: 4,
-            child: Text(
-              name,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: NpColors.ink),
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                name,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: NpColors.ink),
+              ),
             ),
           ),
           Expanded(
-            flex: 6,
+            flex: 5,
             child: Column(
               children: [
                 for (final _Field f in fields)
@@ -632,7 +747,7 @@ class _RowEditor extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         SizedBox(
-                          width: 64,
+                          width: 58,
                           child: DropdownButton<String>(
                             isExpanded: true,
                             value: units.contains(f.unit) ? f.unit : null,
@@ -654,6 +769,49 @@ class _RowEditor extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Remove $name (not on the pack)',
+            onPressed: onRemove,
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.delete_outline_rounded, color: NpColors.errorInk, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A removed nutrient, with Undo (nothing is deleted until
+/// the user saves).
+class _RemovedRow extends StatelessWidget {
+  final String name;
+  final VoidCallback onUndo;
+
+  const _RemovedRow({required this.name, required this.onUndo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: NpColors.errorBg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.delete_outline_rounded, size: 18, color: NpColors.errorInk),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$name will be removed',
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: NpColors.errorInk),
+            ),
+          ),
+          TextButton(
+            onPressed: onUndo,
+            child: const Text('Undo', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),

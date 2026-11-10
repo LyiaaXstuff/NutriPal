@@ -19,6 +19,35 @@ void main() {
     portion: const Portion.amount(1000, 'ml'),
   );
 
+  test('NutriPal explains, one cup: amounts, good news, it fits', () {
+    final ExplainText t = InsightTextService.explain(
+      oneCup,
+      data: homesoy(),
+      profile: sampleUser,
+      portionText: 'your 236 ml',
+    );
+
+    expect(t.portion, 'In your 236 ml');
+    expect(t.amounts, contains('5.4 g carbs'));
+    expect(t.good, startsWith('Low in'));
+    expect(t.watch, isEmpty);
+    // Worked out by checking twice the portion.
+    expect(t.tip.toLowerCase(), contains('twice this amount (472 ml)'));
+  });
+
+  test('NutriPal explains, one litre: what to watch and a half-portion tip', () {
+    final ExplainText t = InsightTextService.explain(
+      oneLitre,
+      data: homesoy(),
+      profile: sampleUser,
+      portionText: 'your 1000 ml',
+    );
+
+    expect(t.watch, isNotEmpty);
+    expect(t.watch.first, contains('for diabetes'));
+    expect(t.tip, contains('half'));
+  });
+
   test('overall text follows the worst area', () {
     expect(InsightTextService.overall(oneCup).title, 'Good choice for you');
 
@@ -68,7 +97,7 @@ void main() {
     final PlainAreaText t = InsightTextService.plainArea(oneLitre.areas[0], oneLitre);
 
     expect(t.headline, startsWith('A lot of'));
-    expect(t.tip, startsWith('Try half this portion'));
+    expect(t.tip, startsWith('Look for a product with less'));
     expect(t.marker, greaterThan(2 / 3));
   });
 

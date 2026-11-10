@@ -49,6 +49,8 @@ class FoodDatabaseService {
     'generic_name',
     'brands',
     'quantity',
+    'product_quantity',
+    'product_quantity_unit',
     'serving_size',
     'serving_quantity',
     'serving_quantity_unit',
@@ -251,6 +253,7 @@ class FoodDatabaseService {
     return NutritionLabelData(
       servingSizeAmount: serving?.amount,
       servingSizeUnit: serving?.unit,
+      servingsPerPackage: serving == null ? null : servingsPerPack(product, serving.amount, serving.unit),
       servingUnitAmount: household?.amount,
       servingUnitName: household?.name,
       columns: columns,
@@ -495,6 +498,70 @@ class FoodDatabaseService {
     if (amount == null || amount <= 0 || generic.contains(name)) return null;
 
     return _Household(amount, name);
+  }
+
+  // =====================================================
+  // SERVINGS PER PACK
+  // =====================================================
+  //
+  // Open Food Facts has no "servings per package" field,
+  // but it has the pack size ("300 ml", "4 x 250 ml") and
+  // the serving size. Same kind of unit (ml with ml, g with
+  // g): servings = pack ÷ serving. Different units, or an
+  // odd result: null (nothing is guessed).
+
+  /// Pack size in g or ml, from "300 ml", "1 L", "4 x 250 ml"
+  /// or the structured product_quantity fields.
+  static ({double amount, String unit})? packSize(Map<String, dynamic> product) {
+    final String text = '${product['quantity'] ?? ''}'.toLowerCase().replaceAll(',', '.');
+
+    final RegExpMatch? m = RegExp(
+      r'^\s*(?:(\d+)\s*[x×]\s*)?(\d+(?:\.\d+)?)\s*(kg|g|ml|cl|l)\b',
+    ).firstMatch(text);
+
+    if (m != null) {
+      final double count = double.tryParse(m.group(1) ?? '1') ?? 1;
+      final double value = double.parse(m.group(2)!);
+
+      final ({double amount, String unit}) one = switch (m.group(3)!) {
+        'kg' => (amount: value * 1000, unit: 'g'),
+        'g' => (amount: value, unit: 'g'),
+        'l' => (amount: value * 1000, unit: 'ml'),
+        'cl' => (amount: value * 10, unit: 'ml'),
+        _ => (amount: value, unit: 'ml'),
+      };
+
+      return (amount: one.amount * count, unit: one.unit);
+    }
+
+    final double? q = _number(product['product_quantity']);
+    final String unit = '${product['product_quantity_unit'] ?? ''}'.toLowerCase();
+
+    if (q != null && q > 0 && (unit == 'g' || unit == 'ml')) {
+      return (amount: q, unit: unit);
+    }
+
+    return null;
+  }
+
+  static double? servingsPerPack(Map<String, dynamic> product, double servingAmount, String servingUnit) {
+    final ({double amount, String unit})? pack = packSize(product);
+
+    if (pack == null || servingAmount <= 0 || pack.unit != servingUnit.toLowerCase()) {
+      return null;
+    }
+
+    final double ratio = pack.amount / servingAmount;
+
+    // Less than one serving, or an unlikely number.
+    if (ratio < 0.95 || ratio > 200) return null;
+
+    // 3.98 -> 4; otherwise one decimal (2.5 servings).
+    final double whole = ratio.roundToDouble();
+
+    if ((ratio - whole).abs() < 0.06) return whole;
+
+    return (ratio * 10).round() / 10;
   }
 
   /// The front-of-pack photo, only as an https link.

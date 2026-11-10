@@ -123,20 +123,74 @@ class NutritionLabelEditor {
     return result;
   }
 
+  /// Removes nutrients that are not on the pack (a reading
+  /// mistake), by row index.
+  static NutritionLabelData removeNutrients(NutritionLabelData data, Set<int> rows) {
+    if (rows.isEmpty) return data;
+
+    return data.copyWith(
+      nutrients: <NutrientRow>[
+        for (int i = 0; i < data.nutrients.length; i++)
+          if (!rows.contains(i)) data.nutrients[i],
+      ],
+      notes: _withEditedNote(data.notes),
+    );
+  }
+
+  /// The everyday measure next to the serving size, e.g.
+  /// 1 cup or 3 biscuits. Null [amount] or an empty [name]
+  /// removes it.
+  static NutritionLabelData setHouseholdMeasure(
+    NutritionLabelData data, {
+    double? amount,
+    String? name,
+  }) {
+    final String cleaned = (name ?? '').trim();
+    final bool clear = amount == null || amount <= 0 || cleaned.isEmpty;
+
+    return _rebuild(
+      data,
+      servingSize: data.servingSizeAmount,
+      servingSizeUnit: data.servingSizeUnit,
+      servingsPerPackage: data.servingsPerPackage,
+      servingUnitAmount: clear ? null : amount,
+      servingUnitName: clear ? null : cleaned,
+    );
+  }
+
   static NutritionLabelData setServing(
     NutritionLabelData data, {
     double? servingSize,
     double? servingsPerPackage,
   }) {
-    return NutritionLabelData(
-      servingSizeAmount: servingSize,
+    return _rebuild(
+      data,
+      servingSize: servingSize,
       servingSizeUnit: servingSize == null
           ? null
-          : data.servingSizeUnit ??
-              (data.hasPer100mlColumn ? 'ml' : 'g'),
+          : data.servingSizeUnit ?? (data.hasPer100mlColumn ? 'ml' : 'g'),
       servingsPerPackage: servingsPerPackage,
       servingUnitAmount: data.servingUnitAmount,
       servingUnitName: data.servingUnitName,
+    );
+  }
+
+  // copyWith cannot set a field back to null, so serving
+  // changes rebuild the label.
+  static NutritionLabelData _rebuild(
+    NutritionLabelData data, {
+    required double? servingSize,
+    required String? servingSizeUnit,
+    required double? servingsPerPackage,
+    required double? servingUnitAmount,
+    required String? servingUnitName,
+  }) {
+    return NutritionLabelData(
+      servingSizeAmount: servingSize,
+      servingSizeUnit: servingSizeUnit,
+      servingsPerPackage: servingsPerPackage,
+      servingUnitAmount: servingUnitAmount,
+      servingUnitName: servingUnitName,
       columns: data.columns,
       nutrients: data.nutrients,
       rawText: data.rawText,

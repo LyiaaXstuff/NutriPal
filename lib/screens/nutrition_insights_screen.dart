@@ -249,6 +249,28 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
     return s == 1 ? 'One serving' : '${NutritionAnalysisService.formatAmount(s, 'g')} servings';
   }
 
+  ExplainText _explain(NutritionAnalysis a) {
+    final String amount = a.portionAmount == null || a.portionUnit == null
+        ? ''
+        : '${NutritionAnalysisService.formatAmount(a.portionAmount!, a.portionUnit!)} ${a.portionUnit}';
+
+    final String? household = a.portionServings == null
+        ? null
+        : NutritionAnalysisService.householdText(_data, a.portionServings!);
+
+    final String portion = household != null && amount.isNotEmpty
+        ? 'your $household ($amount)'
+        : (amount.isNotEmpty ? 'your $amount' : _portionText(a).toLowerCase());
+
+    return InsightTextService.explain(
+      a,
+      data: _data,
+      profile: _profile,
+      portionText: portion,
+      weightGoal: _profile.weightGoal,
+    );
+  }
+
   // ---- household measure counter --------------------
 
   static bool _isWholeCount(HouseholdMeasure m, double servings) {
@@ -827,11 +849,8 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    InsightTextService.summary(a, _portionText(a)),
-                    style: const TextStyle(fontSize: 14, height: 1.55, color: NpColors.bodyInk),
-                  ),
-                  const SizedBox(height: 12),
+                  _ExplainBody(text: _explain(a)),
+                  const SizedBox(height: 14),
                   // Chips sit closer together: no extra tap
                   // padding around each one.
                   Wrap(
@@ -1984,3 +2003,114 @@ class _PortionGrid extends StatelessWidget {
     );
   }
 }
+
+// =======================================================
+// NUTRIPAL EXPLAINS BODY
+// =======================================================
+//
+// The portion at a glance: what is in it, its share of the
+// day's energy, and one worked-out tip (what twice or
+// half the portion would do). Good news and what to watch are on the health area
+// cards above, so they are not repeated here.
+
+class _ExplainBody extends StatelessWidget {
+  final ExplainText text;
+
+  const _ExplainBody({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          text.portion,
+          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: NpColors.ink),
+        ),
+        if (text.amounts.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final String v in text.amounts)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: NpColors.softBorder),
+                  ),
+                  child: Text(
+                    v,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: NpColors.bodyInk),
+                  ),
+                ),
+            ],
+          ),
+        ],
+        if (text.energy != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            text.energy!,
+            style: const TextStyle(fontSize: 13.5, height: 1.4, color: NpColors.muted),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _ExplainLine(
+          icon: Icons.lightbulb_outline_rounded,
+          background: NpColors.lilac,
+          ink: NpColors.purple,
+          text: text.tip,
+        ),
+        if (text.note != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            text.note!,
+            style: const TextStyle(fontSize: 12.5, height: 1.4, color: NpColors.muted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ExplainLine extends StatelessWidget {
+  final IconData icon;
+  final Color background;
+  final Color ink;
+  final String text;
+
+  const _ExplainLine({
+    required this.icon,
+    required this.background,
+    required this.ink,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+          child: Icon(icon, size: 16, color: ink),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 14, height: 1.4, color: NpColors.bodyInk),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+

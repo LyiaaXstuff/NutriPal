@@ -9,6 +9,7 @@
 // =======================================================
 
 import '../models/nutrition_analysis.dart';
+import '../models/nutrition_label_data.dart';
 import 'nutrition_analysis_service.dart';
 
 class OverallText {
@@ -86,6 +87,40 @@ class PlainAreaText {
     this.tip,
     this.goodNews,
     this.note,
+  });
+}
+
+/// "NutriPal explains" in short, plain parts.
+class ExplainText {
+  /// "In your 1 cup (236 ml)".
+  final String portion;
+
+  /// "92 kcal", "5.4 g carbs"...
+  final List<String> amounts;
+
+  /// "That is a small part of the energy you need in a day (6%)."
+  final String? energy;
+
+  /// "Low in sugar and sodium (salt) for you."
+  final String? good;
+
+  /// "Fat makes it moderate for cholesterol."
+  final List<String> watch;
+
+  /// What to do next.
+  final String tip;
+
+  /// Standard-limits reminder when the profile is incomplete.
+  final String? note;
+
+  const ExplainText({
+    required this.portion,
+    required this.amounts,
+    required this.energy,
+    required this.good,
+    required this.watch,
+    required this.tip,
+    required this.note,
   });
 }
 
@@ -350,7 +385,9 @@ class InsightTextService {
 
     // ---- tip --------------------------------------------
     final String? tip = switch (level) {
-      NutrientLevel.high => 'Try half this portion, or a product with less $decider.',
+      // The portion tip (what half would do) is worked out in
+      // NutriPal explains, so it is not repeated here.
+      NutrientLevel.high => 'Look for a product with less $decider.',
       NutrientLevel.moderate => switch (area.area) {
           HealthArea.diabetes => 'Count it as part of your meal.',
           HealthArea.bloodPressure => 'Keep your other meals today less salty.',
@@ -590,6 +627,161 @@ class InsightTextService {
 
     return text.toString().trim();
   }
+
+  // =====================================================
+  // NUTRIPAL EXPLAINS (plain parts)
+  // =====================================================
+  //
+  // What is in the portion, what is good, what to watch,
+  // and one thing to try. The tip re-checks half the
+  // portion with the same rules, so "half keeps it low" is
+  // worked out, not guessed.
+
+  static ExplainText explain(
+    NutritionAnalysis a, {
+    required NutritionLabelData data,
+    required NutritionProfile profile,
+    required String portionText,
+    String? weightGoal,
+  }) {
+    // ---- amounts ----------------------------------------
+    final List<String> amounts = <String>[];
+
+    void add(String name, String label) {
+      final NutrientAssessment? n = a.nutrients[name];
+
+      if (n == null) return;
+
+      final String value = '${_f(n.amount, n.unit)} ${n.unit}';
+
+      amounts.add(label.isEmpty ? value : '$value $label');
+    }
+
+    add('Energy', '');
+    add('Carbohydrate', 'carbs');
+    add('Total Sugars', 'sugar');
+    add('Total Fat', 'fat');
+    add('Sodium', 'sodium');
+    add('Protein', 'protein');
+
+    // ---- energy share -----------------------------------
+    final NutrientAssessment? energy = a.nutrients['Energy'];
+    final String? energyLine = energy?.share == null
+        ? null
+        : 'That is ${fraction(energy!.share!)} of the energy you need in a day '
+            '(${_pct(energy.share!)}).';
+
+    // ---- good: rated nutrients that are low --------------
+    final List<String> low = <String>[
+      for (final String name in <String>['Total Sugars', 'Sodium', 'Saturated Fat', 'Total Fat'])
+        if (a.nutrients[name]?.level == NutrientLevel.low) _plainName(name),
+    ];
+
+    final String? good = low.isEmpty ? null : 'Low in ${_joinAnd(low)} for you.';
+
+    // ---- watch: areas that are moderate or high ----------
+    String areaName(HealthArea area) => switch (area) {
+          HealthArea.weight => switch (weightGoal) {
+              'lose' => 'your weight-loss goal',
+              'maintain' => 'your weight goal',
+              'gain' => 'your weight-gain goal',
+              _ => 'weight',
+            },
+          _ => area.title.toLowerCase(),
+        };
+
+    final List<String> watch = <String>[
+      for (final AreaAssessment x in a.areas)
+        if (x.level == NutrientLevel.moderate || x.level == NutrientLevel.high)
+          '${_capital(_plainName(x.decidedBy ?? ''))} makes it '
+              '${x.level!.label.toLowerCase()} for ${areaName(x.area)}.',
+    ];
+
+    // ---- tip: try half the portion -----------------------
+    final String tip = _tip(a, data: data, profile: profile);
+
+    return ExplainText(
+      portion: 'In $portionText',
+      amounts: amounts,
+      energy: energyLine,
+      good: good,
+      watch: watch,
+      tip: tip,
+      note: a.targets.energyIsPersonal
+          ? null
+          : 'Limits use a standard 2,000 kcal day. Add your weight, height and '
+              'activity in your profile for personal limits.',
+    );
+  }
+
+  static String _tip(
+    NutritionAnalysis a, {
+    required NutritionLabelData data,
+    required NutritionProfile profile,
+  }) {
+    final NutrientLevel? now = a.overall;
+
+    if (now == null) return 'Check the label values with Edit if anything looks wrong.';
+
+    // Same portion scaled by [factor] (½ or 2).
+    Portion? scaled(double factor) => a.portionServings != null
+        ? Portion.servings(a.portionServings! * factor)
+        : (a.portionAmount != null && a.portionUnit != null
+            ? Portion.amount(a.portionAmount! * factor, a.portionUnit!)
+            : null);
+
+    String amountOf(NutritionAnalysis x) => x.portionAmount == null || x.portionUnit == null
+        ? ''
+        : ' (${_f(x.portionAmount!, x.portionUnit!)} ${x.portionUnit})';
+
+    // Already low: how much more would still be fine?
+    if (now == NutrientLevel.low) {
+      final Portion? twice = scaled(2);
+
+      if (twice == null) return 'This portion is a good amount for you.';
+
+      final NutritionAnalysis bigger =
+          NutritionAnalysisService.analyse(data: data, profile: profile, portion: twice);
+
+      if (bigger.overall == NutrientLevel.low) {
+        return 'Even twice this amount${amountOf(bigger)} stays low for you.';
+      }
+
+      return 'Twice this amount${amountOf(bigger)} would be '
+          '${(bigger.overall ?? NutrientLevel.moderate).label.toLowerCase()}, '
+          'so this portion is a good amount.';
+    }
+
+    final Portion? half = scaled(0.5);
+
+    if (half == null) return 'A smaller portion lowers every amount above.';
+
+    final NutritionAnalysis smaller =
+        NutritionAnalysisService.analyse(data: data, profile: profile, portion: half);
+
+    final String amount = amountOf(smaller);
+
+    final NutrientLevel? then = smaller.overall;
+
+    if (then == NutrientLevel.low) {
+      return 'Having half$amount keeps it low for all your health areas.';
+    }
+
+    if (then != null && then.index < now.index) {
+      return 'Having half$amount brings it down to ${then.label.toLowerCase()}.';
+    }
+
+    final AreaAssessment worst = a.areas
+        .where((AreaAssessment x) => x.level != null)
+        .reduce((AreaAssessment x, AreaAssessment y) => y.level!.index > x.level!.index ? y : x);
+
+    return 'Even half stays ${now.label.toLowerCase()}, so look for a product with less '
+        '${_plainName(worst.decidedBy ?? 'sugar')}.';
+  }
+
+  static String _joinAnd(List<String> items) => items.length == 1
+      ? items.first
+      : '${items.sublist(0, items.length - 1).join(', ')} and ${items.last}';
 
   // =====================================================
   // QUESTION CHIPS

@@ -209,4 +209,35 @@ void main() {
       isNull,
     );
   });
+
+  group('servings per pack from pack size and serving size', () {
+    double? servings(Map<String, dynamic> changes) => FoodDatabaseService.fromOpenFoodFacts(
+          <String, dynamic>{..._soyDrink(), ...changes},
+          barcode: '9556001234567',
+        ).servingsPerPackage;
+
+    test('1 l pack, 250 ml serving: 4 servings', () {
+      expect(servings(<String, dynamic>{}), 4);
+    });
+
+    test('one 300 ml can, 300 ml serving: 1 serving', () {
+      expect(
+        servings(<String, dynamic>{
+          'quantity': '300 ml',
+          'serving_size': '300 ml',
+          'serving_quantity': 300,
+        }),
+        1,
+      );
+    });
+
+    test('multipack "4 x 250 ml"', () {
+      expect(servings(<String, dynamic>{'quantity': '4 x 250 ml'}), 4);
+    });
+
+    test('different units or no pack size: nothing is guessed', () {
+      expect(servings(<String, dynamic>{'quantity': '300 g'}), isNull);
+      expect(servings(<String, dynamic>{'quantity': null}), isNull);
+    });
+  });
 }
