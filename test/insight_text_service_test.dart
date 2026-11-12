@@ -13,10 +13,12 @@ void main() {
     profile: sampleUser,
   );
 
+  // 1.5 litres: High for diabetes with the NASEM energy
+  // base (1 litre is Moderate).
   final NutritionAnalysis oneLitre = NutritionAnalysisService.analyse(
     data: homesoy(),
     profile: sampleUser,
-    portion: const Portion.amount(1000, 'ml'),
+    portion: const Portion.amount(1500, 'ml'),
   );
 
   test('NutriPal explains, one cup: amounts, good news, it fits', () {
@@ -35,12 +37,12 @@ void main() {
     expect(t.tip.toLowerCase(), contains('twice this amount (472 ml)'));
   });
 
-  test('NutriPal explains, one litre: what to watch and a half-portion tip', () {
+  test('NutriPal explains, 1.5 litres: what to watch and a half-portion tip', () {
     final ExplainText t = InsightTextService.explain(
       oneLitre,
       data: homesoy(),
       profile: sampleUser,
-      portionText: 'your 1000 ml',
+      portionText: 'your 1500 ml',
     );
 
     expect(t.watch, isNotEmpty);
@@ -87,7 +89,7 @@ void main() {
     expect(t.headline, 'Easy on your blood sugar');
     expect(t.facts.first.label, 'Carbs');
     expect(t.facts.first.amount, '5.4 g');
-    expect(t.facts.first.meaning, 'a small part of what one meal should have (8%)');
+    expect(t.facts.first.meaning, 'a small part of what one meal should have (6%)');
     expect(t.tip, isNull);
     expect(t.goodNews, contains('3.5 g of fibre'));
     expect(t.marker, lessThan(1 / 3));
@@ -106,7 +108,7 @@ void main() {
 
     expect(t.value, '5.4');
     expect(t.unit, 'g carbs');
-    expect(t.share, '8% of 71.7 g meal budget');
+    expect(t.share, '6% of 87.2 g meal budget');
     expect(t.why, contains('0.4 carb exchanges'));
     expect(t.why, contains('Good news: it has 3.5 g of fibre, about 14% of what you need each day.'));
     expect(t.why, contains('Fibre helps keep blood sugar steady.'));

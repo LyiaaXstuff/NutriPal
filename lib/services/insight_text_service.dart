@@ -10,6 +10,7 @@
 
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
+import 'energy_requirement.dart' show GoalEnergyResult;
 import 'nutrition_analysis_service.dart';
 
 class OverallText {
@@ -666,9 +667,18 @@ class InsightTextService {
 
     // ---- energy share -----------------------------------
     final NutrientAssessment? energy = a.nutrients['Energy'];
+    // With a weight goal applied, the share is of the goal
+    // energy, so say which figure it is.
+    final GoalEnergyResult? goal = a.targets.goalAdjusted ? a.targets.goal : null;
+    final String energyOf = goal == null
+        ? 'the energy you need in a day'
+        : goal.changeKcal < 0
+            ? 'your daily energy guide for weight loss'
+            : 'your daily energy guide for weight gain';
+
     final String? energyLine = energy?.share == null
         ? null
-        : 'That is ${fraction(energy!.share!)} of the energy you need in a day '
+        : 'That is ${fraction(energy!.share!)} of $energyOf '
             '(${_pct(energy.share!)}).';
 
     // ---- good: rated nutrients that are low --------------

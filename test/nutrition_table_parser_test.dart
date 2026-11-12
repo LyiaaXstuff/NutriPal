@@ -1000,5 +1000,45 @@ void main() {
 
       expect(issues, contains('3 nutrient names are cut off or unreadable.'));
     });
+
+    // P-T01: the photo check shows which part failed, so
+    // each issue also comes back as a problem code.
+    test('P-T01 issues come back as problem codes', () {
+      Set<PhotoProblem> problemsFor(List<OcrTextLine> lines, double w, double h) {
+        final List<NutritionTableDiagnostics> diagnostics =
+            <NutritionTableDiagnostics>[];
+
+        final NutritionLabelData table = NutritionTableParser.parse(
+          lines,
+          diagnosticsOut: diagnostics,
+        );
+
+        final Set<PhotoProblem> problems = <PhotoProblem>{};
+
+        NutritionLabelOcrService.completenessIssues(
+          table: table,
+          diagnostics: diagnostics.isEmpty ? null : diagnostics.first,
+          imageWidth: w,
+          imageHeight: h,
+          problemsOut: problems,
+        );
+
+        return problems;
+      }
+
+      expect(problemsFor(_tunaLabel(), 1920, 2560), isEmpty);
+      expect(problemsFor(_tunaLabel(), 1340, 1990), contains(PhotoProblem.cutOff));
+
+      final List<OcrTextLine> noNames = _tunaLabel()
+          .where(
+            (OcrTextLine l) =>
+                !<String>['Tenaga', 'Protein', 'Lemak'].contains(l.text),
+          )
+          .toList();
+
+      final Set<PhotoProblem> named = problemsFor(noNames, 1920, 2560);
+      expect(named, contains(PhotoProblem.unreadableNames));
+      expect(named, isNot(contains(PhotoProblem.cutOff)));
+    });
   });
 }

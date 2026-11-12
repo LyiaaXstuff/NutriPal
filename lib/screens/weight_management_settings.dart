@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/nutrition_analysis.dart';
 import '../models/profile_setup_data.dart';
+import '../services/energy_requirement.dart';
 import '../services/user_profile_service.dart';
+import '../widgets/weight_plan_widgets.dart';
 
 class WeightManagementSettings extends StatefulWidget {
   final ProfileSetupData data;
@@ -55,6 +58,13 @@ class _WeightManagementSettingsState
   double? _currentWeight;
   double? _height;
 
+  // Daily figure from a doctor or dietitian (optional).
+  double? _providerEnergyKcal;
+
+  // kcal a day taken off (lose) or added (gain); null
+  // means the default (GoalEnergy).
+  int? _energyChangeKcal;
+
   // =====================================================
   // ORIGINAL VALUES
   // =====================================================
@@ -65,23 +75,25 @@ class _WeightManagementSettingsState
 
   double? _originalCurrentWeight;
   double? _originalHeight;
+  double? _originalProviderEnergyKcal;
+  int? _originalEnergyChangeKcal;
 
   // =====================================================
   // ACTIVITY ICONS
   // =====================================================
 
-  static const Map<String, IconData> _activityIcons = {
-    'Sedentary':
-        Icons.self_improvement_rounded,
+  // NASEM's four activity levels, with the same icons and
+  // descriptions as setup Step 3 (weight_plan_widgets.dart).
+  static final Map<String, IconData> _activityIcons = {
+    for (final (String value, String _, IconData icon)
+        in WeightPlanOptions.activities)
+      value: icon,
+  };
 
-    'Lightly active':
-        Icons.directions_walk_rounded,
-
-    'Moderately active':
-        Icons.directions_run_rounded,
-
-    'Very active':
-        Icons.sports_handball_rounded,
+  static final Map<String, String> _activityDescriptions = {
+    for (final (String value, String description, IconData _)
+        in WeightPlanOptions.activities)
+      value: description,
   };
 
   // =====================================================
@@ -164,8 +176,11 @@ class _WeightManagementSettingsState
     // ACTIVITY
     // ===============================================
 
+    // Older values ("Sedentary"...) map to NASEM levels.
     final String? savedActivity =
-        widget.data.activityLevel;
+        ActivityLevels.normalise(
+      widget.data.activityLevel,
+    );
 
     if (_activityIcons.containsKey(
       savedActivity,
@@ -187,6 +202,12 @@ class _WeightManagementSettingsState
     _height =
         widget.data.height;
 
+    _providerEnergyKcal =
+        widget.data.providerEnergyKcal;
+
+    _energyChangeKcal =
+        widget.data.energyChangeKcal;
+
     // ===============================================
     // ORIGINAL VALUES
     // ===============================================
@@ -205,6 +226,39 @@ class _WeightManagementSettingsState
 
     _originalHeight =
         _height;
+
+    _originalProviderEnergyKcal =
+        _providerEnergyKcal;
+
+    _originalEnergyChangeKcal =
+        _energyChangeKcal;
+  }
+
+  // =====================================================
+  // ENERGY GUIDE (same calculation as the analysis)
+  // =====================================================
+
+  DailyTargets? get _energyTargets {
+    return WeightPlanOptions.energyTargets(
+      ProfileSetupData(
+        dateOfBirth:
+            widget.data.dateOfBirth,
+        weightGoal:
+            _weightGoal,
+        genderForEnergyEstimate:
+            _gender,
+        currentWeight:
+            _currentWeight,
+        height:
+            _height,
+        activityLevel:
+            _activityLevel,
+        providerEnergyKcal:
+            _providerEnergyKcal,
+        energyChangeKcal:
+            _energyChangeKcal,
+      ),
+    );
   }
 
   // =====================================================
@@ -221,7 +275,11 @@ class _WeightManagementSettingsState
         _currentWeight !=
             _originalCurrentWeight ||
         _height !=
-            _originalHeight;
+            _originalHeight ||
+        _providerEnergyKcal !=
+            _originalProviderEnergyKcal ||
+        _energyChangeKcal !=
+            _originalEnergyChangeKcal;
   }
 
   // =====================================================
@@ -296,6 +354,60 @@ class _WeightManagementSettingsState
         setState(() {
           _weightGoal =
               value;
+
+          // A choice for the other goal goes back to the
+          // default for this one.
+          if (!WeightPlanOptions.energyChangeOptions(value)
+              .contains(_energyChangeKcal)) {
+            _energyChangeKcal =
+                null;
+          }
+        });
+      },
+    );
+  }
+
+  // =====================================================
+  // EDIT DAILY ENERGY CHANGE (lose / gain)
+  // =====================================================
+
+  void _editEnergyChange() {
+    final List<int> options =
+        WeightPlanOptions.energyChangeOptions(
+      _weightGoal,
+    );
+
+    if (options.isEmpty) {
+      return;
+    }
+
+    final Map<String, int> byLabel = {
+      for (final int kcal in options)
+        WeightPlanOptions.energyChangeText(
+          _weightGoal,
+          kcal,
+        ): kcal,
+    };
+
+    _showChoiceSheet(
+      title:
+          'Daily energy change',
+      options:
+          byLabel.keys.toList(),
+      selected:
+          WeightPlanOptions.energyChangeText(
+        _weightGoal,
+        GoalEnergy.amountFor(
+          _weightGoal,
+          _energyChangeKcal,
+        ),
+      ),
+      onSelected: (
+        value,
+      ) {
+        setState(() {
+          _energyChangeKcal =
+              byLabel[value];
         });
       },
     );
@@ -346,16 +458,13 @@ class _WeightManagementSettingsState
       title:
           'Activity level',
       options:
-          const [
-        'Sedentary',
-        'Lightly active',
-        'Moderately active',
-        'Very active',
-      ],
+          ActivityLevels.all,
       selected:
           _activityLevel,
       icons:
           _activityIcons,
+      descriptions:
+          _activityDescriptions,
       onSelected: (
         value,
       ) {
@@ -378,6 +487,7 @@ class _WeightManagementSettingsState
     required ValueChanged<String>
         onSelected,
     Map<String, IconData>? icons,
+    Map<String, String>? descriptions,
   }) {
     showModalBottomSheet(
       context:
@@ -584,19 +694,42 @@ class _WeightManagementSettingsState
                                 // =========================
 
                                 Expanded(
-                                  child: Text(
-                                    option,
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          darkPurple,
-                                      fontSize:
-                                          16,
-                                      fontWeight:
-                                          isSelected
-                                              ? FontWeight.w800
-                                              : FontWeight.w600,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        option,
+                                        style:
+                                            TextStyle(
+                                          color:
+                                              darkPurple,
+                                          fontSize:
+                                              16,
+                                          fontWeight:
+                                              isSelected
+                                                  ? FontWeight.w800
+                                                  : FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (descriptions?[option] !=
+                                          null) ...[
+                                        const SizedBox(
+                                          height:
+                                              2,
+                                        ),
+                                        Text(
+                                          descriptions![option]!,
+                                          style:
+                                              const TextStyle(
+                                            color:
+                                                mediumPurple,
+                                            fontSize:
+                                                13,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
 
@@ -749,6 +882,80 @@ class _WeightManagementSettingsState
   }
 
   // =====================================================
+  // EDIT CALORIE TARGET FROM A DOCTOR OR DIETITIAN
+  // =====================================================
+  //
+  // Optional. When set, it replaces NutriPal's estimate as
+  // the energy base ("Set by your healthcare provider").
+
+  Future<void> _editProviderEnergy() async {
+    final TextEditingController controller =
+        TextEditingController(
+      text:
+          _providerEnergyKcal ==
+                  null
+              ? ''
+              : _providerEnergyKcal!
+                  .round()
+                  .toString(),
+    );
+
+    final double? result =
+        await _showNumberDialog(
+      title:
+          'Daily calorie target',
+      helper:
+          'Only enter a figure your doctor or dietitian gave you. '
+          'NutriPal then uses it instead of its own estimate.',
+      controller:
+          controller,
+      suffix:
+          'kcal',
+      min:
+          EnergyRequirement.providerMinimumKcal,
+      max:
+          EnergyRequirement.providerMaximumKcal,
+      wholeNumber:
+          true,
+      invalidMessage:
+          'Please enter a daily figure between 800 and 5,000 kcal.',
+      allowRemove:
+          _providerEnergyKcal !=
+              null,
+    );
+
+    if (result == null ||
+        !mounted) {
+      return;
+    }
+
+    setState(() {
+      // A negative result means "Remove".
+      _providerEnergyKcal =
+          result < 0
+              ? null
+              : result;
+    });
+
+    final String? note =
+        _providerEnergyKcal ==
+                null
+            ? null
+            : WeightPlanOptions.providerNote(
+                _providerEnergyKcal!
+                    .round()
+                    .toString(),
+                _gender,
+              );
+
+    if (note != null) {
+      _showMessage(
+        note,
+      );
+    }
+  }
+
+  // =====================================================
   // NUMBER DIALOG
   // =====================================================
 
@@ -759,6 +966,11 @@ class _WeightManagementSettingsState
     required String suffix,
     required double min,
     required double max,
+    String? helper,
+    bool wholeNumber = false,
+    String? invalidMessage,
+    // Adds a "Remove" button that returns -1.
+    bool allowRemove = false,
   }) async {
     return showDialog<double>(
       context:
@@ -788,23 +1000,52 @@ class _WeightManagementSettingsState
                   FontWeight.w900,
             ),
           ),
-          content: TextField(
+          content: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              if (helper !=
+                  null) ...[
+                Text(
+                  helper,
+                  style:
+                      const TextStyle(
+                    color:
+                        mediumPurple,
+                    fontSize:
+                        14,
+                    height:
+                        1.4,
+                  ),
+                ),
+                const SizedBox(
+                  height:
+                      12,
+                ),
+              ],
+              TextField(
             controller:
                 controller,
             autofocus:
                 true,
             keyboardType:
-                const TextInputType
-                    .numberWithOptions(
-              decimal:
-                  true,
-            ),
+                wholeNumber
+                    ? TextInputType.number
+                    : const TextInputType
+                        .numberWithOptions(
+                        decimal:
+                            true,
+                      ),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(
-                RegExp(
-                  r'^\d*\.?\d{0,2}',
-                ),
-              ),
+              wholeNumber
+                  ? FilteringTextInputFormatter.digitsOnly
+                  : FilteringTextInputFormatter.allow(
+                      RegExp(
+                        r'^\d*\.?\d{0,2}',
+                      ),
+                    ),
             ],
             style:
                 const TextStyle(
@@ -860,7 +1101,30 @@ class _WeightManagementSettingsState
               ),
             ),
           ),
+            ],
+          ),
           actions: [
+            if (allowRemove)
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(
+                    dialogContext,
+                    -1.0,
+                  );
+                },
+                child:
+                    const Text(
+                  'Remove',
+                  style:
+                      TextStyle(
+                    color:
+                        Color(
+                      0xFFB3261E,
+                    ),
+                  ),
+                ),
+              ),
+
             TextButton(
               onPressed: () {
                 Navigator.pop(
@@ -892,7 +1156,8 @@ class _WeightManagementSettingsState
                     value >
                         max) {
                   _showMessage(
-                    'Please enter a valid $title.',
+                    invalidMessage ??
+                        'Please enter a valid $title.',
                   );
 
                   return;
@@ -1004,6 +1269,12 @@ class _WeightManagementSettingsState
     widget.data.activityLevel =
         _activityLevel;
 
+    widget.data.providerEnergyKcal =
+        _providerEnergyKcal;
+
+    widget.data.energyChangeKcal =
+        _energyChangeKcal;
+
     widget.data.weightUnit =
         'kg';
 
@@ -1028,6 +1299,12 @@ class _WeightManagementSettingsState
 
       _originalHeight =
           _height;
+
+      _originalProviderEnergyKcal =
+          _providerEnergyKcal;
+
+      _originalEnergyChangeKcal =
+          _energyChangeKcal;
     });
 
     _showMessage(
@@ -1375,6 +1652,31 @@ class _WeightManagementSettingsState
                     onTap:
                         _editWeightGoal,
                   ),
+
+                  // Lose or gain, unless a provider's
+                  // figure replaces NutriPal's estimate.
+                  if (WeightPlanOptions.energyChangeOptions(
+                        _weightGoal,
+                      ).isNotEmpty &&
+                      _providerEnergyKcal ==
+                          null) ...[
+                    const _SettingsDivider(),
+
+                    _SettingsRow(
+                      label:
+                          'Daily energy change',
+                      value:
+                          WeightPlanOptions.energyChangeText(
+                        _weightGoal,
+                        GoalEnergy.amountFor(
+                          _weightGoal,
+                          _energyChangeKcal,
+                        ),
+                      ),
+                      onTap:
+                          _editEnergyChange,
+                    ),
+                  ],
                 ],
               ),
 
@@ -1478,6 +1780,75 @@ class _WeightManagementSettingsState
                   ),
                 ],
               ),
+
+              const SizedBox(
+                height:
+                    30,
+              ),
+
+              // =========================================
+              // HEALTHCARE PROVIDER (optional)
+              // =========================================
+
+              const _SectionTitle(
+                text:
+                    'FROM YOUR DOCTOR OR DIETITIAN',
+              ),
+
+              const SizedBox(
+                height:
+                    12,
+              ),
+
+              _SettingsGroup(
+                children: [
+                  _SettingsRow(
+                    label:
+                        'Daily calorie target',
+                    value:
+                        _providerEnergyKcal ==
+                                null
+                            ? 'Not set'
+                            : '${WeightPlanOptions.exactKcalText(_providerEnergyKcal!)} kcal',
+                    onTap:
+                        _editProviderEnergy,
+                  ),
+                ],
+              ),
+
+              // =========================================
+              // ENERGY GUIDE
+              // =========================================
+
+              if (_energyTargets !=
+                  null) ...[
+                const SizedBox(
+                  height:
+                      24,
+                ),
+
+                EnergyGuideCard.fromTargets(
+                  _energyTargets!,
+                  goal:
+                      _weightGoal,
+                ),
+
+                const SizedBox(
+                  height:
+                      14,
+                ),
+
+                GoalGuidanceCard(
+                  goal:
+                      _weightGoal,
+                  sex:
+                      _gender,
+                  weightKg:
+                      _currentWeight,
+                  heightCm:
+                      _height,
+                ),
+              ],
             ],
           ),
         ),

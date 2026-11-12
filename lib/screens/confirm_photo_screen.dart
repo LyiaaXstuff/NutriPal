@@ -13,11 +13,15 @@ import 'scan_flow.dart';
 // =======================================================
 //
 // Shows the photo and a short PHOTO CHECK from on-device
-// OCR before the label is analysed:
-//   - Nutrition table detected
-//   - Text is clear enough to read
-//   - Serving information detected
+// OCR before the label is analysed. Each row says what was
+// actually found, e.g. "Nutrition table is cut off" rather
+// than a warning icon next to "Nutrition table detected":
+//   - the whole table is in the photo
+//   - the text is clear enough to read
+//   - the serving information can be read
 // =======================================================
+
+enum _TableState { checking, whole, cutOff, none }
 
 class ConfirmPhotoScreen extends StatefulWidget {
   final String imagePath;
@@ -62,26 +66,62 @@ class _ConfirmPhotoScreenState extends State<ConfirmPhotoScreen> {
 
   bool get _checking => _result == null && !_failed;
 
-  bool? get _tableOk {
-    if (_failed) return false;
-    if (_result == null) return null;
+  Set<PhotoProblem> get _problems => _result?.problems ?? const <PhotoProblem>{};
 
-    return _result!.status != LabelDetectionStatus.notDetected;
+  _TableState get _table {
+    if (_failed) return _TableState.none;
+    if (_result == null) return _TableState.checking;
+    if (_result!.status == LabelDetectionStatus.notDetected) return _TableState.none;
+    if (_problems.contains(PhotoProblem.cutOff)) return _TableState.cutOff;
+
+    return _TableState.whole;
   }
+
+  bool? get _tableOk => switch (_table) {
+        _TableState.checking => null,
+        _TableState.whole => true,
+        _ => false,
+      };
 
   bool? get _textOk {
     if (_failed) return false;
     if (_result == null) return null;
+    if (_table == _TableState.none) return false;
 
-    return _result!.status == LabelDetectionStatus.detected;
+    return !_problems.contains(PhotoProblem.unreadableNames) &&
+        !_problems.contains(PhotoProblem.tooFewRows) &&
+        !_problems.contains(PhotoProblem.noEnergy);
   }
 
   bool? get _servingOk {
     if (_failed) return false;
     if (_result == null) return null;
+    if (_table == _TableState.none) return false;
 
-    return _result!.hasServingInformation;
+    return _result!.hasServingInformation &&
+        !_problems.contains(PhotoProblem.noServingBasis);
   }
+
+  String get _tableText => switch (_table) {
+        _TableState.checking => 'Looking for the nutrition table',
+        _TableState.whole => 'Whole nutrition table in the photo',
+        _TableState.cutOff => 'Nutrition table is cut off',
+        _TableState.none => 'No nutrition table found',
+      };
+
+  String get _textText => switch (_textOk) {
+        null => 'Checking the text',
+        true => 'Text is clear enough to read',
+        false => _table == _TableState.none
+            ? 'No nutrition text could be read'
+            : 'Some text is unclear or cut off',
+      };
+
+  String get _servingText => switch (_servingOk) {
+        null => 'Checking the serving information',
+        true => 'Serving information detected',
+        false => 'Serving information not found',
+      };
 
   void _analyse() {
     Navigator.pushReplacement(
@@ -116,7 +156,9 @@ class _ConfirmPhotoScreenState extends State<ConfirmPhotoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool tableFound = _tableOk == true;
+    final _TableState table = _table;
+    final bool tableFound = table == _TableState.whole || table == _TableState.cutOff;
+    final bool allOk = _tableOk == true && _textOk == true && _servingOk == true;
     final List<String> issues = _result?.issues ?? const <String>[];
 
     return Scaffold(
@@ -140,8 +182,7 @@ class _ConfirmPhotoScreenState extends State<ConfirmPhotoScreen> {
                   children: [
                     _Photo(
                       imagePath: widget.imagePath,
-                      checking: _checking,
-                      tableFound: tableFound,
+                      table: table,
                       onExpand: _openFullScreen,
                     ),
                     const SizedBox(height: 16),
@@ -160,11 +201,11 @@ class _ConfirmPhotoScreenState extends State<ConfirmPhotoScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          _CheckRow(ok: _tableOk, text: 'Nutrition table detected'),
+                          _CheckRow(ok: _tableOk, text: _tableText),
                           const SizedBox(height: 12),
-                          _CheckRow(ok: _textOk, text: 'Text is clear enough to read'),
+                          _CheckRow(ok: _textOk, text: _textText),
                           const SizedBox(height: 12),
-                          _CheckRow(ok: _servingOk, text: 'Serving information detected'),
+                          _CheckRow(ok: _servingOk, text: _servingText),
                           if (_failed) ...[
                             const SizedBox(height: 12),
                             const Text(
@@ -201,7 +242,7 @@ class _ConfirmPhotoScreenState extends State<ConfirmPhotoScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: NpPrimaryButton(
-                      label: _textOk == false && tableFound ? 'Analyse anyway' : 'Analyse',
+                      label: tableFound && !allOk && !_checking ? 'Analyse anyway' : 'Analyse',
                       onPressed: tableFound ? _analyse : null,
                     ),
                   ),
@@ -217,24 +258,38 @@ class _ConfirmPhotoScreenState extends State<ConfirmPhotoScreen> {
 
 class _Photo extends StatelessWidget {
   final String imagePath;
-  final bool checking;
-  final bool tableFound;
+  final _TableState table;
   final VoidCallback onExpand;
 
   const _Photo({
     required this.imagePath,
-    required this.checking,
-    required this.tableFound,
+    required this.table,
     required this.onExpand,
   });
 
   @override
   Widget build(BuildContext context) {
-    final String text = checking
-        ? 'Checking photo…'
-        : tableFound
-            ? 'Nutrition table detected'
-            : 'No nutrition table found';
+    final bool checking = table == _TableState.checking;
+
+    final String text = switch (table) {
+      _TableState.checking => 'Checking photo…',
+      _TableState.whole => 'Nutrition table detected',
+      _TableState.cutOff => 'Nutrition table cut off',
+      _TableState.none => 'No nutrition table found',
+    };
+
+    final Color ink = switch (table) {
+      _TableState.checking => NpColors.purple,
+      _TableState.whole => NpColors.okInk,
+      _TableState.cutOff => NpColors.warnInk,
+      _TableState.none => NpColors.errorInk,
+    };
+
+    final IconData icon = switch (table) {
+      _TableState.whole => Icons.check_rounded,
+      _TableState.cutOff => Icons.priority_high_rounded,
+      _ => Icons.close_rounded,
+    };
 
     return Container(
       height: 420,
@@ -253,7 +308,9 @@ class _Photo extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.file(File(imagePath), fit: BoxFit.cover),
+          // contain, not cover: show the whole photo that is
+          // checked, so a cut-off table is visible here too.
+          Image.file(File(imagePath), fit: BoxFit.contain),
           Positioned(
             left: 14,
             top: 14,
@@ -273,22 +330,14 @@ class _Photo extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2, color: NpColors.purple),
                     )
                   else
-                    Icon(
-                      tableFound ? Icons.check_rounded : Icons.close_rounded,
-                      size: 15,
-                      color: tableFound ? NpColors.okInk : NpColors.errorInk,
-                    ),
+                    Icon(icon, size: 15, color: ink),
                   const SizedBox(width: 6),
                   Text(
                     text,
                     style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w800,
-                      color: checking
-                          ? NpColors.purple
-                          : tableFound
-                              ? NpColors.okInk
-                              : NpColors.errorInk,
+                      color: ink,
                     ),
                   ),
                 ],

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
+import '../services/energy_requirement.dart';
 import '../services/name_rules.dart';
 import 'health_conditions_form.dart';
 
@@ -71,13 +72,30 @@ class _UserProfileFormState
     final DateTime today =
         DateTime.now();
 
+    // NutriPal is for adults aged 19 and over (the NASEM
+    // energy equations start at 19), so the newest date
+    // the wheel allows is the day someone turns 19 today.
+    final DateTime latestBirthDate =
+        AdultAge.latestBirthDate(
+      today,
+    );
+
     DateTime tempDate =
         _selectedDateOfBirth ??
         DateTime(
-          today.year - 20,
-          today.month,
-          today.day,
+          latestBirthDate.year - 6,
+          latestBirthDate.month,
+          latestBirthDate.day,
         );
+
+    // The wheel must start inside its range (an older
+    // profile may hold a date under 19).
+    if (tempDate.isAfter(
+      latestBirthDate,
+    )) {
+      tempDate =
+          latestBirthDate;
+    }
 
     // Click (if Touch sounds is on) + light vibration as
     // each wheel moves.
@@ -203,7 +221,7 @@ class _UserProfileFormState
                           Alignment.centerLeft,
                       child:
                           Text(
-                        'Scroll to choose your date of birth.',
+                        'Scroll to choose your date of birth. NutriPal is for adults aged 19 and over.',
                         style:
                             TextStyle(
                           color:
@@ -291,7 +309,7 @@ class _UserProfileFormState
                             ),
 
                             maximumDate:
-                                today,
+                                latestBirthDate,
 
                             dateOrder:
                                 DatePickerDateOrder.dmy,
@@ -509,6 +527,17 @@ class _UserProfileFormState
         null) {
       _showMessage(
         'Please select your date of birth.',
+      );
+
+      return;
+    }
+
+    if (!AdultAge.isAdult(
+      _selectedDateOfBirth!,
+      DateTime.now(),
+    )) {
+      _showMessage(
+        'NutriPal is for adults aged 19 and over.',
       );
 
       return;

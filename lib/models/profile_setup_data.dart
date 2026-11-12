@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import '../services/energy_requirement.dart';
+
 class ProfileSetupData {
   // =====================================================
   // BASIC PROFILE INFORMATION
@@ -76,11 +78,24 @@ class ProfileSetupData {
 
   String? activityLevel;
 
-  // Possible values:
-  // Sedentary
-  // Lightly active
-  // Moderately active
+  // Possible values (NASEM 2023 activity levels, see
+  // ActivityLevels in services/energy_requirement.dart):
+  // Inactive
+  // Low active
+  // Active
   // Very active
+  //
+  // Older profiles saved "Sedentary", "Lightly active",
+  // "Moderately active"; fromJson maps them to the nearest
+  // NASEM level.
+
+  int? energyChangeKcal;
+
+  // kcal a day NutriPal takes off the maintenance estimate
+  // for "Lose weight" (250, 500 or 750) or adds for "Gain
+  // weight" (300 or 500). Null means the default: 500 less
+  // for lose, 300 more for gain (GoalEnergy in
+  // services/energy_requirement.dart).
 
   // =====================================================
   // LIMITS FROM THE USER'S DOCTOR OR DIETITIAN (optional)
@@ -88,6 +103,9 @@ class ProfileSetupData {
   //
   // When set, these replace NutriPal's default targets in
   // the nutrition analysis (rules document, Layer 2).
+  // providerEnergyKcal (800-5,000 kcal) replaces the NASEM
+  // estimate and is shown as "Set by your healthcare
+  // provider".
 
   double? providerSodiumLimitMg;
 
@@ -158,6 +176,7 @@ class ProfileSetupData {
     this.height,
     this.heightUnit = 'cm',
     this.activityLevel,
+    this.energyChangeKcal,
 
     // PROVIDER LIMITS
     this.providerSodiumLimitMg,
@@ -230,6 +249,7 @@ class ProfileSetupData {
           'height': height,
           'heightUnit': heightUnit,
           'activityLevel': activityLevel,
+          'energyChangeKcal': energyChangeKcal,
         },
         'providerLimits': <String, dynamic>{
           'sodiumMg': providerSodiumLimitMg,
@@ -281,7 +301,8 @@ class ProfileSetupData {
       weightUnit: text(weight['weightUnit'], 'kg'),
       height: number(weight['height']),
       heightUnit: text(weight['heightUnit'], 'cm'),
-      activityLevel: textOrNull(weight['activityLevel']),
+      activityLevel: ActivityLevels.normalise(textOrNull(weight['activityLevel'])),
+      energyChangeKcal: number(weight['energyChangeKcal'])?.round(),
       providerSodiumLimitMg: number(limits['sodiumMg']),
       providerCarbsPerMealG: number(limits['carbsPerMealG']),
       providerEnergyKcal: number(limits['energyKcal']),

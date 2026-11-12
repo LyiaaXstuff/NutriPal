@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/scan_record.dart';
+import 'agent_summary.dart';
 import 'history_retention_policy.dart';
 import 'scan_history_repository.dart';
 
@@ -19,6 +20,10 @@ import 'scan_history_repository.dart';
 //     expiresAt     scannedAt + 90 days; null for
 //                   favourites (Firestore TTL clean-up)
 //     updatedAt     server time
+//     agentSummary  per-100 values + traffic-light levels
+//                   (AgentSummary), read only by the
+//                   Ask NutriPal compare_with_history tool
+//                   on the server for this same user
 //
 // ScanHistoryService still calls saveAll() with the whole
 // list; this class only writes the scans that changed and
@@ -68,6 +73,8 @@ class FirestoreScanHistoryRepository implements ScanHistoryRepository {
 
     _stored.clear();
 
+    final List<ScanRecord> outdated = <ScanRecord>[];
+
     for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in snapshot.docs) {
       final ScanRecord? record = recordFromDoc(doc.data());
 
@@ -75,6 +82,15 @@ class FirestoreScanHistoryRepository implements ScanHistoryRepository {
 
       records.add(record);
       _stored[record.id] = encode(record);
+
+      if (needsSummary(doc.data())) outdated.add(record);
+    }
+
+    // Scans saved before agentSummary existed: rewrite once
+    // so Ask NutriPal can compare them.
+    if (outdated.isNotEmpty) {
+      _write(SyncPlan(toWrite: outdated, toDelete: const <String>[]));
+      _log('added agent summaries to ${outdated.length} scans');
     }
 
     await _moveOldPhoneHistory(records);
@@ -223,8 +239,22 @@ class FirestoreScanHistoryRepository implements ScanHistoryRepository {
       'scannedAt': Timestamp.fromDate(r.scannedAt),
       'isFavourite': r.isFavourite,
       'expiresAt': expires == null ? null : Timestamp.fromDate(expires),
+      'agentSummary': AgentSummary.forLabel(r.label),
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  /// True when a stored doc has no agentSummary of the
+  /// current version (written by an older app).
+  static bool needsSummary(Map<String, dynamic> doc) {
+    if (!doc.containsKey('agentSummary')) return true;
+
+    final Object? summary = doc['agentSummary'];
+
+    // null: the label has nothing per 100 g / ml to give.
+    if (summary == null) return false;
+
+    return summary is! Map || summary['v'] != AgentSummary.version;
   }
 
   /// Reads one document; null when it is unreadable (it

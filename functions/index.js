@@ -20,7 +20,9 @@
 // askNutriPal
 //   Callable from the app. Answers follow-up questions
 //   about one analysed product (Layer 4: explains the
-//   app's analysis, never changes its numbers).
+//   app's analysis, never changes its numbers). Its
+//   tools can search the validated knowledge base and
+//   the signed-in user's own scan history.
 //
 // The Anthropic API key is a Firebase secret: it never
 // ships inside the app.
@@ -44,15 +46,26 @@ const { deleteUserData } = require('./src/user_cleanup');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
-// Change without code edits, e.g. in functions/.env:
-//   ANTHROPIC_MODEL=claude-sonnet-5-5
+// The prototype uses Claude Sonnet 5.5 (also set in
+// functions/.env.nutripal-fyp). Change without code
+// edits, e.g. ANTHROPIC_MODEL=<model id> in that file.
 const ANTHROPIC_MODEL = defineString('ANTHROPIC_MODEL', {
-  default: 'claude-haiku-5-5',
+  default: 'claude-sonnet-5-5',
 });
 
-// Turn on once the app signs users in with Firebase Auth,
-// so only NutriPal users can spend your API credits.
+// On (functions/.env.nutripal-fyp): only signed-in
+// NutriPal users can spend the API credits, and Ask
+// NutriPal knows whose scan history to read.
 const REQUIRE_AUTH = defineBoolean('REQUIRE_AUTH', { default: false });
+
+// firebase-functions creates its own named app to check
+// callable requests, so "any app exists" is not enough:
+// look for the default app itself.
+function db() {
+  if (!getApps().some((app) => app.name === '[DEFAULT]')) initializeApp();
+
+  return getFirestore();
+}
 
 exports.extractNutritionLabel = onCall(
   {
@@ -173,20 +186,28 @@ exports.askNutriPal = onCall(
     const started = Date.now();
 
     try {
+      const uid = request.auth ? request.auth.uid : undefined;
+
       const result = await askNutriPal({
         data: request.data,
         apiKey: ANTHROPIC_API_KEY.value(),
         model: ANTHROPIC_MODEL.value(),
+        // History is read only for the signed-in user.
+        uid,
+        db: uid ? db() : undefined,
       });
 
       logger.info('ask nutripal answered', {
         model: result.model,
-        steps: result.steps.length,
+        steps: result.steps,
+        evidence_ids: result.evidence_ids,
         usage: result.usage,
         ms: Date.now() - started,
       });
 
-      return { answer: result.answer, steps: result.steps };
+      // evidence_ids: for testing only; the app does not
+      // show them.
+      return { answer: result.answer, steps: result.steps, evidence_ids: result.evidence_ids };
     } catch (error) {
       if (error instanceof AskNutriPalError) {
         logger.warn('ask nutripal failed', {
@@ -211,9 +232,7 @@ exports.cleanUpDeletedUser = functionsV1
   .region('asia-southeast1')
   .auth.user()
   .onDelete(async (user) => {
-    if (getApps().length === 0) initializeApp();
-
-    await deleteUserData({ db: getFirestore(), uid: user.uid });
+    await deleteUserData({ db: db(), uid: user.uid });
 
     logger.info('deleted Firestore data of a deleted account');
   });

@@ -1,0 +1,1215 @@
+{
+ "schema": "nutripal.chatbot_kb",
+ "kb_version": "1.3.0",
+ "rules_version": "2.3.0",
+ "generated": "2026-11-12",
+ "selection": "Knowledge-base entries with status source-verified or evidence-derived and use class 1-3 (class 4 'not for automated evaluation' and excluded entries are left out).",
+ "entries": [
+  {
+   "id": "GEN-01",
+   "areas": [
+    "General"
+   ],
+   "topic": "Malaysian label content",
+   "guidance": "Malaysian labels must declare energy, protein, available carbohydrate (excluding fibre), total sugars, fat and sodium per 100 g/ml (or per pack if single portion) and per serving.",
+   "applies_to": "Packaged foods sold in Malaysia",
+   "nutripal_use": "Defines which nutrients can be expected; carbohydrate on Malaysian labels already excludes fibre, so NutriPal must not subtract fibre again.",
+   "caution": "Imported US-style labels show 'Total carbohydrate' that includes fibre; keep the label's own definition.",
+   "education_only": false,
+   "source": "Government of Malaysia (Food Act 1983) 1985"
+  },
+  {
+   "id": "GEN-02",
+   "areas": [
+    "General",
+    "Blood pressure"
+   ],
+   "topic": "Salt-sodium conversion",
+   "guidance": "2,000 mg sodium is equivalent to 5 g salt (about 1 level teaspoon).",
+   "applies_to": "Adults",
+   "nutripal_use": "Convert labels that print salt into sodium before any rule runs.",
+   "caution": "Teaspoon equivalents vary (1,794-1,959 mg in S01 App D/F); say 'about'.",
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "GEN-03",
+   "areas": [
+    "General"
+   ],
+   "topic": "Malaysian 'low' claim levels",
+   "guidance": "Low fat <=3 g/100 g or <=1.5 g/100 ml; low saturated fat <=1.5 g/100 g or <=0.75 g/100 ml and <=10% of the food's energy; low sugar <=5 g/100 g or <=2.5 g/100 ml; low sodium <=120 mg/100 g or <=60 mg/100 ml; very low sodium <=40 mg/100 g or <=20 mg/100 ml; low cholesterol <=20 mg/100 g or <=10 mg/100 ml.",
+   "applies_to": "Packaged foods",
+   "nutripal_use": "Informational badge: 'meets Malaysia's low-sodium level'. These are claim conditions, not health ratings.",
+   "caution": "Never call a product 'healthy' because it meets a claim level.",
+   "education_only": false,
+   "source": "Government of Malaysia (Food Act 1983) 1985"
+  },
+  {
+   "id": "GEN-04",
+   "areas": [
+    "General"
+   ],
+   "topic": "Malaysian fibre claims",
+   "guidance": "Source of fibre >=3 g/100 g or >=1.5 g/100 ml; high fibre >=6 g/100 g or >=3 g/100 ml.",
+   "applies_to": "Packaged foods",
+   "nutripal_use": "Positive informational badge for fibre.",
+   "caution": "Not reproduced in FAIRS 2024; verify.",
+   "education_only": false,
+   "source": "Government of Malaysia (Food Act 1983) 1985"
+  },
+  {
+   "id": "GEN-07",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "US FDA sodium claims",
+   "guidance": "Sodium-free <5 mg, very low <=35 mg, low <=140 mg per serving; reduced = 25% less; light = 50% less.",
+   "applies_to": "US products",
+   "nutripal_use": "Explain US-labelled imports only; Malaysian claims use per 100 g/ml.",
+   "caution": "Do not apply to Malaysian claims.",
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "GEN-08",
+   "areas": [
+    "General"
+   ],
+   "topic": "Front-of-pack traffic light (Layer 1)",
+   "guidance": "FSA per-100 g/ml low/medium/high thresholds for fat, saturated fat, sugars and salt; drinks use stricter values (half for fat, saturated fat and sugars; lower medium/high bounds for salt).",
+   "applies_to": "UK scheme, used by NutriPal",
+   "nutripal_use": "Product-level colour independent of the user.",
+   "caution": "Malaysia has no national traffic-light scheme: a named design decision.",
+   "education_only": false,
+   "source": "Carried over from 'NutriPal Nutrition Analysis Rules' (8 Nov 2026) 2023"
+  },
+  {
+   "id": "GEN-09",
+   "areas": [
+    "General"
+   ],
+   "topic": "Malaysian claims agree with FSA green",
+   "guidance": "Malaysian 'low' levels equal the FSA green upper limits for fat, saturated fat, sugars (food and drink) and sodium in foods; only sodium in drinks differs (Malaysia 60 mg/100 ml vs FSA 120 mg/100 ml).",
+   "applies_to": "-",
+   "nutripal_use": "Strengthens use of FSA green for Malaysian products.",
+   "caution": "Show the Malaysian drink sodium badge separately.",
+   "education_only": false,
+   "source": "Government of Malaysia (Food Act 1983) 1985"
+  },
+  {
+   "id": "GEN-10",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Uncertainty of energy estimates",
+   "guidance": "An individual's calculated energy requirement has a large confidence interval; comparing intake with it does not show whether needs are met. Plan with the estimate, then monitor weight and adjust.",
+   "applies_to": "Adults",
+   "nutripal_use": "Why NutriPal calls energy targets estimates and labels energy shares as approximate.",
+   "caution": null,
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-11",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "NASEM 2023 TEE equations",
+   "guidance": "Adult TEE = sex- and activity-specific equations in age (y), height (cm), weight (kg); e.g. women, low active: 575.77 - 7.01 age + 6.60 height + 12.14 weight. RMSE 339 kcal (men), 246 kcal (women).",
+   "applies_to": "Adults 19+ (US/Canada)",
+   "nutripal_use": "Optional replacement for Mifflin-St Jeor x activity factor.",
+   "caution": "Not validated on Malaysian adults.",
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-12",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Activity categories",
+   "guidance": "Inactive 1.0<=PAL<1.53; low active 1.53-<1.68; active 1.68-<1.85; very active 1.85-<2.50.",
+   "applies_to": "Adults",
+   "nutripal_use": "Maps NutriPal's activity question to an equation.",
+   "caution": null,
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-13",
+   "areas": [
+    "General"
+   ],
+   "topic": "Population gap",
+   "guidance": "Energy metabolism data are sparse for diverse racial and ethnic groups.",
+   "applies_to": "-",
+   "nutripal_use": "Limitation statement for the report and chatbot.",
+   "caution": null,
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-14",
+   "areas": [
+    "General"
+   ],
+   "topic": "Dietary patterns over single nutrients",
+   "guidance": "Current emphasis is on healthy dietary patterns rather than individual nutrient composition.",
+   "applies_to": "Malaysian adults",
+   "nutripal_use": "Why NutriPal does not give a single 'healthy/unhealthy' verdict.",
+   "caution": null,
+   "education_only": false,
+   "source": "Ministry of Health Malaysia / Academy of Medicine Malaysia 2023"
+  },
+  {
+   "id": "GEN-15",
+   "areas": [
+    "General"
+   ],
+   "topic": "Processing",
+   "guidance": "Choose minimally processed foods; plant-based meat alternatives may be ultra-processed with added sugar, saturated fat and salt.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot education only: processing level is not on the nutrition table.",
+   "caution": null,
+   "education_only": true,
+   "source": "Ministry of Health Malaysia / Academy of Medicine Malaysia 2023"
+  },
+  {
+   "id": "GEN-16",
+   "areas": [
+    "Diabetes",
+    "Weight"
+   ],
+   "topic": "Beverages",
+   "guidance": "Water should be the primary beverage; replace sugar-sweetened beverages (including juices) with water or low/no-calorie drinks.",
+   "applies_to": "Adults with or at risk of diabetes",
+   "nutripal_use": "Supports a drink-specific sugar insight.",
+   "caution": null,
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "GEN-17",
+   "areas": [
+    "General"
+   ],
+   "topic": "Comparative claims rule",
+   "guidance": "A 'less'/'more' (comparative) claim needs the two foods to differ by at least 25% (10% for micronutrients), and the absolute difference must be at least the amount needed for a 'low' or 'source' claim. Energy 'low' is 40 kcal/100 g or 20 kcal/100 ml.",
+   "applies_to": "Packaged foods",
+   "nutripal_use": "Used as NutriPal's test for a meaningful difference in product comparisons (tab 5).",
+   "caution": "Wording stays 'lower in', never 'healthier'.",
+   "education_only": false,
+   "source": "Government of Malaysia (Food Act 1983) 1985"
+  },
+  {
+   "id": "GEN-19",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "NASEM 2023 adult EER equations",
+   "guidance": "Eight adult EER equations (age 19+, by sex and four activity categories) in age (y), height (cm) and weight (kg). For weight-stable adults EER equals TEE. Recommended for all BMI categories (separate BMI equations showed no significant difference).",
+   "applies_to": "Adults 19+",
+   "nutripal_use": "NutriPal's maintenance-energy estimate (tab 10, Step 2) and its eligibility rules (no estimate under 19).",
+   "caution": "Derived from US/Canadian doubly labelled water data; not validated on Malaysian adults.",
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-20",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Uncertainty of the EER",
+   "guidance": "Standard error of the predicted value: 241 kcal (women 19+) and 342 kcal (men 19+). About 68% of people with the same characteristics have a true requirement within +/-1 SE of the estimate, and 95% within +/-1.96 SE.",
+   "applies_to": "Adults 19+",
+   "nutripal_use": "NutriPal shows the estimate as a range (EER +/- 1 SE, rounded to 10 kcal).",
+   "caution": "Present as an estimate, never as an exact requirement.",
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-21",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Activity category",
+   "guidance": "No valid, reliable tool exists to classify an individual's physical activity category; Table 7-1 gives example day patterns for inactive, low active, active and very active.",
+   "applies_to": "Adults",
+   "nutripal_use": "Basis for NutriPal's plain-language activity question (wording is a proposed implementation).",
+   "caution": "Tell users to pick the closest description; the category is approximate.",
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "GEN-22",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "EER and weight change",
+   "guidance": "EER equations estimate energy for weight maintenance and do not predict the energy needed for weight change. An intake 1.96 SE below the EER would lead to weight loss in almost all people with those characteristics. Worked example: man, 45 y, 175 cm, 100 kg, low active, EER 3,041 kcal.",
+   "applies_to": "Adults 19+",
+   "nutripal_use": "Why NutriPal uses the EER as a maintenance base for every limit and labels the goal change a general guide (R-EN-02).",
+   "caution": "Not a prescription; weight-loss targets are individualised by a clinician.",
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "DM-02",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Reducing carbohydrate",
+   "guidance": "Consider reducing carbohydrate intake for some adults with diabetes; limiting processed foods is an effective way.",
+   "applies_to": "Adults with diabetes",
+   "nutripal_use": "Supports showing carbohydrate per portion prominently.",
+   "caution": "Not a prescription.",
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-03",
+   "areas": [
+    "General",
+    "Diabetes"
+   ],
+   "topic": "Fibre target",
+   "guidance": "Emphasise minimally processed, high-fibre carbohydrate: at least 14 g fibre per 1,000 kcal.",
+   "applies_to": "People with or at risk of diabetes",
+   "nutripal_use": "Alternative fibre target scaled to the user's energy.",
+   "caution": null,
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-04",
+   "areas": [
+    "General",
+    "Diabetes"
+   ],
+   "topic": "Higher-fibre choice",
+   "guidance": "Foods with at least 3 g fibre per serving are generally considered higher-fibre choices.",
+   "applies_to": "People with diabetes",
+   "nutripal_use": "Per-serving positive insight that needs no daily target.",
+   "caution": null,
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-05",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Sugary drinks and added sugar",
+   "guidance": "Replace sugar-sweetened beverages, including juices, with water or low/no-calorie drinks; minimise foods with added sugar.",
+   "applies_to": "People with or at risk of diabetes",
+   "nutripal_use": "Drink-specific insight; added sugar can only be stated when the label lists it.",
+   "caution": "Do not infer added sugar from total sugars.",
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-06",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Non-nutritive sweeteners",
+   "guidance": "Non-nutritive sweeteners can replace sugar-sweetened products in moderation and short term to cut calories and carbohydrate.",
+   "applies_to": "People with or at risk of diabetes",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-07",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Sodium in diabetes",
+   "guidance": "Limit sodium to <2,300 mg/day as clinically appropriate, mainly by limiting processed foods.",
+   "applies_to": "People with diabetes",
+   "nutripal_use": "Conflicts with Malaysian 2,000 mg; NutriPal keeps 2,000 mg (Malaysian priority).",
+   "caution": null,
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-08",
+   "areas": [
+    "Diabetes",
+    "Cholesterol"
+   ],
+   "topic": "Fats in diabetes",
+   "guidance": "Limit foods high in saturated fat; follow general-population limits for saturated fat, cholesterol and trans fat; avoid trans fat; replace saturated fat with unsaturated fat, not refined carbohydrate.",
+   "applies_to": "People with or at risk of diabetes",
+   "nutripal_use": "Saturated fat can appear as a secondary insight for diabetes users.",
+   "caution": null,
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-09",
+   "areas": [
+    "Diabetes",
+    "Weight"
+   ],
+   "topic": "Protein",
+   "guidance": "No evidence that protein above or below 0.8-1.5 g/kg/day (15-20% of energy) improves health; individualise. Do not go below 0.8 g/kg.",
+   "applies_to": "People with diabetes",
+   "nutripal_use": "Chatbot education; protein is shown, not judged.",
+   "caution": "CKD protein advice is clinical.",
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-10",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Eating pattern principles",
+   "guidance": "Include non-starchy vegetables, whole fruit, legumes, lean protein, whole grains, nuts, seeds, low-fat dairy; minimise red meat, sugar-sweetened beverages, sweets, refined grains and (ultra)processed foods.",
+   "applies_to": "People with prediabetes or diabetes",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-11",
+   "areas": [
+    "Diabetes",
+    "Weight"
+   ],
+   "topic": "Weight loss target",
+   "guidance": "For overweight or obesity, aim for at least 5-7% weight loss.",
+   "applies_to": "Adults with diabetes and overweight",
+   "nutripal_use": "Chatbot education only.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-12",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Alcohol",
+   "guidance": "Do not exceed recommended daily limits; abstainers should not start; delayed hypoglycaemia risk, especially with insulin or secretagogues.",
+   "applies_to": "Adults with diabetes",
+   "nutripal_use": "Chatbot safety note.",
+   "caution": "Refer medication questions.",
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-14",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Carbohydrate in type 1",
+   "guidance": "Carbohydrate is the primary dietary determinant of post-meal glucose and guides prandial insulin; meal composition (fat, protein, fibre, alcohol) changes the response; low-carbohydrate patterns can be used with education and monitoring.",
+   "applies_to": "Adults with type 1 diabetes",
+   "nutripal_use": "For T1D, carbohydrate is displayed as a count (g and 15 g exchanges) without a meal-budget verdict.",
+   "caution": "Never advise insulin.",
+   "education_only": false,
+   "source": "ADA and EASD 2026"
+  },
+  {
+   "id": "DM-15",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Alcohol and hypoglycaemia",
+   "guidance": "Alcohol inhibits liver glucose output; hypoglycaemia risk lasts up to 24 h after the last drink.",
+   "applies_to": "Adults with type 1 diabetes",
+   "nutripal_use": "Chatbot safety note.",
+   "caution": null,
+   "education_only": true,
+   "source": "ADA and EASD 2026"
+  },
+  {
+   "id": "DM-16",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Prevention programme",
+   "guidance": "Refer to a prevention programme for at least 5-7% weight loss through a reduced-calorie eating pattern and >=150 min/week moderate activity; eating patterns such as Mediterranean or low-carbohydrate; no ideal macronutrient split.",
+   "applies_to": "Adults with overweight and high risk",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "DM-17",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Weight loss and remission",
+   "guidance": "Weight loss of 5-15% is a primary target for many; 5-10% improves metabolism; 10-15% or more can lead to remission.",
+   "applies_to": "Adults with type 2 diabetes",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "ADA and EASD 2022"
+  },
+  {
+   "id": "DM-20",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Malaysian T2DM CPG key messages",
+   "guidance": "Weight loss of >=7-10% within 6 months is effective for prevention; encourage low-GI foods in the Malaysian context; >=150 min/week moderate activity.",
+   "applies_to": "Malaysian adults",
+   "nutripal_use": "Chatbot education with Malaysian framing.",
+   "caution": "Verify against the full CPG.",
+   "education_only": true,
+   "source": "Ministry of Health Malaysia / MEMS 2020"
+  },
+  {
+   "id": "DM-21",
+   "areas": [
+    "Diabetes"
+   ],
+   "topic": "Supplements",
+   "guidance": "Micronutrient, herb or spice supplements (e.g. chromium, magnesium, cinnamon) are not recommended for glycaemic benefit.",
+   "applies_to": "People with diabetes",
+   "nutripal_use": "Chatbot: decline supplement advice.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "HT-01",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Daily sodium limit (Malaysia)",
+   "guidance": "Lower sodium intake to <2,000 mg (5 g salt, 1 level teaspoon) per day.",
+   "applies_to": "Adults with hypertension",
+   "nutripal_use": "Layer 2 daily sodium target.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-02",
+   "areas": [
+    "General"
+   ],
+   "topic": "Daily sodium (Malaysian CPG)",
+   "guidance": "A diet with <2,000 mg sodium daily (5 g salt) can be beneficial to decrease CVD risk.",
+   "applies_to": "Malaysian adults",
+   "nutripal_use": "Confirms the same limit for all users.",
+   "caution": null,
+   "education_only": false,
+   "source": "Ministry of Health Malaysia / Academy of Medicine Malaysia 2023"
+  },
+  {
+   "id": "HT-03",
+   "areas": [
+    "General"
+   ],
+   "topic": "Daily sodium (WHO)",
+   "guidance": "Reduce sodium to <2 g/day (5 g salt) in adults (strong recommendation).",
+   "applies_to": "Adults",
+   "nutripal_use": "International confirmation.",
+   "caution": null,
+   "education_only": false,
+   "source": "World Health Organization 2025"
+  },
+  {
+   "id": "HT-04",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Daily sodium (US)",
+   "guidance": "Reduce sodium to <2,300 mg/day, moving toward an ideal <1,500 mg/day. Sodium reduction may be contraindicated in severe symptomatic orthostatic hypotension.",
+   "applies_to": "US adults",
+   "nutripal_use": "Not the default; a 1,500 mg provider limit can be entered.",
+   "caution": "Orthostatic hypotension -> clinician.",
+   "education_only": false,
+   "source": "AHA/ACC and partner societies 2025"
+  },
+  {
+   "id": "HT-05",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "DASH",
+   "guidance": "Adopting the DASH eating pattern is recommended.",
+   "applies_to": "Adults with hypertension",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-06",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Dietary potassium",
+   "guidance": "Increase dietary potassium from food in people with normal kidney function not at risk of hyperkalaemia; routine potassium, magnesium or calcium supplements are not supported.",
+   "applies_to": "Adults with hypertension",
+   "nutripal_use": "Potassium on a label may be shown as information with a kidney/medication caution, never as a target.",
+   "caution": "Kidney disease, potassium-sparing drugs.",
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-07",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Potassium amount and exceptions",
+   "guidance": "Dietary potassium 3,500-5,000 mg/day; except CKD or drugs that reduce potassium excretion (ACE inhibitors, ARBs, potassium-sparing diuretics, MRAs).",
+   "applies_to": "US adults",
+   "nutripal_use": "Chatbot education with exceptions.",
+   "caution": "Never advise on medicines.",
+   "education_only": true,
+   "source": "AHA/ACC and partner societies 2025"
+  },
+  {
+   "id": "HT-08",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Salt substitutes (WHO)",
+   "guidance": "If using table salt, WHO suggests replacing it with lower-sodium salt substitutes containing potassium (conditional); adults only, not pregnancy or children, excluding kidney impairment.",
+   "applies_to": "General adult population",
+   "nutripal_use": "Chatbot education with exclusions.",
+   "caution": "Kidney disease.",
+   "education_only": true,
+   "source": "World Health Organization 2025"
+  },
+  {
+   "id": "HT-09",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Salt substitutes (US)",
+   "guidance": "Potassium-based salt substitutes (25-30% KCl, 65-75% NaCl) can be useful, except with CKD or potassium-retaining drugs.",
+   "applies_to": "US adults",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "AHA/ACC and partner societies 2025"
+  },
+  {
+   "id": "HT-10",
+   "areas": [
+    "Blood pressure",
+    "Weight"
+   ],
+   "topic": "Weight loss and BP",
+   "guidance": "Losing 4-5 kg lowers systolic BP by 4-7 and diastolic by 3-6 mmHg in adults with overweight; aim for BMI 25 and waist 90 cm (men) / 80 cm (women).",
+   "applies_to": "Adults with hypertension and overweight",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-11",
+   "areas": [
+    "Blood pressure",
+    "Cholesterol"
+   ],
+   "topic": "Alcohol limits",
+   "guidance": "People who drink should limit to 2 standard drinks/day (men) and 1 (women); 1 standard drink = 14 g alcohol. ACC/AHA: abstinence or <=1/<=2; 12-14 g per drink. Malaysian CPG: 10 g/20 g.",
+   "applies_to": "Adults who drink",
+   "nutripal_use": "Chatbot education; definitions of a drink differ (see conflicts).",
+   "caution": "Never encourage starting alcohol.",
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-12",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Tea and coffee",
+   "guidance": "Regular green or black tea is recommended; the coffee-BP relationship is inconclusive.",
+   "applies_to": "Adults with hypertension",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-13",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Hidden sodium names",
+   "guidance": "Ingredient names that mean sodium include MSG, sodium benzoate, baking soda, disodium inosinate/guanylate, sodium phosphate, among others.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot only; ingredient lists are outside the nutrition table.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-14",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Malaysian high-sodium foods",
+   "guidance": "Sodium per serving for common Malaysian foods, e.g. instant noodles 1,500 mg per 85 g packet; stock cube 2,208 mg per piece.",
+   "applies_to": "Malaysian foods",
+   "nutripal_use": "Familiar comparison anchors in explanations.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-15",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Eating-out and cooking tips",
+   "guidance": "Leave the gravy/soup, avoid adding salt or soy sauce, pick clear soup over cream soup, request less salt.",
+   "applies_to": "Malaysian adults",
+   "nutripal_use": "Chatbot tips.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "HT-16",
+   "areas": [
+    "Blood pressure"
+   ],
+   "topic": "Sodium in salt types",
+   "guidance": "Sodium per 5 g: table salt 1,794 mg; bamboo 1,753; Himalayan pink 1,740; kosher 1,731; French sea salt 1,562. Potassium salt substitutes: 983-1,150 mg sodium per 5 g.",
+   "applies_to": "-",
+   "nutripal_use": "Chatbot: speciality salts are about as salty as table salt.",
+   "caution": "Substitute brands not endorsed.",
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-01",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Saturated fat limit",
+   "guidance": "Limit saturated fat to <10% of total energy.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Layer 2 saturated fat target.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-02",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Replace saturated fat",
+   "guidance": "Replace saturated fat with polyunsaturated (and monounsaturated) fat; a diet rich in fruit, vegetables, nuts, legumes, whole grains and fibre lowers LDL-C.",
+   "applies_to": "Adults with or without ASCVD",
+   "nutripal_use": "Explains the swap advice in insights.",
+   "caution": null,
+   "education_only": false,
+   "source": "ACC/AHA and partner societies 2026"
+  },
+  {
+   "id": "LD-03",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Trans fat limit",
+   "guidance": "Limit trans fat to <1% of total energy.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Layer 2 trans fat target.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-04",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Trans fat in Malaysian foods",
+   "guidance": "Trans fat in common Malaysian supermarket foods is generally very low (<1 mg/100 g).",
+   "applies_to": "Malaysian market",
+   "nutripal_use": "Explains why trans fat is often 0 or missing.",
+   "caution": "Missing trans fat stays 'not listed', not zero.",
+   "education_only": false,
+   "source": "Ministry of Health Malaysia / Academy of Medicine Malaysia 2023"
+  },
+  {
+   "id": "LD-05",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Total fat limit",
+   "guidance": "Limit total fat to 30% or less of total energy.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Secondary nutrient for LDL; not a TG decider.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-06",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Dietary cholesterol",
+   "guidance": "Reducing dietary cholesterol to <200 mg/day should be considered; its link to blood cholesterol is weak and questionable. Limiting saturated fat lowers LDL more consistently than restricting dietary cholesterol.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Show cholesterol with context; never the deciding nutrient.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-07",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Dietary fibre",
+   "guidance": "Fibre 25-30 g/day (MDA); 20-30 g/day with 7-13 g soluble fibre (CPG); soluble fibre improves cholesterol and TG.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Total fibre is a benefit; soluble fibre cannot be inferred from total fibre.",
+   "caution": "Do not infer soluble fibre.",
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-08",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Plant sterols/stanols",
+   "guidance": "2-3 g/day plant sterol/stanol from enriched foods is recommended.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Mention only if a label lists plant sterols.",
+   "caution": "Not a recommendation to buy supplements.",
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-09",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Beta-glucan, soy, nuts",
+   "guidance": "Oat/barley beta-glucan >=3 g/day, soy protein >=25 g/day and 30 g mixed nuts/day are encouraged.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Chatbot education; beta-glucan only if labelled.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-10",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Mediterranean diet",
+   "guidance": "Adopting a Mediterranean diet is recommended for people with dyslipidaemia at increased CVD risk.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-11",
+   "areas": [
+    "Cholesterol",
+    "Weight"
+   ],
+   "topic": "Weight and lipids",
+   "guidance": "Weight loss improves lipids in overweight; MDA: BMI <25 and waist <90/<80 cm (B). Malaysian CPG: BMI <23 or 5-10% loss; waist <90/<80 cm.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot; cut-offs conflict (see conflicts).",
+   "caution": "NutriPal does not classify BMI.",
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "LD-12",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Tropical oils",
+   "guidance": "Saturated fat is typically in red meat, butter, high-fat milk, coconut, palm and palm kernel oil. SFA share of fat: coconut 91.9%, palm kernel 84.2%, palm oil 44.9%, palm olein 42.4%, olive 18.8%.",
+   "applies_to": "-",
+   "nutripal_use": "Chatbot education for Malaysian oils.",
+   "caution": null,
+   "education_only": true,
+   "source": "ACC/AHA and partner societies 2026"
+  },
+  {
+   "id": "LD-14",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Coffee",
+   "guidance": "Unfiltered coffee raises LDL-C; filtered coffee does not; 3-4 cups/day probably not harmful.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "TG-01",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Diet for TG 1.7-5.6 mmol/L",
+   "guidance": "A diet low in added sugar, refined carbohydrates and saturated fat, minimising alcohol, is beneficial to reduce TG and ASCVD risk.",
+   "applies_to": "Adults with fasting TG 150-499 mg/dL",
+   "nutripal_use": "Defines TG deciders: sugars (proxy), saturated fat; fibre/whole grain as quality signal.",
+   "caution": "Only total sugars is usually on the label.",
+   "education_only": false,
+   "source": "ACC/AHA and partner societies 2026"
+  },
+  {
+   "id": "TG-03",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Weight loss and TG",
+   "guidance": "5-10% weight loss lowers TG by about 20%.",
+   "applies_to": "Adults with overweight",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "American College of Cardiology 2021"
+  },
+  {
+   "id": "TG-04",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Carbohydrate swaps",
+   "guidance": "Replacing 1% of energy from carbohydrate with MUFA or PUFA lowers TG by about 1.7 and 2.3 mg/dL.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "ACC/AHA and partner societies 2026"
+  },
+  {
+   "id": "TG-05",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Carbohydrate share",
+   "guidance": "Reduce carbohydrate to 50-60% of energy with emphasis on whole grains; intakes above 60% raise TG.",
+   "applies_to": "Adults with dyslipidaemia",
+   "nutripal_use": "Context for carbohydrate quality insight.",
+   "caution": null,
+   "education_only": false,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "TG-06",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Refined carbs and sweet drinks",
+   "guidance": "Reduce refined carbohydrates and sweetened beverages; carbohydrate should be lower with high TG and low HDL.",
+   "applies_to": "Malaysian adults",
+   "nutripal_use": "Supports drink-sugar insight for TG.",
+   "caution": null,
+   "education_only": false,
+   "source": "Ministry of Health Malaysia / Academy of Medicine Malaysia 2023"
+  },
+  {
+   "id": "TG-07",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Food-level guidance",
+   "guidance": "For TG <5.6 mmol/L: restrict sugar-sweetened beverages; whole fruit over juice (3-4 servings/day); limit full-fat and sweetened dairy; total fat 30-35% of energy with saturated fat limited.",
+   "applies_to": "Adults with persistent hypertriglyceridaemia",
+   "nutripal_use": "Chatbot education; total fat is not a TG decider.",
+   "caution": null,
+   "education_only": true,
+   "source": "American College of Cardiology 2021"
+  },
+  {
+   "id": "TG-08",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Alcohol and refined carbs",
+   "guidance": "Reducing alcohol with a diet low in refined carbohydrate (added sugar) and more activity can lower TG by 10-20%.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Malaysian Dietitians' Association (MDA) 2026"
+  },
+  {
+   "id": "TG-09",
+   "areas": [
+    "Cholesterol"
+   ],
+   "topic": "Dietitian referral",
+   "guidance": "With TG 1.7-11.3 mmol/L and cardio-kidney-metabolic features, referral to a dietitian can be beneficial.",
+   "applies_to": "Adults",
+   "nutripal_use": "Chatbot referral wording.",
+   "caution": null,
+   "education_only": true,
+   "source": "ACC/AHA and partner societies 2026"
+  },
+  {
+   "id": "WT-01",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Energy balance",
+   "guidance": "Eating more energy than used leads to weight gain; less leads to loss; individual responses vary.",
+   "applies_to": "All",
+   "nutripal_use": "Chatbot: calories matter but responses differ.",
+   "caution": null,
+   "education_only": true,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  },
+  {
+   "id": "WT-02",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Calories and metabolism",
+   "guidance": "To lose weight and keep it off, reduce calories from foods and drinks; metabolism slows during weight loss so needs fall.",
+   "applies_to": "Adults with overweight",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "NIDDK (NIH) 2023"
+  },
+  {
+   "id": "WT-03",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "US nutrient caps",
+   "guidance": "Added sugars <10% of calories, saturated fat <10%, sodium <2,300 mg/day.",
+   "applies_to": "US adults",
+   "nutripal_use": "Supports the 10% free-sugar cap (US framing).",
+   "caution": null,
+   "education_only": true,
+   "source": "NIDDK (NIH) 2023"
+  },
+  {
+   "id": "WT-04",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Activity to keep weight off",
+   "guidance": "Aim for at least 300 min/week of moderate activity to keep weight off; weigh regularly.",
+   "applies_to": "Adults after weight loss",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "NIDDK (NIH) 2023"
+  },
+  {
+   "id": "WT-05",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Realistic goal",
+   "guidance": "Start with losing 5-10% of starting weight over 6 months.",
+   "applies_to": "US adults",
+   "nutripal_use": "Chatbot education.",
+   "caution": "Older source (2020).",
+   "education_only": true,
+   "source": "NIDDK (NIH) 2020"
+  },
+  {
+   "id": "WT-06",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Label reading and portions",
+   "guidance": "Read labels for calories, servings, fat, fibre, sodium and added sugars per serving; at restaurants eat about half and take the rest home.",
+   "applies_to": "US adults",
+   "nutripal_use": "Supports portion-aware insights.",
+   "caution": null,
+   "education_only": false,
+   "source": "NIDDK (NIH) 2020"
+  },
+  {
+   "id": "WT-07",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Pace and swaps",
+   "guidance": "Aim to lose 0.5-1 kg a week; choose products with more green than amber or red traffic lights; swap sugary drinks for water; five 80 g portions of fruit and vegetables a day; 150 min activity a week.",
+   "applies_to": "UK adults",
+   "nutripal_use": "Supports Layer 1 colours and the 500 kcal default (approx. 0.5 kg/week).",
+   "caution": "Review overdue.",
+   "education_only": false,
+   "source": "NHS (England) 2023"
+  },
+  {
+   "id": "WT-08",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Healthy gain",
+   "guidance": "Gain gradually with about 300-500 extra kcal/day; small frequent meals; add nuts, seeds, cheese, milky drinks; protein from beans, pulses, fish, eggs, lean meat; do not rely on chocolate, cakes and sugary drinks; see a GP for unexplained weight loss.",
+   "applies_to": "UK adults",
+   "nutripal_use": "Source of the gain default (300 kcal more, lower end of the range; 500 as an option, R-EN-02); sugar and saturated fat still flagged.",
+   "caution": "Unexplained weight loss -> GP.",
+   "education_only": false,
+   "source": "NHS (England) 2023"
+  },
+  {
+   "id": "WT-09",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Adequacy during loss",
+   "guidance": "Monitor people pursuing weight loss for adequate protein and micronutrients.",
+   "applies_to": "People with diabetes",
+   "nutripal_use": "Chatbot caution against crash diets.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "WT-10",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Individualised prescription",
+   "guidance": "Dietary prescriptions should be individualised to motivation, age, sex, comorbidities, physical activity and weight-loss goals; medical nutrition therapy by a dietitian is recommended for overweight and obesity, especially with comorbidities.",
+   "applies_to": "Adults with overweight or obesity",
+   "nutripal_use": "Why NutriPal's goal change is a general, adjustable default, never a prescription (R-EN-02).",
+   "caution": null,
+   "education_only": false,
+   "source": "Ministry of Health Malaysia, MEMS, MASO, MDA, FMSA 2023"
+  },
+  {
+   "id": "WT-13",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Calorie restriction options",
+   "guidance": "Calorie restriction should be individualised (age, sex, readiness, activity, comorbidities, preference). Any one of: 1,200-1,500 kcal/day for women; 1,500-1,800 kcal/day for men; or reduce daily energy by 500-750 kcal from usual intake, for an initial loss of 0.5-1 kg/week.",
+   "applies_to": "Adults with overweight or obesity",
+   "nutripal_use": "Source of the lose default (500 kcal less, lower end of the range) and the 1,200/1,500 kcal floors (R-EN-02); the full range is shown as education.",
+   "caution": "Nutrient inadequacy reported with restriction.",
+   "education_only": false,
+   "source": "Ministry of Health Malaysia, MEMS, MASO, MDA, FMSA 2023"
+  },
+  {
+   "id": "WT-14",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Realistic weight-loss goals",
+   "guidance": "Up to 1 kg/week; up to 10% of baseline weight; 3-5% of baseline weight when cardiovascular risk factors are present (hypertension, hyperlipidaemia, hyperglycaemia).",
+   "applies_to": "Adults with overweight or obesity",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "Ministry of Health Malaysia, MEMS, MASO, MDA, FMSA 2023"
+  },
+  {
+   "id": "WT-15",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Activity and weight",
+   "guidance": "At least 150 min/week moderate activity has demonstrated weight maintenance; more than 300 min/week is associated with maintenance after weight loss.",
+   "applies_to": "Adults with obesity",
+   "nutripal_use": "Chatbot education.",
+   "caution": "Exercise clearance for people with obesity.",
+   "education_only": true,
+   "source": "Ministry of Health Malaysia, MEMS, MASO, MDA, FMSA 2023"
+  },
+  {
+   "id": "WT-16",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Diet approaches",
+   "guidance": "Calorie restriction should be combined with either low-carbohydrate or low-fat intake; meal replacement or intermittent fasting may be alternatives. Low-carbohydrate and balanced diets gave similar weight loss.",
+   "applies_to": "Adults with overweight or obesity",
+   "nutripal_use": "Chatbot: no single diet is best for weight loss.",
+   "caution": null,
+   "education_only": true,
+   "source": "Ministry of Health Malaysia, MEMS, MASO, MDA, FMSA 2023"
+  },
+  {
+   "id": "WT-19",
+   "areas": [
+    "Diabetes",
+    "Weight"
+   ],
+   "topic": "500-750 kcal deficit context",
+   "guidance": "Programmes with high-frequency counselling (>=16 sessions in 6 months) targeting a 500-750 kcal/day deficit are recommended when available; if limited, alternative structured programmes (including remote or mobile app) may be considered. The deficit is about 1,200-1,500 kcal/day for most women and 1,500-1,800 for most men, adjusted for baseline weight.",
+   "applies_to": "Adults with type 2 diabetes and overweight or obesity",
+   "nutripal_use": "Context: deficits are set inside structured care, so NutriPal labels its goal change a general, adjustable guide (R-EN-02).",
+   "caution": null,
+   "education_only": false,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "WT-20",
+   "areas": [
+    "Diabetes",
+    "Weight"
+   ],
+   "topic": "Weight-loss benefit",
+   "guidance": "Any magnitude of weight loss helps; 5-7% improves glycaemia and CV risk factors; sustained >10% gives greater benefits, including possible remission.",
+   "applies_to": "Adults with type 2 diabetes and overweight or obesity",
+   "nutripal_use": "Chatbot education.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "WT-21",
+   "areas": [
+    "Weight"
+   ],
+   "topic": "Safety during weight loss",
+   "guidance": "Individualise nutrition and keep general nutrition guidance while in deficit (8.9, A); very-low-calorie meals (800-1,000 kcal/day) only in medical settings (8.12, B); supplements not recommended for weight loss (8.13, A); monitor protein and micronutrient adequacy (8.14, E).",
+   "applies_to": "Adults with diabetes and overweight or obesity",
+   "nutripal_use": "Chatbot safety: no crash diets, no weight-loss supplements.",
+   "caution": null,
+   "education_only": true,
+   "source": "American Diabetes Association 2026"
+  },
+  {
+   "id": "WT-11",
+   "areas": [
+    "General",
+    "Weight"
+   ],
+   "topic": "Energy equation is for maintenance",
+   "guidance": "EER predicts energy for maintaining current weight; to reach a desired weight, adjust intake and monitor weight.",
+   "applies_to": "Adults",
+   "nutripal_use": "Loss/gain adjustments are NutriPal design choices on top of EER.",
+   "caution": null,
+   "education_only": false,
+   "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+  }
+ ]
+}

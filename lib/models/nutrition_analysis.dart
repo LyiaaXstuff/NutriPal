@@ -10,6 +10,8 @@
 // document) for where every threshold comes from.
 // =======================================================
 
+import '../services/energy_requirement.dart' show GoalEnergyResult;
+
 enum NutrientLevel { low, moderate, high }
 
 extension NutrientLevelText on NutrientLevel {
@@ -197,11 +199,33 @@ class PortionOption {
 // =======================================================
 
 class DailyTargets {
+  // Energy base for every limit: the provider's figure,
+  // the NASEM maintenance estimate or the 2,000 kcal
+  // reference.
   final double energyKcal;
+
+  // The weight goal applied to the maintenance estimate
+  // (lose / gain), or null when none applies (maintain, no
+  // goal, a provider's figure, the 2,000 kcal reference).
+  // Only the energy target uses it.
+  final GoalEnergyResult? goal;
+
+  /// Energy target for judging each product's energy.
+  double get goalEnergyKcal => goal?.kcal ?? energyKcal;
+
+  /// True when the energy target differs from maintenance.
+  bool get goalAdjusted => goal?.adjusted ?? false;
 
   // False when the profile lacks age, sex, weight, height
   // or activity and the 2,000 kcal reference was used.
   final bool energyIsPersonal;
+
+  // Likely range of the NASEM estimate (EER plus or minus
+  // one standard error). Null for a provider figure or the
+  // 2,000 kcal reference.
+  final double? energyLowKcal;
+
+  final double? energyHighKcal;
 
   final double sodiumMg;
 
@@ -224,7 +248,10 @@ class DailyTargets {
 
   const DailyTargets({
     required this.energyKcal,
+    this.goal,
     required this.energyIsPersonal,
+    this.energyLowKcal,
+    this.energyHighKcal,
     required this.sodiumMg,
     required this.freeSugarsG,
     required this.totalFatG,

@@ -69,6 +69,7 @@ class _HealthConditionsSettingsState
 
   double? _currentWeight;
   double? _height;
+  double? _providerEnergyKcal;
 
   String? _activityLevel;
 
@@ -89,6 +90,7 @@ class _HealthConditionsSettingsState
 
   double? _originalCurrentWeight;
   double? _originalHeight;
+  double? _originalProviderEnergyKcal;
 
   String? _originalActivityLevel;
 
@@ -137,6 +139,9 @@ class _HealthConditionsSettingsState
     _activityLevel =
         widget.data.activityLevel;
 
+    _providerEnergyKcal =
+        widget.data.providerEnergyKcal;
+
     _originalDiabetes =
         _diabetes;
 
@@ -169,6 +174,9 @@ class _HealthConditionsSettingsState
 
     _originalActivityLevel =
         _activityLevel;
+
+    _originalProviderEnergyKcal =
+        _providerEnergyKcal;
   }
 
   // =====================================================
@@ -376,7 +384,9 @@ class _HealthConditionsSettingsState
         _height !=
             _originalHeight ||
         _activityLevel !=
-            _originalActivityLevel;
+            _originalActivityLevel ||
+        _providerEnergyKcal !=
+            _originalProviderEnergyKcal;
   }
 
   // =====================================================
@@ -1328,7 +1338,8 @@ class _HealthConditionsSettingsState
         heightCm: _height,
         activity: _activityLevel,
         dateOfBirth: widget.data.dateOfBirth,
-        providerEnergyKcal: widget.data.providerEnergyKcal,
+        providerEnergyKcal: _providerEnergyKcal,
+        energyChangeKcal: widget.data.energyChangeKcal,
       ),
     );
 
@@ -1342,6 +1353,7 @@ class _HealthConditionsSettingsState
       _currentWeight = result.weightKg;
       _height = result.heightCm;
       _activityLevel = result.activity;
+      _providerEnergyKcal = result.providerEnergyKcal;
       _weightManagement = true;
     });
   }
@@ -1441,6 +1453,9 @@ class _HealthConditionsSettingsState
     widget.data.activityLevel =
         _activityLevel;
 
+    widget.data.providerEnergyKcal =
+        _providerEnergyKcal;
+
     widget.data.weightUnit =
         'kg';
 
@@ -1489,6 +1504,9 @@ class _HealthConditionsSettingsState
 
       _originalActivityLevel =
           _activityLevel;
+
+      _originalProviderEnergyKcal =
+          _providerEnergyKcal;
     });
 
     _showMessage(
@@ -2485,12 +2503,16 @@ class _WeightSheetResult {
   final double heightCm;
   final String activity;
 
+  // Daily figure from a doctor or dietitian, or null.
+  final double? providerEnergyKcal;
+
   const _WeightSheetResult({
     required this.goal,
     required this.sex,
     required this.weightKg,
     required this.heightCm,
     required this.activity,
+    required this.providerEnergyKcal,
   });
 }
 
@@ -2501,9 +2523,14 @@ class _WeightManagementSheet extends StatefulWidget {
   final double? heightCm;
   final String? activity;
 
-  // For the energy guide only.
+  // For the energy guide.
   final DateTime? dateOfBirth;
+
+  // Editable in the sheet (optional).
   final double? providerEnergyKcal;
+
+  // Chosen in Weight management settings (null = default).
+  final int? energyChangeKcal;
 
   const _WeightManagementSheet({
     required this.goal,
@@ -2513,6 +2540,7 @@ class _WeightManagementSheet extends StatefulWidget {
     required this.activity,
     required this.dateOfBirth,
     required this.providerEnergyKcal,
+    this.energyChangeKcal,
   });
 
   @override
@@ -2530,10 +2558,15 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
   late final TextEditingController _heightController =
       TextEditingController(text: WeightPlanOptions.formatNumber(widget.heightCm));
 
+  late final TextEditingController _providerController = TextEditingController(
+    text: widget.providerEnergyKcal == null ? '' : widget.providerEnergyKcal!.round().toString(),
+  );
+
   @override
   void dispose() {
     _weightController.dispose();
     _heightController.dispose();
+    _providerController.dispose();
     super.dispose();
   }
 
@@ -2546,7 +2579,8 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
       _sex != null &&
       _activity != null &&
       WeightPlanOptions.weightOk(_weight) &&
-      WeightPlanOptions.heightOk(_height);
+      WeightPlanOptions.heightOk(_height) &&
+      WeightPlanOptions.providerTextOk(_providerController.text);
 
   DailyTargets? get _targets {
     if (!_complete) return null;
@@ -2559,7 +2593,8 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
         currentWeight: _weight,
         height: _height,
         activityLevel: _activity,
-        providerEnergyKcal: widget.providerEnergyKcal,
+        providerEnergyKcal: WeightPlanOptions.providerKcal(_providerController.text),
+        energyChangeKcal: widget.energyChangeKcal,
       ),
     );
   }
@@ -2575,6 +2610,7 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
         weightKg: _weight!,
         heightCm: _height!,
         activity: _activity!,
+        providerEnergyKcal: WeightPlanOptions.providerKcal(_providerController.text),
       ),
     );
   }
@@ -2675,11 +2711,22 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
                         selected: _activity,
                         onChanged: (String v) => setState(() => _activity = v),
                       ),
+                      const SizedBox(height: 22),
+                      ProviderEnergyField(
+                        controller: _providerController,
+                        sex: _sex,
+                        onChanged: (_) => setState(() {}),
+                        labelAsSectionTitle: true,
+                      ),
                       if (targets != null) ...[
                         const SizedBox(height: 18),
-                        EnergyGuideCard(
-                          kcalText: WeightPlanOptions.kcalText(targets.energyKcal),
-                          note: WeightPlanOptions.energyNote(targets, _goal),
+                        EnergyGuideCard.fromTargets(targets, goal: _goal),
+                        const SizedBox(height: 14),
+                        GoalGuidanceCard(
+                          goal: _goal,
+                          sex: _sex,
+                          weightKg: _weight,
+                          heightCm: _height,
                         ),
                       ],
                     ],

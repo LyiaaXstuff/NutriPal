@@ -313,7 +313,7 @@ function sanitizeLabel(input) {
  * @param {object} args
  * @param {any} args.data request data from the app
  * @param {string} args.apiKey Anthropic API key
- * @param {string} args.model model id, e.g. "claude-haiku-5-5"
+ * @param {string} args.model model id, e.g. "claude-sonnet-5-5"
  * @param {typeof fetch} [args.fetchImpl] injectable for tests
  */
 async function readNutritionLabel({ data, apiKey, model, fetchImpl = fetch }) {

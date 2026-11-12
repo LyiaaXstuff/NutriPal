@@ -163,7 +163,9 @@ class _AskNutriPalScreenState extends State<AskNutriPalScreen> {
                           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: NpColors.ink),
                         ),
                         Text(
-                          'Knows your profile and this label',
+                          'Based on your profile, this label and guidelines',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 12.5, color: NpColors.muted),
                         ),
                       ],

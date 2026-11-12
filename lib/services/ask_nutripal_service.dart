@@ -1,9 +1,12 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
 import '../models/profile_setup_data.dart';
+import 'agent_summary.dart';
+import 'energy_requirement.dart' show GoalEnergyResult;
 import 'nutrition_analysis_service.dart';
 
 // =======================================================
@@ -17,6 +20,9 @@ import 'nutrition_analysis_service.dart';
 //
 // Privacy: no name, email or date of birth is sent, only
 // the label, the user's health areas, goal and limits.
+// The server may also read the signed-in user's own scan
+// history (compare_with_history tool) and NutriPal's
+// validated guideline notes (search_guidelines tool).
 // =======================================================
 
 class AskNutriPalException implements Exception {
@@ -36,7 +42,17 @@ class ChatTurn {
   // What the agent did ("Recalculated for 472 ml").
   final List<String> steps;
 
-  const ChatTurn({required this.role, required this.text, this.steps = const <String>[]});
+  // Knowledge-base entries the answer drew on (GEN-05,
+  // DM-12...). Internal, for testing only: never shown in
+  // the chat; printed to the debug console.
+  final List<String> evidenceIds;
+
+  const ChatTurn({
+    required this.role,
+    required this.text,
+    this.steps = const <String>[],
+    this.evidenceIds = const <String>[],
+  });
 }
 
 class AskNutriPalService {
@@ -76,7 +92,7 @@ class AskNutriPalService {
           },
         if (data.servingsPerPackage != null) 'servings_per_package': data.servingsPerPackage,
       },
-      'per_100': _per100(data),
+      'per_100': AgentSummary.per100(data),
       'portion_rated_by_app': <String, dynamic>{
         if (analysis.portionAmount != null) 'amount': analysis.portionAmount,
         if (analysis.portionUnit != null) 'unit': analysis.portionUnit,
@@ -90,8 +106,32 @@ class AskNutriPalService {
         if (profile.diabetesType != null) 'diabetes_type': profile.diabetesType,
       },
       'targets': <String, dynamic>{
-        'energy_kcal': _r(t.energyKcal),
+        // The energy target each product is judged against
+        // (with the weight goal applied).
+        'energy_kcal': _r(t.goalEnergyKcal),
         'energy_is_personal': t.energyIsPersonal,
+        // Where the energy figure comes from, so the chatbot
+        // never calls an estimate a prescription.
+        'energy_basis': t.setByProvider.contains('Energy')
+            ? 'set by healthcare provider'
+            : !t.energyIsPersonal
+                ? 'standard 2,000 kcal reference'
+                : t.goalAdjusted
+                    ? 'NASEM 2023 maintenance estimate '
+                        '${t.goal!.changeKcal < 0 ? 'minus' : 'plus'} '
+                        '${t.goal!.changeKcal.abs().round()} kcal for the weight goal '
+                        '(general guide, adjustable in settings)'
+                    : 'NASEM 2023 estimated maintenance energy',
+        if (t.goal != null) 'maintenance_energy_kcal': _r(t.goal!.maintenanceKcal),
+        if (_goalNote(t) != null) 'energy_goal_note': _goalNote(t),
+        if (t.energyLowKcal != null && t.energyHighKcal != null)
+          'maintenance_likely_range_kcal': <int>[
+            (t.energyLowKcal! / 10).round() * 10,
+            (t.energyHighKcal! / 10).round() * 10,
+          ],
+        // Every limit below is based on maintenance energy
+        // (or the provider's figure), not on the goal energy.
+        'limits_energy_kcal': _r(t.energyKcal),
         'sodium_mg': _r(t.sodiumMg),
         'free_sugars_g': _r(t.freeSugarsG),
         'total_fat_g': _r(t.totalFatG),
@@ -142,51 +182,62 @@ class AskNutriPalService {
       },
       'rules': 'Levels: share of limit up to 10% Low, up to 30% Moderate, above '
           '30% High${AnalysisRules.combineRule == CombineRule.worseOfBoth ? ', and never lower than the per-100 traffic light' : ''}.',
+      // The app's own rule numbers and per-100 amounts, so
+      // the recalculate_portion tool rates another amount
+      // exactly like the result screen (no second copy of
+      // the rules on the server).
+      'rating': ratingRules(analysis),
+    };
+  }
+
+  /// Why the weight goal changed the energy less than
+  /// asked, or null.
+  static String? _goalNote(DailyTargets t) {
+    final GoalEnergyResult? g = t.goal;
+
+    if (g == null) return null;
+    if (g.lowBmi) return 'no deficit because BMI is below 18.5';
+    if (g.floorApplied && g.floorKcal != null) {
+      return 'weight-loss guide kept at or above ${g.floorKcal!.round()} kcal';
+    }
+
+    return null;
+  }
+
+  /// Layer 1 + Layer 3 inputs for rating any amount.
+  static Map<String, dynamic> ratingRules(NutritionAnalysis analysis) {
+    return <String, dynamic>{
+      'low_share_max': AnalysisRules.lowShare,
+      'moderate_share_max': AnalysisRules.highShare,
+      'combine': AnalysisRules.combineRule == CombineRule.worseOfBoth ? 'worse_of_both' : 'portion_decides',
+      'nutrients': <Map<String, dynamic>>[
+        for (final NutrientAssessment n in analysis.nutrients.values)
+          if (n.per100 != null)
+            <String, dynamic>{
+              'name': n.name,
+              // In the rule unit (kcal, g, mg), after any
+              // kJ or salt conversion the app made.
+              'per100': n.per100,
+              'unit': n.unit,
+              if (n.productLevel != null) 'product_level_per_100': n.productLevel!.label,
+              'rated': !n.isBenefit,
+            },
+      ],
+      'areas': <Map<String, dynamic>>[
+        for (final AreaAssessment a in analysis.areas)
+          <String, dynamic>{
+            'area': a.area.title,
+            'nutrients': AnalysisRules.areaNutrients[a.area],
+            // Without one of these the area cannot be rated.
+            'key_any_of': a.area == HealthArea.cholesterol
+                ? <String>['Saturated Fat', 'Total Fat']
+                : <String>[AnalysisRules.areaNutrients[a.area]!.first],
+          },
+      ],
     };
   }
 
   static double _r(double v) => double.parse(v.toStringAsFixed(v.abs() >= 10 ? 1 : 2));
-
-  /// Every nutrient per 100 g / ml (from the label, or from
-  /// per serving and the serving size).
-  static List<Map<String, dynamic>> _per100(NutritionLabelData data) {
-    final int g = data.columnIndexFor(NutritionColumnBasis.per100g);
-    final int p100 = g >= 0 ? g : data.columnIndexFor(NutritionColumnBasis.per100ml);
-    final int ps = data.columnIndexFor(NutritionColumnBasis.perServing);
-    final double? size = data.servingSizeAmount;
-
-    final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
-
-    for (final NutrientRow row in data.nutrients) {
-      List<NutritionValue> cell = const <NutritionValue>[];
-      double factor = 1;
-
-      if (p100 >= 0 && p100 < row.valuesByColumn.length && row.valuesByColumn[p100].isNotEmpty) {
-        cell = row.valuesByColumn[p100];
-      } else if (ps >= 0 && ps < row.valuesByColumn.length && size != null && size > 0) {
-        cell = row.valuesByColumn[ps];
-        factor = 100 / size;
-      }
-
-      if (cell.isEmpty) continue;
-
-      NutritionValue v = cell.first;
-
-      for (final NutritionValue c in cell) {
-        if (c.unit == 'kcal') v = c;
-      }
-
-      if (v.unit == '?') continue;
-
-      rows.add(<String, dynamic>{
-        'name': row.name,
-        'amount': _r(v.amount * factor),
-        'unit': v.unit,
-      });
-    }
-
-    return rows;
-  }
 
   // =====================================================
   // ASK
@@ -221,6 +272,15 @@ class AskNutriPalService {
         throw const AskNutriPalException('Unexpected answer. Please try again.');
       }
 
+      final List<String> evidence = <String>[
+        for (final dynamic e in (data['evidence_ids'] as List? ?? <dynamic>[]))
+          if (e is String) e,
+      ];
+
+      if (kDebugMode && evidence.isNotEmpty) {
+        debugPrint('[Ask NutriPal] evidence: ${evidence.join(', ')}');
+      }
+
       return ChatTurn(
         role: 'assistant',
         text: data['answer'] as String,
@@ -228,6 +288,7 @@ class AskNutriPalService {
           for (final dynamic s in (data['steps'] as List? ?? <dynamic>[]))
             if (s is String) s,
         ],
+        evidenceIds: evidence,
       );
     } on FirebaseFunctionsException catch (error) {
       throw AskNutriPalException(

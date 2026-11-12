@@ -9,7 +9,8 @@
 //   Layer 1  Product level per 100 g / 100 ml
 //            (FSA front-of-pack traffic lights).
 //   Layer 2  Personal daily targets from the profile
-//            (Mifflin-St Jeor energy, WHO 2023/2026 limits).
+//            (NASEM 2023 EER, WHO 2023/2026 limits; see
+//            energy_requirement.dart).
 //   Layer 3  Share of the target in the intended portion,
 //            combined with Layer 1 into one level per
 //            health area.
@@ -25,6 +26,7 @@ import 'dart:math' as math;
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
 import '../models/profile_setup_data.dart';
+import 'energy_requirement.dart';
 
 /// How Layer 1 and Layer 3 are combined for one nutrient.
 /// See the open comment in the rules document.
@@ -68,8 +70,10 @@ class AnalysisRules {
   static const double saltPerSodium = 2.5;
 
   // ---- Layer 2 ----------------------------------------
+  // Used only when NutriPal cannot estimate the user's
+  // energy (no weight details, or an older profile under
+  // 19). Energy itself: EnergyRequirement (NASEM 2023).
   static const double referenceEnergyKcal = 2000;
-  static const double weightLossDeficitKcal = 500;
   static const double sodiumLimitMg = 2000;
   static const double freeSugarsShare = 0.10;
   static const double totalFatShare = 0.30;
@@ -79,13 +83,6 @@ class AnalysisRules {
   static const int mainMealsPerDay = 3;
   static const double fibreTargetG = 25;
   static const double carbExchangeG = 15;
-
-  static const Map<String, double> activityFactors = <String, double>{
-    'sedentary': 1.2,
-    'lightly active': 1.375,
-    'moderately active': 1.55,
-    'very active': 1.725,
-  };
 
   // ---- Layer 3 ----------------------------------------
   static const double lowShare = 0.10;
@@ -122,6 +119,10 @@ class NutritionProfile {
   final String? activityLevel;
   final String? weightGoal; // 'lose' | 'maintain' | 'gain'
 
+  // kcal a day the user chose to take off (lose: 250, 500,
+  // 750) or add (gain: 300, 500); null = the default.
+  final int? energyChangeKcal;
+
   final Set<HealthArea> areas;
 
   // Limits from the user's doctor or dietitian (optional).
@@ -136,6 +137,7 @@ class NutritionProfile {
     this.heightCm,
     this.activityLevel,
     this.weightGoal,
+    this.energyChangeKcal,
     this.areas = const <HealthArea>{},
     this.providerSodiumMg,
     this.providerCarbsPerMealG,
@@ -149,16 +151,7 @@ class NutritionProfile {
     final DateTime now = today ?? DateTime.now();
     final DateTime? born = data.dateOfBirth;
 
-    int? age;
-
-    if (born != null) {
-      age = now.year - born.year;
-
-      if (now.month < born.month ||
-          (now.month == born.month && now.day < born.day)) {
-        age--;
-      }
-    }
+    final int? age = born == null ? null : AdultAge.yearsOn(born, now);
 
     final String? goal = data.weightGoal?.toLowerCase();
 
@@ -171,7 +164,7 @@ class NutritionProfile {
       heightCm: data.heightUnit == 'in' && data.height != null
           ? data.height! * 2.54
           : data.height,
-      activityLevel: data.activityLevel,
+      activityLevel: ActivityLevels.normalise(data.activityLevel),
       weightGoal: goal == null
           ? null
           : goal.contains('lose')
@@ -179,6 +172,7 @@ class NutritionProfile {
               : goal.contains('gain')
                   ? 'gain'
                   : 'maintain',
+      energyChangeKcal: data.energyChangeKcal,
       areas: <HealthArea>{
         if (data.diabetes) HealthArea.diabetes,
         if (data.hypertension) HealthArea.bloodPressure,
@@ -219,71 +213,78 @@ class NutritionAnalysisService {
     'Protein': 'g',
   };
 
-  static const Set<String> _subRows = <String>{
-    'Saturated Fat',
-    'Trans Fat',
-    'Unsaturated Fat',
-    'Monounsaturated Fat',
-    'Polyunsaturated Fat',
-    'Omega 3',
-    'Total Sugars',
-    'Added Sugars',
-    'Dietary Fibre',
+  // Indented rows and the row they sit under. Dietary
+  // fibre is its own row on Malaysian labels (carbohydrate
+  // there excludes fibre), so it is never indented.
+  static const Map<String, String> _subRowParent = <String, String>{
+    'Saturated Fat': 'Total Fat',
+    'Trans Fat': 'Total Fat',
+    'Unsaturated Fat': 'Total Fat',
+    'Monounsaturated Fat': 'Total Fat',
+    'Polyunsaturated Fat': 'Total Fat',
+    'Omega 3': 'Total Fat',
+    'Total Sugars': 'Carbohydrate',
+    'Added Sugars': 'Carbohydrate',
   };
 
   // =====================================================
   // LAYER 2: DAILY TARGETS
   // =====================================================
 
-  /// Mifflin-St Jeor resting energy, or null when the
-  /// profile does not have every input.
-  static double? restingEnergyKcal(NutritionProfile p) {
-    final double? w = p.weightKg;
-    final double? h = p.heightCm;
-    final int? a = p.ageYears;
-
-    if (w == null || h == null || a == null || w <= 0 || h <= 0) {
-      return null;
-    }
-
-    final double s = switch (p.sex) {
-      'male' => 5,
-      'female' => -161,
-      _ => double.nan,
-    };
-
-    if (s.isNaN) return null;
-
-    return 10 * w + 6.25 * h - 5 * a + s;
+  /// NASEM 2023 maintenance energy (EER) with its standard
+  /// error, or null when the profile cannot be estimated.
+  static EnergyEstimate? maintenanceEnergy(NutritionProfile p) {
+    return EnergyRequirement.estimate(
+      sex: p.sex,
+      ageYears: p.ageYears,
+      heightCm: p.heightCm,
+      weightKg: p.weightKg,
+      activity: p.activityLevel,
+    );
   }
 
-  static double? activityFactor(String? level) {
-    if (level == null) return null;
-
-    return AnalysisRules.activityFactors[level.trim().toLowerCase()];
-  }
-
+  /// Energy base, in this order:
+  ///   1. a daily figure from the user's doctor or
+  ///      dietitian (800-5,000 kcal), used as given
+  ///   2. the NASEM EER (maintenance), with the weight goal
+  ///      applied to the energy target only (GoalEnergy:
+  ///      lose -500 by default with floors, gain +300)
+  ///   3. the 2,000 kcal reference
+  /// Every other limit is based on 1, 2 (maintenance) or 3.
   static DailyTargets targetsFor(NutritionProfile p) {
     final Set<String> provider = <String>{};
 
     double energy = AnalysisRules.referenceEnergyKcal;
     bool personal = false;
+    double? low;
+    double? high;
+    GoalEnergyResult? goal;
 
-    final double? bmr = restingEnergyKcal(p);
-    final double? factor = activityFactor(p.activityLevel);
+    final EnergyEstimate? eer = maintenanceEnergy(p);
 
-    if (p.providerEnergyKcal != null && p.providerEnergyKcal! > 0) {
+    if (EnergyRequirement.providerTargetOk(p.providerEnergyKcal)) {
       energy = p.providerEnergyKcal!;
       personal = true;
       provider.add('Energy');
-    } else if (bmr != null && factor != null) {
-      energy = bmr * factor;
-
-      if (p.weightGoal == 'lose') {
-        energy = math.max(energy - AnalysisRules.weightLossDeficitKcal, bmr);
-      }
-
+    } else if (eer != null) {
+      energy = eer.kcal;
+      low = eer.lowKcal;
+      high = eer.highKcal;
       personal = true;
+
+      final GoalEnergyResult g = GoalEnergy.apply(
+        maintenanceKcal: eer.kcal,
+        goal: p.weightGoal,
+        chosenKcal: p.energyChangeKcal,
+        sex: p.sex,
+        weightKg: p.weightKg,
+        heightCm: p.heightCm,
+      );
+
+      // Kept for lose and gain, including "no deficit"
+      // because of the floor or a low BMI, so the app can
+      // say why.
+      if (g.requestedKcal > 0) goal = g;
     }
 
     double sodium = AnalysisRules.sodiumLimitMg;
@@ -304,7 +305,10 @@ class NutritionAnalysisService {
 
     return DailyTargets(
       energyKcal: energy,
+      goal: goal,
       energyIsPersonal: personal,
+      energyLowKcal: low,
+      energyHighKcal: high,
       sodiumMg: sodium,
       freeSugarsG: energy * AnalysisRules.freeSugarsShare / 4,
       totalFatG: energy * AnalysisRules.totalFatShare / 9,
@@ -592,7 +596,7 @@ class NutritionAnalysisService {
       }
 
       final (double? target, String? label) = switch (name) {
-        'Energy' => (targets.energyKcal, 'daily energy'),
+        'Energy' => (targets.goalEnergyKcal, 'daily energy'),
         'Carbohydrate' => (targets.carbsPerMealG, 'meal budget'),
         'Total Sugars' => (targets.freeSugarsG, 'daily sugar limit'),
         'Total Fat' => (targets.totalFatG, 'daily fat limit'),
@@ -868,8 +872,19 @@ class NutritionAnalysisService {
 
     final List<FactRow> rows = <FactRow>[];
 
+    // Parent of the rows that may be indented next
+    // ("Total Fat" after Total Fat or one of its parts).
+    String? group;
+
     for (final NutrientRow row in data.nutrients) {
       if (!row.hasAnyValue) continue;
+
+      // Indent only directly under the parent or a sibling,
+      // so a row read out of order is not shown as a part
+      // of the wrong nutrient.
+      final String? parent = _subRowParent[row.name];
+      final bool isSubRow = parent != null && parent == group;
+      group = isSubRow ? group : (_subRowParent.containsValue(row.name) ? row.name : null);
 
       List<NutritionValue>? per100Cell;
       List<NutritionValue>? servingCell;
@@ -899,8 +914,15 @@ class NutritionAnalysisService {
       double? per100;
       String unit = v100?.unit ?? vs?.unit ?? '';
 
+      // The label value itself, when a column is shown as
+      // printed (not calculated), so it keeps the pack's
+      // own digits: 2.66 µg, 3.0 g, <0.1 g.
+      NutritionValue? per100Printed;
+      NutritionValue? portionPrinted;
+
       if (v100 != null) {
         per100 = v100.amount;
+        per100Printed = v100;
       } else if (vs != null && size != null && size > 0) {
         per100 = vs.amount * 100 / size;
       }
@@ -911,26 +933,30 @@ class NutritionAnalysisService {
       if (scale.byServing && scale.servings != null && vs != null) {
         portion = vs.amount * scale.servings!;
         portionUnit = vs.unit;
+        if (scale.servings == 1) portionPrinted = vs;
       } else if (scale.amount != null && per100 != null) {
         portion = per100 * scale.amount! / 100;
+        if (scale.amount == 100) portionPrinted = per100Printed;
       } else if (scale.servings != null && vs != null) {
         portion = vs.amount * scale.servings!;
         portionUnit = vs.unit;
+        if (scale.servings == 1) portionPrinted = vs;
       }
 
-      String text(double? value, String u) {
+      String text(double? value, String u, NutritionValue? printed) {
         if (value == null) return '–';
 
-        return u == '?' || u.isEmpty
-            ? formatAmount(value, u)
-            : '${formatAmount(value, u)} $u';
+        final String number =
+            printed != null ? printedAmount(printed) : formatAmount(value, u);
+
+        return u == '?' || u.isEmpty ? number : '$number $u';
       }
 
       rows.add(FactRow(
         name: row.name,
-        portion: text(portion, portionUnit),
-        per100: text(per100, unit),
-        isSubRow: _subRows.contains(row.name),
+        portion: text(portion, portionUnit, portionPrinted),
+        per100: text(per100, unit, per100Printed),
+        isSubRow: isSubRow,
       ));
     }
 
@@ -960,6 +986,33 @@ class NutritionAnalysisService {
     if (text.contains('.')) {
       text = text.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
     }
+
+    return text;
+  }
+
+  /// A label value exactly as the pack prints it: 2.66,
+  /// 3.0, <0.1. The digits come from the printed text when
+  /// it holds the same number; otherwise the stored amount
+  /// is shown without rounding (only float noise removed).
+  static String printedAmount(NutritionValue v) {
+    final RegExpMatch? m =
+        RegExp(r'^\s*(<)?\s*(\d+(?:[.,]\d+)?)').firstMatch(v.rawText);
+
+    if (m != null) {
+      final String digits = m.group(2)!.replaceAll(',', '.');
+      final double? printed = double.tryParse(digits);
+
+      // Labels print a few decimals at most; a long tail
+      // ("0.30000000000000004") is a computed number.
+      final int decimals = digits.contains('.') ? digits.split('.').last.length : 0;
+
+      if (printed != null && decimals <= 3 && (printed - v.amount).abs() < 1e-9) {
+        return '${m.group(1) ?? ''}$digits';
+      }
+    }
+
+    String text = v.amount.toStringAsFixed(4);
+    text = text.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
 
     return text;
   }

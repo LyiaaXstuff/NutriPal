@@ -27,8 +27,10 @@ void main() {
         genderForEnergyEstimate: 'Female',
         currentWeight: 65.5,
         height: 158,
-        activityLevel: 'Lightly active',
+        activityLevel: 'Low active',
+        energyChangeKcal: 750,
         providerSodiumLimitMg: 1500,
+        providerEnergyKcal: 1500,
         avatarPath: '/data/user/0/avatar.jpg',
       );
 
@@ -51,14 +53,24 @@ void main() {
       expect(loaded.currentWeight, 65.5);
       expect(loaded.height, 158);
       expect(loaded.weightUnit, 'kg');
-      expect(loaded.activityLevel, 'Lightly active');
+      expect(loaded.activityLevel, 'Low active');
+      expect(loaded.energyChangeKcal, 750);
       expect(loaded.providerSodiumLimitMg, 1500);
+      expect(loaded.providerEnergyKcal, 1500);
 
       // Email comes from Firebase Auth; the avatar file is
       // on the phone only.
       expect(json.containsKey('email'), isFalse);
       expect(loaded.email, 'audry@example.com');
       expect(loaded.avatarPath, isNull);
+    });
+
+    test('an older activity value loads as the NASEM level', () {
+      final ProfileSetupData p = ProfileSetupData.fromJson(<String, dynamic>{
+        'weight': <String, dynamic>{'activityLevel': 'Lightly active'},
+      });
+
+      expect(p.activityLevel, 'Low active');
     });
 
     test('date of birth is saved as a plain date', () {

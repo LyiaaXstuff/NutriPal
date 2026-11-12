@@ -14,7 +14,12 @@ import 'home_screen.dart';
 //
 //   1. Weight goal      Lose / Maintain / Gain
 //   2. About your body  gender, weight (kg), height (cm)
-//   3. Activity level   four levels
+//   3. Activity level   NASEM's four levels
+//
+// Then one optional box: a daily calorie figure from the
+// user's doctor or dietitian. When filled in it replaces
+// NutriPal's estimate (shown as "Set by your healthcare
+// provider"). It is not one of the three questions.
 //
 // Each card's number turns into a tick when answered. The
 // footer shows progress and Continue only works once all
@@ -42,6 +47,7 @@ class WeightManagementForm extends StatefulWidget {
 class _WeightManagementFormState extends State<WeightManagementForm> {
   late final TextEditingController _weightController;
   late final TextEditingController _heightController;
+  late final TextEditingController _providerController;
 
   // =====================================================
   // INIT / DISPOSE
@@ -60,12 +66,19 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
     _heightController = TextEditingController(
       text: WeightPlanOptions.formatNumber(widget.data.height),
     );
+
+    final double? provider = widget.data.providerEnergyKcal;
+
+    _providerController = TextEditingController(
+      text: provider == null ? '' : provider.round().toString(),
+    );
   }
 
   @override
   void dispose() {
     _weightController.dispose();
     _heightController.dispose();
+    _providerController.dispose();
 
     super.dispose();
   }
@@ -102,6 +115,11 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
 
   bool get _allDone => _doneCount == 3;
 
+  // The optional provider box must be empty or valid.
+  bool get _providerOk => WeightPlanOptions.providerTextOk(_providerController.text);
+
+  bool get _canContinue => _allDone && _providerOk;
+
   // =====================================================
   // CONTINUE
   // =====================================================
@@ -109,7 +127,7 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
   void _continue() {
     FocusScope.of(context).unfocus();
 
-    if (!_allDone) return;
+    if (!_canContinue) return;
 
     widget.data.weightUnit = 'kg';
     widget.data.heightUnit = 'cm';
@@ -258,13 +276,39 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
                   ),
                 ),
 
+                // ---- optional: provider's figure ---------
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: WeightPlanColors.cardBorder),
+                  ),
+                  child: ProviderEnergyField(
+                    controller: _providerController,
+                    sex: widget.data.genderForEnergyEstimate,
+                    onChanged: (String v) => setState(
+                      () => widget.data.providerEnergyKcal = WeightPlanOptions.providerKcal(v),
+                    ),
+                  ),
+                ),
+
                 // ---- energy guide ------------------------
                 if (targets != null) ...[
                   const SizedBox(height: 14),
-                  EnergyGuideCard(
-                    kcalText: WeightPlanOptions.kcalText(targets.energyKcal),
-                    note: '${WeightPlanOptions.energyNote(targets, widget.data.weightGoal)} '
-                        'You can change your details in Profile.',
+                  EnergyGuideCard.fromTargets(
+                    targets,
+                    goal: widget.data.weightGoal,
+                    extraNote: 'You can change your details in Profile.',
+                  ),
+                  const SizedBox(height: 14),
+                  GoalGuidanceCard(
+                    goal: widget.data.weightGoal,
+                    sex: widget.data.genderForEnergyEstimate,
+                    weightKg: widget.data.currentWeight,
+                    heightCm: widget.data.height,
                   ),
                 ],
               ],
@@ -314,18 +358,18 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _allDone ? _continue : null,
+                    onPressed: _canContinue ? _continue : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: WeightPlanColors.purple,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: const Color(0xFFDCD3EC),
                       disabledForegroundColor: const Color(0xFF4F4268),
-                      elevation: _allDone ? 4 : 0,
+                      elevation: _canContinue ? 4 : 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                     ),
                     child: Text(
                       _allDone
-                          ? 'Continue'
+                          ? (_providerOk ? 'Continue' : 'Check the calorie target')
                           : left == 1
                               ? 'Answer 1 more question'
                               : 'Answer $left more questions',

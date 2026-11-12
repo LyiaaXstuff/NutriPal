@@ -15,6 +15,21 @@ import 'ocr_geometry.dart';
 // VALIDATION RESULT
 // =======================================================
 
+// What the completeness check found wrong, so the photo
+// check can show which part failed (not just one status).
+enum PhotoProblem {
+  // The table touches a photo edge.
+  cutOff,
+  // Values whose nutrient name is missing or unreadable.
+  unreadableNames,
+  // Fewer than 4 nutrient rows read.
+  tooFewRows,
+  // No energy (Tenaga) row.
+  noEnergy,
+  // No serving size or per serving / per 100 headings.
+  noServingBasis,
+}
+
 class NutritionLabelValidationResult {
   final LabelDetectionStatus status;
 
@@ -69,6 +84,9 @@ class NutritionLabelValidationResult {
   // user, most important first. Empty when complete.
   final List<String> issues;
 
+  // The same findings as [issues], as codes.
+  final Set<PhotoProblem> problems;
+
   const NutritionLabelValidationResult({
     required this.status,
     required this.rawText,
@@ -87,12 +105,14 @@ class NutritionLabelValidationResult {
     required this.servingSizeUnit,
     required this.servingSizeSource,
     this.issues = const [],
+    this.problems = const {},
   });
 
   NutritionLabelValidationResult withStatus(
     LabelDetectionStatus newStatus,
-    List<String> newIssues,
-  ) {
+    List<String> newIssues, [
+    Set<PhotoProblem> newProblems = const {},
+  ]) {
     return NutritionLabelValidationResult(
       status: newStatus,
       rawText: rawText,
@@ -111,6 +131,7 @@ class NutritionLabelValidationResult {
       servingSizeUnit: servingSizeUnit,
       servingSizeSource: servingSizeSource,
       issues: newIssues,
+      problems: newProblems,
     );
   }
 }
@@ -663,8 +684,12 @@ class NutritionLabelOcrService {
         imagePath,
       );
 
+      final Set<PhotoProblem> problems = {};
+
       final List<String> issues =
           completenessIssues(
+        problemsOut:
+            problems,
         table:
             table,
         diagnostics:
@@ -698,6 +723,7 @@ class NutritionLabelOcrService {
       return keywordCheck.withStatus(
         status,
         issues,
+        problems,
       );
     } finally {
       await recognizer.close();
@@ -716,8 +742,11 @@ class NutritionLabelOcrService {
     required NutritionTableDiagnostics? diagnostics,
     required double? imageWidth,
     required double? imageHeight,
+    Set<PhotoProblem>? problemsOut,
   }) {
     final List<String> issues = [];
+
+    void found(PhotoProblem p) => problemsOut?.add(p);
 
     // ---------------------------------------------------
     // 1. Table touching the photo edge = cut off
@@ -747,6 +776,8 @@ class NutritionLabelOcrService {
             ? 'the ${sides.first} edge'
             : 'the ${sides.sublist(0, sides.length - 1).join(', ')} and ${sides.last} edges';
 
+        found(PhotoProblem.cutOff);
+
         issues.add(
           'The nutrition table is cut off at $where of the photo. '
           'Move back so the whole table border fits inside the frame.',
@@ -760,6 +791,8 @@ class NutritionLabelOcrService {
 
     if (diagnostics != null &&
         diagnostics.unnamedValueRows > 0) {
+      found(PhotoProblem.unreadableNames);
+
       issues.add(
         diagnostics.unnamedValueRows == 1
             ? 'One nutrient name is cut off or unreadable.'
@@ -772,6 +805,8 @@ class NutritionLabelOcrService {
     // ---------------------------------------------------
 
     if (table.nutrients.length < 4) {
+      found(PhotoProblem.tooFewRows);
+
       issues.add(
         table.nutrients.isEmpty
             ? 'No nutrient rows could be read.'
@@ -792,6 +827,8 @@ class NutritionLabelOcrService {
 
     if (table.nutrients.isNotEmpty &&
         !hasEnergy) {
+      found(PhotoProblem.noEnergy);
+
       issues.add(
         'The energy (Tenaga) row could not be read.',
       );
@@ -799,6 +836,8 @@ class NutritionLabelOcrService {
 
     if (table.nutrients.isNotEmpty &&
         !table.canCalculatePortion) {
+      found(PhotoProblem.noServingBasis);
+
       issues.add(
         'The serving size or the per serving / per 100 g headings could not be read.',
       );

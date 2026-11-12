@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/nutrition_analysis.dart';
 import '../models/profile_setup_data.dart';
+import '../services/energy_requirement.dart';
 import '../services/nutrition_analysis_service.dart';
 
 // =======================================================
@@ -17,8 +18,16 @@ import '../services/nutrition_analysis_service.dart';
 //   Conditions > Weight     (Weight management sheet)
 //   management
 //
-// Stored values are the app's existing ones ("Lose weight",
-// "Male", "Lightly active"...). Weight is kg, height cm.
+// Stored values: "Lose weight", "Male", and the NASEM
+// activity levels ("Inactive", "Low active", "Active",
+// "Very active"). Weight is kg, height cm.
+//
+// Energy (rules document, Layer 2): the NASEM 2023
+// maintenance estimate, adjusted for a weight goal (lose
+// 500 kcal less, gain 300 kcal more by default, with the
+// guideline floors), or a daily figure from the user's
+// doctor or dietitian ("Set by your healthcare provider").
+// See GoalEnergy in services/energy_requirement.dart.
 // =======================================================
 
 class WeightPlanColors {
@@ -48,12 +57,15 @@ class WeightPlanOptions {
     ('Gain weight', 'Gain\nweight', Icons.trending_up_rounded),
   ];
 
-  /// (stored value, description, icon)
+  /// (stored value, description, icon). The four NASEM
+  /// activity levels, described in everyday words (NASEM
+  /// 2023, Table 7-1). No tool can place a person exactly,
+  /// so the user picks the closest one.
   static const List<(String, String, IconData)> activities = <(String, String, IconData)>[
-    ('Sedentary', 'Mostly sitting, little exercise', Icons.self_improvement_rounded),
-    ('Lightly active', 'Light exercise 1–3 days a week', Icons.directions_walk_rounded),
-    ('Moderately active', 'Moderate exercise 3–5 days a week', Icons.directions_run_rounded),
-    ('Very active', 'Hard exercise 6–7 days a week', Icons.sports_handball_rounded),
+    (ActivityLevels.inactive, 'Mostly daily activities, little extra movement', Icons.self_improvement_rounded),
+    (ActivityLevels.lowActive, 'Some extra walking and light activity', Icons.directions_walk_rounded),
+    (ActivityLevels.active, 'Regular movement and moderate activity', Icons.directions_run_rounded),
+    (ActivityLevels.veryActive, 'Highly active lifestyle or vigorous activity', Icons.sports_handball_rounded),
   ];
 
   static const double minWeightKg = 20;
@@ -98,9 +110,14 @@ class WeightPlanOptions {
     return t.energyIsPersonal ? t : null;
   }
 
-  /// 1720.8 -> "1,720"
-  static String kcalText(double kcal) {
-    final String digits = ((kcal / 10).round() * 10).toString();
+  /// 1720.8 -> "1,720" (rounded to 10 kcal, for estimates)
+  static String kcalText(double kcal) => _thousands((kcal / 10).round() * 10);
+
+  /// 1234 -> "1,234" (exact, for a provider's figure)
+  static String exactKcalText(double kcal) => _thousands(kcal.round());
+
+  static String _thousands(int value) {
+    final String digits = value.toString();
     final StringBuffer out = StringBuffer();
 
     for (int i = 0; i < digits.length; i++) {
@@ -114,12 +131,169 @@ class WeightPlanOptions {
   /// The line under the energy number.
   static String energyNote(DailyTargets t, String? goal) {
     if (t.setByProvider.contains('Energy')) {
-      return 'Set by your doctor or dietitian. NutriPal uses this to judge each '
+      return 'NutriPal uses this instead of its own estimate to judge each '
           'product’s energy for you.';
     }
 
-    return '${goal == 'Lose weight' ? 'Includes a gentle 500 kcal deficit. ' : ''}'
-        'NutriPal uses this to judge each product’s energy for you.';
+    final GoalEnergyResult? g = t.goal;
+
+    if (g != null && g.lowBmi) {
+      return 'Your weight is already in the low range, so NutriPal doesn’t take '
+          'calories off. Please talk to a doctor or dietitian before trying to '
+          'lose weight.';
+    }
+
+    if (g != null && !g.adjusted && g.floorApplied && g.floorKcal != null) {
+      return 'NutriPal doesn’t set weight-loss guides below '
+          '${exactKcalText(g.floorKcal!)} kcal a day, so it uses the energy to '
+          'keep your current weight. A doctor or dietitian can set a plan that '
+          'suits you.';
+    }
+
+    if (g != null && g.adjusted) {
+      return 'A general guide, not a prescription. NutriPal uses it to judge each '
+          'product’s energy; your other limits stay based on maintenance. You can '
+          'change the amount in your weight settings.';
+    }
+
+    return 'NutriPal uses this to judge each product’s energy for you.';
+  }
+
+  // ---- energy change for a weight goal -----------------
+
+  /// "500 kcal less a day" / "300 kcal more a day", with
+  /// "(default)" for the default amount.
+  static String energyChangeText(String? goal, int kcal) {
+    final String? key = GoalEnergy.goalKey(goal);
+    final bool isDefault = (key == 'lose' && kcal == GoalEnergy.defaultLoseKcal) ||
+        (key == 'gain' && kcal == GoalEnergy.defaultGainKcal);
+
+    return '$kcal kcal ${key == 'gain' ? 'more' : 'less'} a day'
+        '${isDefault ? ' (default)' : ''}';
+  }
+
+  /// The choices for this goal, or empty for maintain.
+  static List<int> energyChangeOptions(String? goal) => switch (GoalEnergy.goalKey(goal)) {
+        'lose' => GoalEnergy.loseOptions,
+        'gain' => GoalEnergy.gainOptions,
+        _ => const <int>[],
+      };
+
+  // ---- daily figure from a doctor or dietitian ---------
+
+  static double? parseKcal(String text) {
+    final String digits = text.trim().replaceAll(',', '');
+
+    return digits.isEmpty ? null : double.tryParse(digits);
+  }
+
+  /// The accepted figure, or null when the box is empty or
+  /// out of range.
+  static double? providerKcal(String text) {
+    final double? kcal = parseKcal(text);
+
+    return EnergyRequirement.providerTargetOk(kcal) ? kcal : null;
+  }
+
+  /// True when the optional box is empty or holds a figure
+  /// NutriPal can use.
+  static bool providerTextOk(String text) =>
+      text.trim().isEmpty || providerKcal(text) != null;
+
+  static String? providerError(String text) {
+    if (providerTextOk(text)) return null;
+
+    final double? kcal = parseKcal(text);
+
+    if (kcal != null && kcal < EnergyRequirement.providerMinimumKcal) {
+      return 'NutriPal can’t use targets below 800 kcal a day. Very low calorie '
+          'diets need close medical supervision.';
+    }
+
+    return 'Please enter a daily figure up to '
+        '${exactKcalText(EnergyRequirement.providerMaximumKcal)} kcal.';
+  }
+
+  /// A short note for an accepted figure below the usual
+  /// guideline range, else null.
+  static String? providerNote(String text, String? sex) {
+    final double? kcal = providerKcal(text);
+
+    if (kcal == null || !EnergyRequirement.providerTargetIsBelowGuideline(kcal, sex)) {
+      return null;
+    }
+
+    return 'This is lower than most guideline plans. NutriPal will use it '
+        'because your healthcare provider set it.';
+  }
+
+  // ---- what guidelines say for each goal ----------------
+  //
+  // General information only, never a plan for the user
+  // (the applied change is in GoalEnergy). Sources: MOH obesity CPG 2023 and ADA 2026
+  // Section 8 (lose, WT-13 / WT-14 / WT-19), NHS (gain,
+  // WT-08), maintenance activity (WT-02, WT-15).
+
+  /// BMI below this hides the weight-loss ranges (WT-17).
+  static const double lowBmi = 18.5;
+
+  static double? bmi(double? weightKg, double? heightCm) {
+    if (weightKg == null || heightCm == null || weightKg <= 0 || heightCm <= 0) return null;
+
+    final double m = heightCm / 100;
+
+    return weightKg / (m * m);
+  }
+
+  /// (text, show the "general ranges" line) for the goal,
+  /// or null when there is nothing to show.
+  static (String, bool)? goalGuidance({
+    required String? goal,
+    required String? sex,
+    required double? weightKg,
+    required double? heightCm,
+  }) {
+    if (goal == 'Lose weight') {
+      final double? b = bmi(weightKg, heightCm);
+
+      if (b != null && b < lowBmi) {
+        return (
+          'Your weight is already in the low range. Please talk to a doctor '
+              'or dietitian before trying to lose weight.',
+          false,
+        );
+      }
+
+      final String range = sex == 'Male' ? '1,500–1,800' : '1,200–1,500';
+
+      return (
+        'Guidelines suggest eating 500–750 kcal a day less than usual, or about '
+            '$range kcal a day, aiming to lose 0.5–1 kg a week. A doctor or '
+            'dietitian can set a plan that suits you. If you take insulin or other '
+            'diabetes medicines, ask your doctor before eating less.',
+        true,
+      );
+    }
+
+    if (goal == 'Gain weight') {
+      return (
+        'Guidelines suggest adding about 300–500 kcal a day, step by step, from '
+            'nourishing foods such as nuts, milk, eggs, beans and fish rather than '
+            'sweets or sugary drinks. If you are losing weight without trying, '
+            'see a doctor.',
+        true,
+      );
+    }
+
+    if (goal == 'Maintain weight') {
+      return (
+        'Keeping your weight steady depends on your whole day. About 150 '
+            'minutes of activity a week helps.',
+        false,
+      );
+    }
+
+    return null;
   }
 }
 
@@ -360,7 +534,7 @@ class ActivityList extends StatelessWidget {
             label: WeightPlanOptions.activities[i].$1,
             description: WeightPlanOptions.activities[i].$2,
             icon: WeightPlanOptions.activities[i].$3,
-            selected: selected == WeightPlanOptions.activities[i].$1,
+            selected: ActivityLevels.normalise(selected) == WeightPlanOptions.activities[i].$1,
             onTap: () => onChanged(WeightPlanOptions.activities[i].$1),
           ),
         ],
@@ -637,7 +811,70 @@ class EnergyGuideCard extends StatelessWidget {
   final String kcalText;
   final String note;
 
-  const EnergyGuideCard({super.key, required this.kcalText, required this.note});
+  // "Estimated daily maintenance energy" or "Set by your
+  // healthcare provider".
+  final String label;
+
+  // "Likely 1,850–2,330 kcal", or null.
+  final String? rangeText;
+
+  // An estimate shows "≈", a provider's figure does not.
+  final bool approximate;
+
+  const EnergyGuideCard({
+    super.key,
+    required this.kcalText,
+    required this.note,
+    this.label = 'Estimated daily maintenance energy',
+    this.rangeText,
+    this.approximate = true,
+  });
+
+  /// The card for these targets. [extraNote] is added
+  /// after the usual note.
+  factory EnergyGuideCard.fromTargets(
+    DailyTargets t, {
+    Key? key,
+    String? goal,
+    String? extraNote,
+  }) {
+    final bool byProvider = t.setByProvider.contains('Energy');
+    final String note = WeightPlanOptions.energyNote(t, goal);
+    final GoalEnergyResult? g = byProvider ? null : t.goal;
+
+    // Lose or gain with a change applied: show the goal
+    // energy and how it was worked out.
+    if (g != null && g.adjusted) {
+      final bool losing = g.changeKcal < 0;
+      final String maintenance = WeightPlanOptions.kcalText(g.maintenanceKcal);
+
+      return EnergyGuideCard(
+        key: key,
+        kcalText: WeightPlanOptions.kcalText(g.kcal),
+        label: losing ? 'Daily energy guide for weight loss' : 'Daily energy guide for weight gain',
+        rangeText: g.floorApplied
+            ? 'Maintenance ≈ $maintenance kcal; set to the '
+                '${WeightPlanOptions.exactKcalText(g.kcal)} kcal minimum'
+            : 'Maintenance ≈ $maintenance kcal '
+                '${losing ? '−' : '+'} ${g.requestedKcal} kcal',
+        note: extraNote == null ? note : '$note $extraNote',
+      );
+    }
+
+    return EnergyGuideCard(
+      key: key,
+      kcalText: byProvider
+          ? WeightPlanOptions.exactKcalText(t.energyKcal)
+          : WeightPlanOptions.kcalText(t.energyKcal),
+      approximate: !byProvider,
+      label: byProvider ? 'Set by your healthcare provider' : 'Estimated daily maintenance energy',
+      rangeText: !byProvider && t.energyLowKcal != null && t.energyHighKcal != null
+          ? 'Likely ${WeightPlanOptions.kcalText(t.energyLowKcal!)}–'
+              '${WeightPlanOptions.kcalText(t.energyHighKcal!)} kcal'
+          : null,
+      note: extraNote == null ? note : '$note $extraNote',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -677,14 +914,30 @@ class EnergyGuideCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '≈ $kcalText kcal',
+                  approximate ? '≈ $kcalText kcal' : '$kcalText kcal',
                   style: const TextStyle(
                     color: Color(0xFF0B4A47),
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF0B4A47),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (rangeText != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    rangeText!,
+                    style: const TextStyle(color: Color(0xFF24514F), fontSize: 13),
+                  ),
+                ],
+                const SizedBox(height: 6),
                 Text(
                   note,
                   style: const TextStyle(color: Color(0xFF24514F), fontSize: 13, height: 1.4),
@@ -692,6 +945,215 @@ class EnergyGuideCard extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// =======================================================
+// DAILY FIGURE FROM A DOCTOR OR DIETITIAN (optional)
+// =======================================================
+
+/// Optional box for a daily calorie figure from the user's
+/// doctor or dietitian. When filled in, it replaces
+/// NutriPal's estimate as the energy base.
+class ProviderEnergyField extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  // For the "lower than most guideline plans" note.
+  final String? sex;
+
+  // Larger label, like the other section titles.
+  final bool labelAsSectionTitle;
+
+  const ProviderEnergyField({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+    required this.sex,
+    this.labelAsSectionTitle = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String text = controller.text;
+    final String? error = WeightPlanOptions.providerError(text);
+    final String? note = WeightPlanOptions.providerNote(text, sex);
+    final bool ok = text.trim().isNotEmpty && error == null;
+
+    final Color borderColor = error != null
+        ? WeightPlanColors.error
+        : ok
+            ? WeightPlanColors.purple
+            : WeightPlanColors.border;
+
+    OutlineInputBorder outline(Color color, double width) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: color, width: width),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: WeightPlanLabel(
+                'Calorie target from your doctor or dietitian',
+                asSectionTitle: labelAsSectionTitle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Optional',
+              style: TextStyle(
+                color: WeightPlanColors.stepGrey,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Only fill this in if a healthcare provider gave you a daily calorie '
+          'figure. NutriPal then uses it instead of its own estimate.',
+          style: TextStyle(color: WeightPlanColors.muted, fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          onChanged: onChanged,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(4),
+          ],
+          style: const TextStyle(
+            color: WeightPlanColors.ink,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: InputDecoration(
+            hintText: 'e.g. 1500',
+            hintStyle: const TextStyle(color: Color(0xFF8A7FA3), fontWeight: FontWeight.w500),
+            filled: true,
+            fillColor: const Color(0xFFFBF9FE),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (text.isNotEmpty)
+                  IconButton(
+                    tooltip: 'Clear',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                    icon: const Icon(Icons.close_rounded, color: WeightPlanColors.stepGrey, size: 20),
+                  ),
+                const Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: Text(
+                    'kcal',
+                    style: TextStyle(
+                      color: WeightPlanColors.stepGrey,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+            enabledBorder: outline(borderColor, 1.5),
+            focusedBorder: outline(error != null ? WeightPlanColors.error : WeightPlanColors.purple, 2),
+            border: outline(borderColor, 1.5),
+          ),
+        ),
+        if (error != null || note != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            error ?? note!,
+            style: TextStyle(
+              color: error != null ? WeightPlanColors.error : WeightPlanColors.muted,
+              fontSize: 13,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// =======================================================
+// WHAT GUIDELINES SAY (education only)
+// =======================================================
+
+class GoalGuidanceCard extends StatelessWidget {
+  final String? goal;
+  final String? sex;
+  final double? weightKg;
+  final double? heightCm;
+
+  const GoalGuidanceCard({
+    super.key,
+    required this.goal,
+    required this.sex,
+    required this.weightKg,
+    required this.heightCm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (String, bool)? guidance = WeightPlanOptions.goalGuidance(
+      goal: goal,
+      sex: sex,
+      weightKg: weightKg,
+      heightCm: heightCm,
+    );
+
+    if (guidance == null) return const SizedBox.shrink();
+
+    final (String text, bool general) = guidance;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: WeightPlanColors.lilac,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: WeightPlanColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'WHAT GUIDELINES SAY',
+            style: TextStyle(
+              color: WeightPlanColors.stepGrey,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text,
+            style: const TextStyle(color: WeightPlanColors.bodyInk, fontSize: 13.5, height: 1.45),
+          ),
+          if (general) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'These are general guideline ranges, not a plan for you.',
+              style: TextStyle(color: WeightPlanColors.muted, fontSize: 12.5, fontStyle: FontStyle.italic),
+            ),
+          ],
         ],
       ),
     );
