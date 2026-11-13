@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nutripal/models/nutrition_analysis.dart';
+import 'package:nutripal/services/energy_requirement.dart';
 import 'package:nutripal/services/nutrition_analysis_service.dart';
 import 'package:nutripal/widgets/weight_plan_widgets.dart';
 
@@ -42,7 +43,7 @@ void main() {
       expect(card.rangeText, isNull);
     });
 
-    DailyTargets targets(String goal, {double weightKg = 65, int? change, String sex = 'female'}) =>
+    DailyTargets targets(String goal, {double weightKg = 65, String sex = 'female'}) =>
         NutritionAnalysisService.targetsFor(
           NutritionProfile(
             sex: sex,
@@ -51,7 +52,6 @@ void main() {
             heightCm: 158,
             activityLevel: 'Low active',
             weightGoal: goal,
-            energyChangeKcal: change,
           ),
         );
 
@@ -67,16 +67,12 @@ void main() {
       expect(card.note, contains('not a prescription'));
     });
 
-    test('W-T10 gain: 300 kcal more by default; 500 when chosen', () {
+    test('W-T10 gain: 300 kcal more', () {
       final EnergyGuideCard card = EnergyGuideCard.fromTargets(targets('gain'), goal: 'Gain weight');
 
       expect(card.kcalText, '2,390');
       expect(card.label, 'Daily energy guide for weight gain');
       expect(card.rangeText, 'Maintenance ≈ 2,090 kcal + 300 kcal');
-      expect(
-        EnergyGuideCard.fromTargets(targets('gain', change: 500), goal: 'Gain weight').kcalText,
-        '2,590',
-      );
     });
 
     test('W-T19 lose with BMI under 18.5: no deficit, referral note', () {
@@ -90,21 +86,17 @@ void main() {
     });
 
     test('W-T20 lose: never below 1,200 kcal for a woman', () {
-      // 2092.2 - 750 = 1342.2 (above the floor) ...
-      expect(targets('lose', change: 750).goalEnergyKcal, closeTo(1342.2, 0.1));
-
-      // ... a smaller, inactive woman of 50 kg at 158 cm:
-      // EER 584.90 - 315.45 + 903.76 + 585.5 = 1758.7;
-      // 1758.7 - 750 = 1008.7 -> 1,200.
+      // An inactive woman of 70, 47 kg at 158 cm (BMI 18.8):
+      // EER 584.90 - 490.70 + 903.76 + 550.37 = 1548.3;
+      // 1548.3 - 500 = 1048.3 -> 1,200.
       final DailyTargets t = NutritionAnalysisService.targetsFor(
         const NutritionProfile(
           sex: 'female',
-          ageYears: 45,
-          weightKg: 50,
+          ageYears: 70,
+          weightKg: 47,
           heightCm: 158,
           activityLevel: 'Inactive',
           weightGoal: 'lose',
-          energyChangeKcal: 750,
         ),
       );
       final EnergyGuideCard card = EnergyGuideCard.fromTargets(t, goal: 'Lose weight');
@@ -113,12 +105,10 @@ void main() {
       expect(card.rangeText, contains('1,200 kcal minimum'));
     });
 
-    test('energy change choices and labels', () {
-      expect(WeightPlanOptions.energyChangeOptions('Lose weight'), <int>[250, 500, 750]);
-      expect(WeightPlanOptions.energyChangeOptions('Gain weight'), <int>[300, 500]);
-      expect(WeightPlanOptions.energyChangeOptions('Maintain weight'), isEmpty);
-      expect(WeightPlanOptions.energyChangeText('Lose weight', 500), '500 kcal less a day (default)');
-      expect(WeightPlanOptions.energyChangeText('Gain weight', 500), '500 kcal more a day');
+    test('the weight-goal amount is fixed: no user choice', () {
+      expect(GoalEnergy.amountFor('Lose weight'), 500);
+      expect(GoalEnergy.amountFor('Gain weight'), 300);
+      expect(GoalEnergy.amountFor('Maintain weight'), 0);
     });
   });
 

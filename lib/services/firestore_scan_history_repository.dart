@@ -17,7 +17,7 @@ import 'scan_history_repository.dart';
 //                   label has lists inside lists, which
 //                   Firestore fields cannot hold)
 //     productName, scannedAt, isFavourite   for the console
-//     expiresAt     scannedAt + 90 days; null for
+//     expiresAt     scannedAt + 30 days; null for
 //                   favourites (Firestore TTL clean-up)
 //     updatedAt     server time
 //     agentSummary  per-100 values + traffic-light levels

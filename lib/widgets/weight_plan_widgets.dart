@@ -152,32 +152,12 @@ class WeightPlanOptions {
 
     if (g != null && g.adjusted) {
       return 'A general guide, not a prescription. NutriPal uses it to judge each '
-          'product’s energy; your other limits stay based on maintenance. You can '
-          'change the amount in your weight settings.';
+          'product’s energy; your other limits stay based on maintenance. If your '
+          'doctor or dietitian gave you a daily calorie figure, enter it instead.';
     }
 
     return 'NutriPal uses this to judge each product’s energy for you.';
   }
-
-  // ---- energy change for a weight goal -----------------
-
-  /// "500 kcal less a day" / "300 kcal more a day", with
-  /// "(default)" for the default amount.
-  static String energyChangeText(String? goal, int kcal) {
-    final String? key = GoalEnergy.goalKey(goal);
-    final bool isDefault = (key == 'lose' && kcal == GoalEnergy.defaultLoseKcal) ||
-        (key == 'gain' && kcal == GoalEnergy.defaultGainKcal);
-
-    return '$kcal kcal ${key == 'gain' ? 'more' : 'less'} a day'
-        '${isDefault ? ' (default)' : ''}';
-  }
-
-  /// The choices for this goal, or empty for maintain.
-  static List<int> energyChangeOptions(String? goal) => switch (GoalEnergy.goalKey(goal)) {
-        'lose' => GoalEnergy.loseOptions,
-        'gain' => GoalEnergy.gainOptions,
-        _ => const <int>[],
-      };
 
   // ---- daily figure from a doctor or dietitian ---------
 

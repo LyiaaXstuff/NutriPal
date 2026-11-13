@@ -17,7 +17,7 @@ import 'saved_scan_navigation.dart';
 // from Home (Recent scans -> View all) and Profile (Scan
 // history); it is not a bottom-navigation tab.
 //
-// Scans are kept for 90 days unless saved as a favourite.
+// Scans are kept for 30 days unless saved as a favourite.
 // Opening this screen also runs the clean-up.
 // =======================================================
 
@@ -36,7 +36,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // Search and filter.
   final TextEditingController _search = TextEditingController();
   String _query = '';
-  ScanPeriod _period = ScanPeriod.all;
+  ScanKind _kind = ScanKind.all;
 
   @override
   void initState() {
@@ -54,7 +54,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _search.clear();
     setState(() {
       _query = '';
-      _period = ScanPeriod.all;
+      _kind = ScanKind.all;
     });
   }
 
@@ -115,7 +115,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             final List<ScanRecord> shown = ScanFilter.apply(
               records,
               query: _query,
-              period: _period,
+              kind: _kind,
               now: _history.now,
             );
 
@@ -184,14 +184,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 else if (records.isEmpty)
                   const _EmptyHistory()
                 else ...[
-                  ScanSearchBar<ScanPeriod>(
+                  ScanSearchBar<ScanKind>(
                     controller: _search,
-                    options: ScanPeriod.values,
-                    selected: _period,
-                    labelOf: (ScanPeriod p) => p.label,
-                    iconOf: ScanSearchBar.periodIcon,
+                    options: ScanKind.values,
+                    selected: _kind,
+                    labelOf: (ScanKind k) => k.label,
+                    iconOf: ScanSearchBar.kindIcon,
                     onQueryChanged: (String q) => setState(() => _query = q),
-                    onSelected: (ScanPeriod p) => setState(() => _period = p),
+                    onSelected: (ScanKind k) => setState(() => _kind = k),
                   ),
                   const SizedBox(height: 14),
                   if (shown.isEmpty) ScanNoMatches(onClear: _clearFilters),
@@ -255,7 +255,7 @@ class _EmptyHistory extends StatelessWidget {
           ),
           SizedBox(height: 14),
           Text(
-            'No scans in the last 90 days',
+            'No scans in the last 30 days',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: NpColors.ink),
           ),

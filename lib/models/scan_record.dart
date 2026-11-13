@@ -8,7 +8,7 @@
 //   History       every record that has not expired
 //   Favourites    records with isFavourite = true
 //
-// History is temporary (90 days from scannedAt, see
+// History is temporary (30 days from scannedAt, see
 // HistoryRetentionPolicy); a favourite never expires until
 // the user removes it from Favourites.
 //

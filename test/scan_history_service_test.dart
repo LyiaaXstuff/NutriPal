@@ -32,24 +32,24 @@ void main() {
     );
   });
 
-  group('90-day retention', () {
+  group('30-day retention', () {
     const HistoryRetentionPolicy policy = HistoryRetentionPolicy();
 
-    test('a normal scan expires after 90 days, a favourite never does', () {
-      expect(policy.isExpired(record('a', daysAgo: 89), now), isFalse);
-      expect(policy.isExpired(record('b', daysAgo: 91), now), isTrue);
+    test('a normal scan expires after 30 days, a favourite never does', () {
+      expect(policy.isExpired(record('a', daysAgo: 29), now), isFalse);
+      expect(policy.isExpired(record('b', daysAgo: 31), now), isTrue);
       expect(policy.isExpired(record('c', daysAgo: 400, favourite: true), now), isFalse);
     });
 
     test('days left before removal', () {
-      expect(policy.daysLeft(record('a', daysAgo: 80), now), 10);
+      expect(policy.daysLeft(record('a', daysAgo: 20), now), 10);
       expect(policy.daysLeft(record('b', daysAgo: 10, favourite: true), now), isNull);
     });
 
     test('loading removes expired scans but keeps favourites', () async {
       repo = InMemoryScanHistoryRepository(<ScanRecord>[
         record('old', daysAgo: 120),
-        record('kept', daysAgo: 30),
+        record('kept', daysAgo: 10),
         record('fav', daysAgo: 365, favourite: true),
       ]);
       service = ScanHistoryService(repository: repo, clock: () => now, storeThumbnails: false);
@@ -76,7 +76,7 @@ void main() {
     test('the clean-up runs again later', () async {
       await service.recordScan(label: homesoy(), productName: 'Homesoy');
 
-      now = now.add(const Duration(days: 91));
+      now = now.add(const Duration(days: 31));
       await service.cleanUpExpired();
 
       expect(service.history, isEmpty);

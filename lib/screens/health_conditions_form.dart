@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
 import '../services/user_profile_service.dart';
-import 'diabetes_form.dart';
-import 'cholesterol_form.dart';
 import 'weight_management_form.dart';
 import 'home_screen.dart';
 
@@ -27,22 +25,9 @@ class _HealthConditionsFormState
   // =====================================================
   // CLEAR CONDITIONAL DATA
   // =====================================================
-
-  void _clearDiabetesData() {
-    widget.data.diabetesType =
-        null;
-  }
-
-  void _clearCholesterolData() {
-    widget.data.highLdl =
-        false;
-
-    widget.data.highTriglycerides =
-        false;
-
-    widget.data.cholesterolNotSure =
-        false;
-  }
+  //
+  // Only weight management has follow-up questions;
+  // diabetes and high LDL cholesterol have none.
 
   void _clearWeightData() {
     widget.data.weightGoal =
@@ -84,10 +69,6 @@ class _HealthConditionsFormState
           widget.data.diabetes =
               !widget.data.diabetes;
 
-          if (!widget.data.diabetes) {
-            _clearDiabetesData();
-          }
-
           break;
 
         case 'hypertension':
@@ -100,11 +81,6 @@ class _HealthConditionsFormState
           widget.data.highCholesterol =
               !widget.data
                   .highCholesterol;
-
-          if (!widget.data
-              .highCholesterol) {
-            _clearCholesterolData();
-          }
 
           break;
 
@@ -147,8 +123,6 @@ class _HealthConditionsFormState
         widget.data.weightManagement =
             false;
 
-        _clearDiabetesData();
-        _clearCholesterolData();
         _clearWeightData();
       }
     });
@@ -212,40 +186,7 @@ class _HealthConditionsFormState
       return;
     }
 
-    // DIABETES FIRST
-    if (widget.data.diabetes) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              DiabetesForm(
-            data:
-                widget.data,
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    // CHOLESTEROL
-    if (widget.data
-        .highCholesterol) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              CholesterolForm(
-            data:
-                widget.data,
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    // WEIGHT
+    // WEIGHT: the only area with follow-up questions
     if (widget.data
         .weightManagement) {
       Navigator.push(
@@ -262,7 +203,8 @@ class _HealthConditionsFormState
       return;
     }
 
-    // HYPERTENSION ONLY
+    // DIABETES, HYPERTENSION AND HIGH LDL CHOLESTEROL:
+    // no follow-up questions.
     _goToHome();
   }
 
@@ -499,7 +441,7 @@ class _HealthConditionsFormState
 
               _SelectionCard(
                 label:
-                    'Diabetes or prediabetes',
+                    'Diabetes',
                 icon:
                     Icons.water_drop_outlined,
                 selected:
@@ -537,7 +479,7 @@ class _HealthConditionsFormState
 
               _SelectionCard(
                 label:
-                    'High cholesterol',
+                    'High LDL cholesterol',
                 icon:
                     Icons.favorite_border_rounded,
                 selected:

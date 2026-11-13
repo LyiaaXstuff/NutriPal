@@ -8,7 +8,7 @@
 //                      history (a rescan of the same
 //                      product updates its record).
 //   toggleFavourite()  favourites are protected from the
-//                      90-day clean-up.
+//                      30-day clean-up.
 //   cleanUpExpired()   applies HistoryRetentionPolicy.
 //
 // STORAGE: signed-in users' scans are saved in Cloud
@@ -62,7 +62,7 @@ class ScanHistoryService extends ChangeNotifier {
   // True in tests: never switch to local storage.
   final bool _injected;
 
-  // 90-day rule (shown on the History screen too).
+  // 30-day rule (shown on the History screen too).
   final HistoryRetentionPolicy policy;
 
   final Clock _clock;
@@ -364,7 +364,7 @@ class ScanHistoryService extends ChangeNotifier {
         ? r.copyWith(isFavourite: true, favouritedAt: now)
         : r.copyWith(isFavourite: false, clearFavouritedAt: true);
 
-    // Un-favouriting an old scan lets the 90-day rule
+    // Un-favouriting an old scan lets the 30-day rule
     // apply again straight away.
     if (!favourite) {
       final List<ScanRecord> kept = policy.apply(_records, now);

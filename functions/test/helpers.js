@@ -3,7 +3,8 @@
 // Shared test data and fakes (not a test file).
 
 // Homesoy, sample user (rules document worked example:
-// woman, 45 y, 158 cm, 65 kg, low active; NASEM 2023 EER).
+// woman, 45 y, 158 cm, 65 kg, low active; NASEM 2023 EER;
+// diabetes: 45 g carbohydrate meal budget).
 const CONTEXT = {
   product: { name: 'Homesoy Soya Bean Drink', form: 'drink', serving_size: { amount: 236, unit: 'ml' } },
   per_100: [
@@ -18,7 +19,7 @@ const CONTEXT = {
     energy_kcal: 2092.2,
     sodium_mg: 2000,
     free_sugars_g: 52.3,
-    carbs_per_meal_g: 87.2,
+    carbs_per_meal_g: 45,
     set_by_provider: [],
   },
   // As AskNutriPalService.ratingRules builds it.
@@ -27,14 +28,14 @@ const CONTEXT = {
     moderate_share_max: 0.3,
     combine: 'worse_of_both',
     nutrients: [
-      { name: 'Energy', per100: 39, unit: 'kcal', rated: true },
-      { name: 'Protein', per100: 3.0, unit: 'g', rated: true },
-      { name: 'Total Fat', per100: 1.6, unit: 'g', product_level_per_100: 'Moderate', rated: true },
-      { name: 'Saturated Fat', per100: 0.3, unit: 'g', product_level_per_100: 'Low', rated: true },
-      { name: 'Carbohydrate', per100: 2.3, unit: 'g', rated: true },
-      { name: 'Total Sugars', per100: 0.7, unit: 'g', product_level_per_100: 'Low', rated: true },
-      { name: 'Dietary Fibre', per100: 1.5, unit: 'g', rated: false },
-      { name: 'Sodium', per100: 17, unit: 'mg', product_level_per_100: 'Low', rated: true },
+      { name: 'Energy', per100: 39, unit: 'kcal', rated: true, target: 2092.2, low_share_max: 0.1, moderate_share_max: 0.3 },
+      { name: 'Protein', per100: 3.0, unit: 'g', rated: false, low_share_max: 0.1, moderate_share_max: 0.3 },
+      { name: 'Total Fat', per100: 1.6, unit: 'g', product_level_per_100: 'Moderate', rated: true, target: 69.7, low_share_max: 0.1, moderate_share_max: 0.3 },
+      { name: 'Saturated Fat', per100: 0.3, unit: 'g', product_level_per_100: 'Low', rated: true, target: 23.2, low_share_max: 0.1, moderate_share_max: 0.3 },
+      { name: 'Carbohydrate', per100: 2.3, unit: 'g', rated: true, target: 45, low_share_max: 0.25, moderate_share_max: 0.5 },
+      { name: 'Total Sugars', per100: 0.7, unit: 'g', product_level_per_100: 'Low', rated: true, target: 52.3, low_share_max: 0.1, moderate_share_max: 0.3 },
+      { name: 'Dietary Fibre', per100: 1.5, unit: 'g', rated: false, target: 25, low_share_max: 0.1, moderate_share_max: 0.3 },
+      { name: 'Sodium', per100: 17, unit: 'mg', product_level_per_100: 'Low', rated: true, target: 2000, low_share_max: 0.1, moderate_share_max: 0.3 },
     ],
     areas: [
       { area: 'Diabetes', nutrients: ['Carbohydrate', 'Total Sugars'], key_any_of: ['Carbohydrate'] },

@@ -44,7 +44,7 @@ const MAX_TOOL_ROUNDS = 4;
 const { searchGuidelines } = require('./guidelines');
 const { compareWithHistory, NUTRIENTS } = require('./history');
 
-const SYSTEM_PROMPT = `You are NutriPal, a friendly nutrition-label assistant in a Malaysian mobile app for people managing diabetes or prediabetes, high blood pressure, high cholesterol or their weight.
+const SYSTEM_PROMPT = `You are NutriPal, a friendly nutrition-label assistant in a Malaysian mobile app for people managing diabetes, high blood pressure, high LDL cholesterol or their weight.
 
 The app has already analysed one packaged food for this user with fixed guideline rules (WHO and Malaysian guidelines, UK traffic-light thresholds). That analysis is in <context>. Your job is to explain it and answer follow-up questions.
 
@@ -54,11 +54,14 @@ Rules:
 - If <context> and your tools give no validated information for a question (search_guidelines returns found: false), say plainly that NutriPal doesn't have enough validated information to answer it, and suggest their doctor or dietitian. Never fill the gap from general knowledge.
 - Keep sources internal: you may say "guidelines" or name the organisation (for example WHO), but never show entry IDs, document titles, page numbers or links. Respect each entry's applies_to and caution, and treat education_only entries as background, not a rule for this product.
 - When the user asks for a better or healthier option, a swap, or how this product compares with what they have scanned before, call compare_with_history with the nutrient that matters most for their question or health areas. Comparisons are per 100 g or 100 ml, not per portion; say so. Mention a traffic light that is worse in the other product (for example lower sugar but high sodium). If it finds nothing, say so and describe what to look for on a label instead.
-- Levels (Low, Moderate, High) come only from the app (<context>) or from recalculate_portion, which applies the app's own rules. Never work out a level yourself. If recalculate_portion returns no rating, give the amounts and shares instead.
-- When the user asks about a different amount (for example 2 cups, half a pack, 300 ml), call recalculate_portion first and give its overall level and each health area's level, with the nutrient that decided it. Say any assumption you made (for example 1 cup = 250 ml).
+- No health area has a Low, Moderate or High level and there is no overall result: never give one or work one out. The only Low/Medium/High wording is the per-100 product traffic light in <context>, which describes the product and is not a rating of the user's condition. If recalculate_portion returns no rating, give the amounts and shares instead.
+- When the user asks about a different amount (for example 2 cups, half a pack, 300 ml), call recalculate_portion first and give the nutrient amounts and shares it returns for each health area. Say any assumption you made (for example 1 cup = 250 ml).
 - Do not diagnose, do not comment on medicines or doses, and never say a food is safe or unsafe for a disease. If the user mentions symptoms, medicines or a doctor's instruction, tell them to follow their doctor or dietitian.
-- If a limit is listed in targets.set_by_provider, say it was set by their healthcare provider (their doctor or dietitian).
-- targets.energy_kcal is the energy target each product is judged against, and targets.energy_basis says where it comes from. For a weight goal it is the maintenance estimate (targets.maintenance_energy_kcal) minus or plus a general amount (500 kcal less or 300 kcal more by default), which the user can change in their weight settings; targets.energy_goal_note explains when less was applied. Call it a general guide, never a prescription or a diet plan, and never suggest a different figure yourself. Other limits stay based on targets.limits_energy_kcal. For a personal plan, suggest their doctor or dietitian, and say a figure they give can be entered in NutriPal. If the user takes insulin or other diabetes medicines and wants to eat less, tell them to check with their doctor first.
+- If a limit is listed in targets.set_by_provider, say it was set by their healthcare provider (their doctor or dietitian). If it is listed in targets.set_by_user, say it is the target they entered in NutriPal.
+- Diabetes is one health area: the app does not ask the type of diabetes. Carbohydrate (grams and 15 g exchanges) and total sugars are amounts only, with no meal budget: never give them a level, never suggest a carbohydrate limit for a meal, and never suggest insulin or medicine doses or insulin-to-carb ratios. If the user mentions their own carbohydrate plan, tell them to follow their doctor or dietitian.
+- The Cholesterol area means high LDL cholesterol: saturated fat and trans fat are the main nutrients, with total fat as context and fibre as support.
+- If user.key_nutrient_cards is present, follow it: every health area is shown as key nutrients with no Low, Moderate or High level and no overall result. Give amounts, the percentage of the daily reference where one is shown (a daily reference, not a per-portion limit) and present a per-100 traffic light as describing the product, not their condition. Never call total sugars added or free sugar. Never say a food is safe or unsuitable for any condition, and never combine areas into one score.
+- targets.energy_kcal is the energy target each product is judged against, and targets.energy_basis says where it comes from. For a weight goal it is the maintenance estimate (targets.maintenance_energy_kcal) minus 500 kcal or plus 300 kcal, a fixed general amount; targets.energy_goal_note explains when less was applied. Call it a general guide, never a prescription or a diet plan, and never suggest a different figure yourself. Other limits stay based on targets.limits_energy_kcal. For a personal plan, suggest their doctor or dietitian, and say a figure they give can be entered in NutriPal. If the user takes insulin or other diabetes medicines and wants to eat less, tell them to check with their doctor first.
 - Total sugars on labels include natural sugars (milk, fruit); the WHO limit is for free sugars, so the share is a cautious estimate.
 - For healthier swaps, describe what to look for on a label using the numbers in context.guide (per 100 g or 100 ml). Do not name brands or products unless the user does or compare_with_history returned them (they are the user's own scans).
 - Keep answers short: 2 to 5 sentences in plain words. When you give levels for several health areas, use one short sentence per area. The app shows plain text only: never use markdown, asterisks, bullet points, numbered lists, tables or headings. Reply in the user's language (English or Bahasa Melayu).
@@ -70,7 +73,7 @@ const TOOLS = [
   {
     name: 'recalculate_portion',
     description:
-      "Scales this product's label to another amount and returns each nutrient for that amount, its share of the user's limits, and the Low/Moderate/High levels for that amount (each nutrient, each health area and overall), worked out with the app's own rules. Use it before answering any question about a different portion.",
+      "Scales this product's label to another amount and returns each nutrient for that amount, its share of the user's limits, and the key nutrients of each health area for that amount (amounts and shares, no levels). Use it before answering any question about a different portion.",
     input_schema: {
       type: 'object',
       properties: {
@@ -206,6 +209,7 @@ const TARGET_FOR = {
   'Trans Fat': ['trans_fat_g', 'g', 'daily trans fat limit'],
   Sodium: ['sodium_mg', 'mg', 'daily sodium limit'],
   'Dietary Fibre': ['fibre_g', 'g', 'daily fibre target'],
+  Protein: ['protein_g', 'g', 'daily protein goal'],
 };
 
 const TO_GRAMS = { g: 1, mg: 0.001, 'µg': 0.000001 };
@@ -291,8 +295,12 @@ function worse(a, b) {
  * Layers 1 + 3 for any amount, the same way as
  * NutritionAnalysisService.analyse in the app:
  *   nutrient level = worse of the per-100 traffic light
- *                    and the share band (<=10% Low,
- *                    <=30% Moderate, else High);
+ *                    and the share band (daily limits
+ *                    <=10% Low, <=30% Moderate; the
+ *                    carbohydrate meal budget <=25% Low,
+ *                    <=50% Moderate; else High). Each
+ *                    nutrient carries its own target and
+ *                    bands from the app;
  *   area level     = worst of its nutrients (needs its
  *                    key nutrient);
  *   overall        = worst area.
@@ -305,13 +313,14 @@ function rateAmount(context, amount) {
 
   if (!rules || typeof rules !== 'object' || !Array.isArray(rules.nutrients)) return null;
 
-  const low = Number(rules.low_share_max);
-  const moderate = Number(rules.moderate_share_max);
-
-  if (!(low > 0 && moderate > low)) return null;
+  const globalLow = Number(rules.low_share_max);
+  const globalModerate = Number(rules.moderate_share_max);
 
   const targets = context.targets || {};
   const levels = {};
+  // Share band alone (no traffic light), for areas that
+  // rate that way.
+  const bands = {};
   const known = new Set();
 
   for (const n of rules.nutrients) {
@@ -321,32 +330,60 @@ function rateAmount(context, amount) {
 
     if (n.rated === false) continue;
 
+    // The app's own target for this nutrient, else the
+    // matching context.targets value.
     const target = TARGET_FOR[n.name];
-    const limit = target && targets[target[0]];
+    const limit =
+      typeof n.target === 'number' ? n.target : target ? targets[target[0]] : undefined;
 
-    if (typeof limit !== 'number' || limit <= 0 || n.unit !== target[1]) continue;
+    if (typeof limit !== 'number' || limit <= 0) continue;
+    if (typeof n.target !== 'number' && (!target || n.unit !== target[1])) continue;
+
+    const low = Number(n.low_share_max ?? globalLow);
+    const moderate = Number(n.moderate_share_max ?? globalModerate);
+
+    if (!(low > 0 && moderate > low)) continue;
 
     const share = (n.per100 * amount) / 100 / limit;
     const band = share <= low ? 'Low' : share <= moderate ? 'Moderate' : 'High';
     const product = LEVELS.includes(n.product_level_per_100) ? n.product_level_per_100 : null;
 
+    bands[n.name] = band;
     levels[n.name] = product && rules.combine === 'worse_of_both' ? worse(product, band) : band;
   }
 
   const areas = [];
   let overall = null;
+  let anyPartial = false;
 
   for (const a of Array.isArray(rules.areas) ? rules.areas : []) {
     if (!a || typeof a.area !== 'string' || !Array.isArray(a.nutrients)) continue;
 
     const keyPresent = (a.key_any_of || []).some((k) => known.has(k));
+    // Every health area: key nutrients with no level and
+    // no effect on the overall result.
+    const displayOnly = Array.isArray(a.display_only) ? a.display_only.filter((n) => known.has(n)) : [];
+
+    if (a.combine === 'findings') {
+      const shown = [...new Set([...a.nutrients, ...displayOnly])].filter((n) => known.has(n));
+
+      areas.push({
+        area: a.area,
+        level: 'key nutrients, no level',
+        shown_without_level: shown,
+      });
+      anyPartial = true;
+      continue;
+    }
+
+    const byBand = a.combine === 'portion_decides';
 
     let level = null;
     let decidedBy = null;
 
     if (keyPresent) {
       for (const name of a.nutrients) {
-        const l = levels[name];
+        const l = byBand ? bands[name] : levels[name];
 
         if (l && (level === null || LEVELS.indexOf(l) > LEVELS.indexOf(level))) {
           level = l;
@@ -364,7 +401,27 @@ function rateAmount(context, amount) {
     if (level) overall = overall ? worse(overall, level) : level;
   }
 
-  return { levels, areas, overall: overall || 'not enough information' };
+  // Per-nutrient levels as the areas use them: the merged
+  // level where an area combines with the traffic light,
+  // else the band; nutrients no area rates get none.
+  const used = {};
+
+  for (const a of Array.isArray(rules.areas) ? rules.areas : []) {
+    if (!a || !Array.isArray(a.nutrients) || a.combine === 'findings') continue;
+
+    for (const name of a.nutrients) {
+      const l = a.combine === 'portion_decides' ? bands[name] : levels[name];
+
+      if (!l) continue;
+      if (!used[name] || a.combine !== 'portion_decides') used[name] = l;
+    }
+  }
+
+  if (anyPartial && (overall === null || overall === 'Low')) {
+    return { levels: used, areas, overall: 'review key nutrients (no health area has a level)' };
+  }
+
+  return { levels: used, areas, overall: overall || 'not enough information' };
 }
 
 function buildMessages(messages) {

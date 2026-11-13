@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nutripal/models/nutrition_targets.dart';
 import 'package:nutripal/models/profile_setup_data.dart';
 import 'package:nutripal/models/scan_record.dart';
 import 'package:nutripal/services/firestore_scan_history_repository.dart';
@@ -19,18 +20,23 @@ void main() {
         dateOfBirth: DateTime(2002, 3, 9),
         diabetes: true,
         hypertension: true,
-        diabetesType: 'Type 2 diabetes',
         highCholesterol: true,
-        highLdl: true,
         weightManagement: true,
         weightGoal: 'Lose weight',
         genderForEnergyEstimate: 'Female',
         currentWeight: 65.5,
         height: 158,
         activityLevel: 'Low active',
-        energyChangeKcal: 750,
-        providerSodiumLimitMg: 1500,
         providerEnergyKcal: 1500,
+        nutritionTargets: NutritionTargets(
+          carbsPerMealG: 45,
+          proteinG: 60,
+          fatG: 50,
+          sugarsG: 25,
+          sodiumMg: 1500,
+          saturatedFatG: 13,
+          fibreG: 30,
+        ),
         avatarPath: '/data/user/0/avatar.jpg',
       );
 
@@ -43,10 +49,11 @@ void main() {
       expect(loaded.dateOfBirth, DateTime(2002, 3, 9));
       expect(loaded.diabetes, isTrue);
       expect(loaded.hypertension, isTrue);
-      expect(loaded.diabetesType, 'Type 2 diabetes');
       expect(loaded.highCholesterol, isTrue);
-      expect(loaded.highLdl, isTrue);
-      expect(loaded.highTriglycerides, isFalse);
+      // Diabetes and cholesterol sub-types are no longer
+      // saved (schema 3); older values are cleared.
+      expect(json['diabetesType'], isNull);
+      expect(json['cholesterol'], isNull);
       expect(loaded.weightManagement, isTrue);
       expect(loaded.weightGoal, 'Lose weight');
       expect(loaded.genderForEnergyEstimate, 'Female');
@@ -54,15 +61,46 @@ void main() {
       expect(loaded.height, 158);
       expect(loaded.weightUnit, 'kg');
       expect(loaded.activityLevel, 'Low active');
-      expect(loaded.energyChangeKcal, 750);
-      expect(loaded.providerSodiumLimitMg, 1500);
       expect(loaded.providerEnergyKcal, 1500);
+      expect(loaded.nutritionTargets, original.nutritionTargets);
+      expect(loaded.nutritionTargets.sodiumMg, 1500);
+      expect(loaded.nutritionTargets.proteinG, 60);
+      // The old chosen energy change is cleared.
+      expect((json['weight'] as Map<String, dynamic>)['energyChangeKcal'], isNull);
 
       // Email comes from Firebase Auth; the avatar file is
       // on the phone only.
       expect(json.containsKey('email'), isFalse);
       expect(loaded.email, 'audry@example.com');
       expect(loaded.avatarPath, isNull);
+    });
+
+    test('NT-T04 older profiles: provider sodium and carbs move to Nutrition Targets', () {
+      final ProfileSetupData p = ProfileSetupData.fromJson(<String, dynamic>{
+        'providerLimits': <String, dynamic>{'sodiumMg': 1500, 'carbsPerMealG': 60, 'energyKcal': 1800},
+        'weight': <String, dynamic>{'energyChangeKcal': 750},
+      });
+
+      expect(p.nutritionTargets.sodiumMg, 1500);
+      expect(p.nutritionTargets.carbsPerMealG, 60);
+      expect(p.providerEnergyKcal, 1800);
+
+      final Map<String, dynamic> saved = p.toJson();
+
+      expect((saved['nutritionTargets'] as Map<String, dynamic>)['sodiumMg'], 1500);
+      expect((saved['providerLimits'] as Map<String, dynamic>)['sodiumMg'], isNull);
+    });
+
+    test('NT-T05 targets outside their range are ignored', () {
+      final ProfileSetupData p = ProfileSetupData.fromJson(<String, dynamic>{
+        'nutritionTargets': <String, dynamic>{'sodiumMg': 99999, 'proteinG': 'lots', 'fibreG': 30},
+      });
+
+      expect(p.nutritionTargets.sodiumMg, isNull);
+      expect(p.nutritionTargets.proteinG, isNull);
+      expect(p.nutritionTargets.fibreG, 30);
+      expect(NutritionTargets.parse('1,500 mg'), 1500);
+      expect(NutritionTargets.parse(''), isNull);
     });
 
     test('an older activity value loads as the NASEM level', () {

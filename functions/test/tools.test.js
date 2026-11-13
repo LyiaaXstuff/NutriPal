@@ -72,6 +72,15 @@ test("the user's health areas filter results; health_area widens them", () => {
   assert.ok(r.evidence_ids.includes('LD-12'));
 });
 
+test('an area the app no longer uses (Triglycerides) is ignored', () => {
+  const old = { user: { health_areas: ['Triglycerides'] } };
+  const none = { user: { health_areas: [] } };
+  const q = { query: 'refined carbohydrate sweet drinks' };
+
+  // Treated like a user with no areas: every entry is searched.
+  assert.deepEqual(searchGuidelines(old, q), searchGuidelines(none, q));
+});
+
 test('same question, same entries (deterministic)', () => {
   const a = searchGuidelines(DM_BP, { query: 'alcohol' });
   const b = searchGuidelines(DM_BP, { query: 'alcohol' });

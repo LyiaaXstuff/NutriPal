@@ -816,6 +816,21 @@ class _UserAccountState extends State<UserAccount> {
                       ),
 
                       const SizedBox(
+                        height: 8,
+                      ),
+
+                      const Text(
+                        'Date of birth cannot be changed',
+                        style:
+                            TextStyle(
+                          color:
+                              mediumPurple,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+
+                      const SizedBox(
                         height: 24,
                       ),
 
@@ -848,75 +863,13 @@ class _UserAccountState extends State<UserAccount> {
                       ),
 
                       const Text(
-                        'Your registered email cannot be changed here.',
+                        'Email address cannot be changed',
                         style:
                             TextStyle(
                           color:
                               mediumPurple,
                           fontSize: 13,
                           height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
-                // =================================================
-                // INFO BOX
-                // =================================================
-                Container(
-                  width:
-                      double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 15,
-                  ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        selectedPurple,
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                  ),
-                  child:
-                      const Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 19,
-                        backgroundColor:
-                            primaryPurple,
-                        child: Icon(
-                          Icons
-                              .info_outline_rounded,
-                          color:
-                              Colors.white,
-                          size: 22,
-                        ),
-                      ),
-
-                      SizedBox(
-                        width: 13,
-                      ),
-
-                      Expanded(
-                        child: Text(
-                          'Only your nickname can be edited in NutriPal.',
-                          style:
-                              TextStyle(
-                            color:
-                                darkPurple,
-                            fontSize: 14,
-                            height: 1.35,
-                            fontWeight:
-                                FontWeight.w500,
-                          ),
                         ),
                       ),
                     ],

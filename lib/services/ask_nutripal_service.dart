@@ -103,7 +103,16 @@ class AskNutriPalService {
           for (final AreaAssessment a in analysis.areas) a.area.title,
         ],
         if (profile.weightGoal != null) 'weight_goal': profile.weightGoal,
-        if (profile.diabetesType != null) 'diabetes_type': profile.diabetesType,
+        if (analysis.areas.any((AreaAssessment a) => a.partial))
+          'key_nutrient_cards': 'Every health area is shown as key nutrients with no level and no '
+              'overall result. Give amounts, the percentage of the daily reference where one is '
+              'shown (sodium 2,000 mg; saturated fat under 10% and trans fat under 1% of energy; '
+              'energy of the estimated need; these are daily references, not per-portion limits) '
+              'and the per-100 traffic light as product-level information, never as a condition '
+              'rating. Diabetes is one area (no type is asked): carbohydrate in grams and 15 g '
+              'exchanges and total sugars are amounts only, with no meal budget, and never an '
+              'insulin or medicine dose. Cholesterol means high LDL cholesterol only. Total '
+              'sugars are not added or free sugars.',
       },
       'targets': <String, dynamic>{
         // The energy target each product is judged against
@@ -120,7 +129,7 @@ class AskNutriPalService {
                     ? 'NASEM 2023 maintenance estimate '
                         '${t.goal!.changeKcal < 0 ? 'minus' : 'plus'} '
                         '${t.goal!.changeKcal.abs().round()} kcal for the weight goal '
-                        '(general guide, adjustable in settings)'
+                        '(general guide; a doctor\'s or dietitian\'s figure can replace it)'
                     : 'NASEM 2023 estimated maintenance energy',
         if (t.goal != null) 'maintenance_energy_kcal': _r(t.goal!.maintenanceKcal),
         if (_goalNote(t) != null) 'energy_goal_note': _goalNote(t),
@@ -137,17 +146,29 @@ class AskNutriPalService {
         'total_fat_g': _r(t.totalFatG),
         'saturated_fat_g': _r(t.saturatedFatG),
         'trans_fat_g': _r(t.transFatG),
-        'carbs_per_meal_g': _r(t.carbsPerMealG),
+        // Only the user's own carbohydrate goal is sent: NutriPal
+        // no longer rates carbohydrate against a budget.
+        if (t.carbsBasis == CarbBudgetBasis.userGoal) ...<String, dynamic>{
+          'carbs_per_meal_g': _r(t.carbsPerMealG),
+          'carbs_basis': "user's own carbohydrate goal",
+        },
         'fibre_g': _r(t.fibreG),
+        if (t.proteinG != null) 'protein_g': _r(t.proteinG!),
         'set_by_provider': t.setByProvider.toList(),
+        // Targets the user entered in Nutrition Targets.
+        'set_by_user': t.setByUser.toList(),
       },
       'analysis': <String, dynamic>{
-        'overall': analysis.overall?.label ?? 'not enough information',
+        'overall': analysis.areas.isEmpty
+            ? 'not enough information'
+            : 'review key nutrients (no health area has a level)',
         'areas': <Map<String, dynamic>>[
           for (final AreaAssessment a in analysis.areas)
             <String, dynamic>{
               'area': a.area.title,
-              'level': a.level?.label ?? 'not enough information',
+              'level': a.partial
+                  ? 'key nutrients, no level'
+                  : a.level?.label ?? 'not enough information',
               if (a.decidedBy != null) 'decided_by': a.decidedBy,
               'nutrients': <Map<String, dynamic>>[
                 for (final NutrientAssessment n in a.nutrients)
@@ -161,6 +182,17 @@ class AskNutriPalService {
                     'level': n.level?.label,
                   },
               ],
+              if (a.watch.isNotEmpty)
+                'shown_without_level': <Map<String, dynamic>>[
+                  for (final NutrientAssessment n in a.watch)
+                    <String, dynamic>{
+                      'name': n.name,
+                      'amount': _r(n.amount),
+                      'unit': n.unit,
+                      if (n.productLevel != null)
+                        'product_level_per_100_not_clinical': n.productLevel!.label,
+                    },
+                ],
               if (a.missing.isNotEmpty) 'not_on_label': a.missing,
             },
         ],
@@ -180,8 +212,9 @@ class AskNutriPalService {
           'sodium_mg': _r(guide['Salt']![1] / AnalysisRules.saltPerSodium * 1000),
         },
       },
-      'rules': 'Levels: share of limit up to 10% Low, up to 30% Moderate, above '
-          '30% High${AnalysisRules.combineRule == CombineRule.worseOfBoth ? ', and never lower than the per-100 traffic light' : ''}.',
+      'rules': 'No health area has a Low, Moderate or High result and there is no overall '
+          'result. The per-100 traffic light (UK front-of-pack) is product-level information '
+          'only. Percentages of a daily reference are neutral context.',
       // The app's own rule numbers and per-100 amounts, so
       // the recalculate_portion tool rates another amount
       // exactly like the result screen (no second copy of
@@ -206,6 +239,13 @@ class AskNutriPalService {
 
   /// Layer 1 + Layer 3 inputs for rating any amount.
   static Map<String, dynamic> ratingRules(NutritionAnalysis analysis) {
+    // No health area rates a nutrient any more (every card is
+    // key nutrients with no level), so this stays empty.
+    final Set<String> ratedByAnArea = <String>{
+      for (final AreaAssessment a in analysis.areas)
+        if (!a.partial) ...a.ruleNutrients,
+    };
+
     return <String, dynamic>{
       'low_share_max': AnalysisRules.lowShare,
       'moderate_share_max': AnalysisRules.highShare,
@@ -220,18 +260,26 @@ class AskNutriPalService {
               'per100': n.per100,
               'unit': n.unit,
               if (n.productLevel != null) 'product_level_per_100': n.productLevel!.label,
-              'rated': !n.isBenefit,
+              // Rated against this target with its own bands
+              // (a count only when there is no target).
+              'rated': !n.isBenefit && n.target != null && ratedByAnArea.contains(n.name),
+              if (n.target != null) 'target': n.target,
+              'low_share_max': n.lowShareMax,
+              'moderate_share_max': n.highShareMax,
             },
       ],
       'areas': <Map<String, dynamic>>[
         for (final AreaAssessment a in analysis.areas)
           <String, dynamic>{
             'area': a.area.title,
-            'nutrients': AnalysisRules.areaNutrients[a.area],
+            'nutrients': a.ruleNutrients,
             // Without one of these the area cannot be rated.
-            'key_any_of': a.area == HealthArea.cholesterol
-                ? <String>['Saturated Fat', 'Total Fat']
-                : <String>[AnalysisRules.areaNutrients[a.area]!.first],
+            'key_any_of': a.keyNutrients,
+            // Findings only, and nutrients shown without a
+            // level (diabetes: carbohydrate and sugars).
+            if (a.partial) 'combine': 'findings',
+            if (a.watch.isNotEmpty)
+              'display_only': <String>[for (final NutrientAssessment n in a.watch) n.name],
           },
       ],
     };

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../services/energy_requirement.dart';
+import 'nutrition_targets.dart';
 
 class ProfileSetupData {
   // =====================================================
@@ -29,27 +30,14 @@ class ProfileSetupData {
 
   bool generalNutrition;
 
-  // =====================================================
-  // DIABETES
-  // =====================================================
-
-  String? diabetesType;
-
-  // Possible values:
-  // Prediabetes
-  // Type 1 diabetes
-  // Type 2 diabetes
-  // Not sure
-
-  // =====================================================
-  // HIGH CHOLESTEROL
-  // =====================================================
-
-  bool highLdl;
-
-  bool highTriglycerides;
-
-  bool cholesterolNotSure;
+  // Diabetes and high LDL cholesterol have no follow-up
+  // questions: one Diabetes card and one LDL cholesterol
+  // card are shown for everyone who selects them. Only
+  // weight management asks follow-up questions.
+  //
+  // highCholesterol keeps its saved name (conditions.
+  // highCholesterol) for older profiles; on screen it is
+  // "High LDL cholesterol".
 
   // =====================================================
   // WEIGHT MANAGEMENT
@@ -89,29 +77,33 @@ class ProfileSetupData {
   // "Moderately active"; fromJson maps them to the nearest
   // NASEM level.
 
-  int? energyChangeKcal;
-
-  // kcal a day NutriPal takes off the maintenance estimate
-  // for "Lose weight" (250, 500 or 750) or adds for "Gain
-  // weight" (300 or 500). Null means the default: 500 less
-  // for lose, 300 more for gain (GoalEnergy in
-  // services/energy_requirement.dart).
+  // For "Lose weight" and "Gain weight" NutriPal applies a
+  // fixed amount to the maintenance estimate internally
+  // (500 kcal less / 300 kcal more, GoalEnergy in
+  // services/energy_requirement.dart). It is not a user
+  // setting: a user with their own figure enters it as
+  // providerEnergyKcal below.
 
   // =====================================================
-  // LIMITS FROM THE USER'S DOCTOR OR DIETITIAN (optional)
+  // DAILY ENERGY FROM THE USER'S DOCTOR OR DIETITIAN
   // =====================================================
   //
-  // When set, these replace NutriPal's default targets in
-  // the nutrition analysis (rules document, Layer 2).
   // providerEnergyKcal (800-5,000 kcal) replaces the NASEM
-  // estimate and is shown as "Set by your healthcare
-  // provider".
-
-  double? providerSodiumLimitMg;
-
-  double? providerCarbsPerMealG;
+  // estimate and the weight-goal amount, and is shown as
+  // "Set by your healthcare provider". Entered on the
+  // Weight Management Goal screen.
 
   double? providerEnergyKcal;
+
+  // =====================================================
+  // NUTRITION TARGETS (Profile > Nutrition Targets)
+  // =====================================================
+  //
+  // Optional carbohydrate, protein, fat, sugar, sodium,
+  // saturated fat and fibre targets. Each one replaces
+  // NutriPal's default for that nutrient.
+
+  NutritionTargets nutritionTargets;
 
   // =====================================================
   // NUTRITION PERSONALITY
@@ -160,14 +152,6 @@ class ProfileSetupData {
     this.weightManagement = false,
     this.generalNutrition = false,
 
-    // DIABETES
-    this.diabetesType,
-
-    // CHOLESTEROL
-    this.highLdl = false,
-    this.highTriglycerides = false,
-    this.cholesterolNotSure = false,
-
     // WEIGHT MANAGEMENT
     this.weightGoal,
     this.genderForEnergyEstimate,
@@ -176,19 +160,19 @@ class ProfileSetupData {
     this.height,
     this.heightUnit = 'cm',
     this.activityLevel,
-    this.energyChangeKcal,
 
-    // PROVIDER LIMITS
-    this.providerSodiumLimitMg,
-    this.providerCarbsPerMealG,
+    // PROVIDER ENERGY
     this.providerEnergyKcal,
+
+    // NUTRITION TARGETS
+    NutritionTargets? nutritionTargets,
 
     // NUTRITION PERSONALITY
     this.nutritionPersonality,
 
     // AVATAR
     this.avatarPath,
-  });
+  }) : nutritionTargets = nutritionTargets ?? NutritionTargets();
 
   // =====================================================
   // OPTIONAL HELPER
@@ -221,7 +205,13 @@ class ProfileSetupData {
   // dateOfBirth is saved as "yyyy-mm-dd" so it never moves
   // a day because of time zones.
 
-  static const int schemaVersion = 1;
+  // 2: nutritionTargets added; sodium and carbohydrate
+  //    moved there from providerLimits; the weight-goal
+  //    energy change is no longer saved.
+  // 3: the diabetes type and the cholesterol sub-type
+  //    (LDL / triglycerides / not sure) are no longer
+  //    asked or saved.
+  static const int schemaVersion = 3;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'schema': schemaVersion,
@@ -235,12 +225,9 @@ class ProfileSetupData {
           'weightManagement': weightManagement,
           'generalNutrition': generalNutrition,
         },
-        'diabetesType': diabetesType,
-        'cholesterol': <String, dynamic>{
-          'highLdl': highLdl,
-          'highTriglycerides': highTriglycerides,
-          'notSure': cholesterolNotSure,
-        },
+        // No longer asked (schema 3); cleared on save.
+        'diabetesType': null,
+        'cholesterol': null,
         'weight': <String, dynamic>{
           'goal': weightGoal,
           'sex': genderForEnergyEstimate,
@@ -249,13 +236,17 @@ class ProfileSetupData {
           'height': height,
           'heightUnit': heightUnit,
           'activityLevel': activityLevel,
-          'energyChangeKcal': energyChangeKcal,
+          // Older profiles saved a chosen amount; it is no
+          // longer used, so clear it.
+          'energyChangeKcal': null,
         },
         'providerLimits': <String, dynamic>{
-          'sodiumMg': providerSodiumLimitMg,
-          'carbsPerMealG': providerCarbsPerMealG,
+          // Moved to nutritionTargets (schema 2).
+          'sodiumMg': null,
+          'carbsPerMealG': null,
           'energyKcal': providerEnergyKcal,
         },
+        'nutritionTargets': nutritionTargets.toJson(),
         'nutritionPersonality': nutritionPersonality,
       };
 
@@ -277,7 +268,6 @@ class ProfileSetupData {
     double? number(Object? v) => v is num ? v.toDouble() : null;
 
     final Map<String, dynamic> conditions = group('conditions');
-    final Map<String, dynamic> cholesterol = group('cholesterol');
     final Map<String, dynamic> weight = group('weight');
     final Map<String, dynamic> limits = group('providerLimits');
 
@@ -291,10 +281,6 @@ class ProfileSetupData {
       highCholesterol: flag(conditions['highCholesterol']),
       weightManagement: flag(conditions['weightManagement']),
       generalNutrition: flag(conditions['generalNutrition']),
-      diabetesType: textOrNull(json['diabetesType']),
-      highLdl: flag(cholesterol['highLdl']),
-      highTriglycerides: flag(cholesterol['highTriglycerides']),
-      cholesterolNotSure: flag(cholesterol['notSure']),
       weightGoal: textOrNull(weight['goal']),
       genderForEnergyEstimate: textOrNull(weight['sex']),
       currentWeight: number(weight['currentWeight']),
@@ -302,10 +288,8 @@ class ProfileSetupData {
       height: number(weight['height']),
       heightUnit: text(weight['heightUnit'], 'cm'),
       activityLevel: ActivityLevels.normalise(textOrNull(weight['activityLevel'])),
-      energyChangeKcal: number(weight['energyChangeKcal'])?.round(),
-      providerSodiumLimitMg: number(limits['sodiumMg']),
-      providerCarbsPerMealG: number(limits['carbsPerMealG']),
       providerEnergyKcal: number(limits['energyKcal']),
+      nutritionTargets: NutritionTargets.fromJson(group('nutritionTargets'), legacy: limits),
       nutritionPersonality: textOrNull(json['nutritionPersonality']),
     );
   }

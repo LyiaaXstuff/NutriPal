@@ -59,11 +59,9 @@ class _WeightManagementSettingsState
   double? _height;
 
   // Daily figure from a doctor or dietitian (optional).
+  // Without it, NutriPal applies its fixed weight-goal
+  // amount internally (GoalEnergy).
   double? _providerEnergyKcal;
-
-  // kcal a day taken off (lose) or added (gain); null
-  // means the default (GoalEnergy).
-  int? _energyChangeKcal;
 
   // =====================================================
   // ORIGINAL VALUES
@@ -76,7 +74,6 @@ class _WeightManagementSettingsState
   double? _originalCurrentWeight;
   double? _originalHeight;
   double? _originalProviderEnergyKcal;
-  int? _originalEnergyChangeKcal;
 
   // =====================================================
   // ACTIVITY ICONS
@@ -205,9 +202,6 @@ class _WeightManagementSettingsState
     _providerEnergyKcal =
         widget.data.providerEnergyKcal;
 
-    _energyChangeKcal =
-        widget.data.energyChangeKcal;
-
     // ===============================================
     // ORIGINAL VALUES
     // ===============================================
@@ -229,9 +223,6 @@ class _WeightManagementSettingsState
 
     _originalProviderEnergyKcal =
         _providerEnergyKcal;
-
-    _originalEnergyChangeKcal =
-        _energyChangeKcal;
   }
 
   // =====================================================
@@ -255,8 +246,6 @@ class _WeightManagementSettingsState
             _activityLevel,
         providerEnergyKcal:
             _providerEnergyKcal,
-        energyChangeKcal:
-            _energyChangeKcal,
       ),
     );
   }
@@ -277,9 +266,7 @@ class _WeightManagementSettingsState
         _height !=
             _originalHeight ||
         _providerEnergyKcal !=
-            _originalProviderEnergyKcal ||
-        _energyChangeKcal !=
-            _originalEnergyChangeKcal;
+            _originalProviderEnergyKcal;
   }
 
   // =====================================================
@@ -354,60 +341,6 @@ class _WeightManagementSettingsState
         setState(() {
           _weightGoal =
               value;
-
-          // A choice for the other goal goes back to the
-          // default for this one.
-          if (!WeightPlanOptions.energyChangeOptions(value)
-              .contains(_energyChangeKcal)) {
-            _energyChangeKcal =
-                null;
-          }
-        });
-      },
-    );
-  }
-
-  // =====================================================
-  // EDIT DAILY ENERGY CHANGE (lose / gain)
-  // =====================================================
-
-  void _editEnergyChange() {
-    final List<int> options =
-        WeightPlanOptions.energyChangeOptions(
-      _weightGoal,
-    );
-
-    if (options.isEmpty) {
-      return;
-    }
-
-    final Map<String, int> byLabel = {
-      for (final int kcal in options)
-        WeightPlanOptions.energyChangeText(
-          _weightGoal,
-          kcal,
-        ): kcal,
-    };
-
-    _showChoiceSheet(
-      title:
-          'Daily energy change',
-      options:
-          byLabel.keys.toList(),
-      selected:
-          WeightPlanOptions.energyChangeText(
-        _weightGoal,
-        GoalEnergy.amountFor(
-          _weightGoal,
-          _energyChangeKcal,
-        ),
-      ),
-      onSelected: (
-        value,
-      ) {
-        setState(() {
-          _energyChangeKcal =
-              byLabel[value];
         });
       },
     );
@@ -1272,9 +1205,6 @@ class _WeightManagementSettingsState
     widget.data.providerEnergyKcal =
         _providerEnergyKcal;
 
-    widget.data.energyChangeKcal =
-        _energyChangeKcal;
-
     widget.data.weightUnit =
         'kg';
 
@@ -1302,9 +1232,6 @@ class _WeightManagementSettingsState
 
       _originalProviderEnergyKcal =
           _providerEnergyKcal;
-
-      _originalEnergyChangeKcal =
-          _energyChangeKcal;
     });
 
     _showMessage(
@@ -1652,31 +1579,6 @@ class _WeightManagementSettingsState
                     onTap:
                         _editWeightGoal,
                   ),
-
-                  // Lose or gain, unless a provider's
-                  // figure replaces NutriPal's estimate.
-                  if (WeightPlanOptions.energyChangeOptions(
-                        _weightGoal,
-                      ).isNotEmpty &&
-                      _providerEnergyKcal ==
-                          null) ...[
-                    const _SettingsDivider(),
-
-                    _SettingsRow(
-                      label:
-                          'Daily energy change',
-                      value:
-                          WeightPlanOptions.energyChangeText(
-                        _weightGoal,
-                        GoalEnergy.amountFor(
-                          _weightGoal,
-                          _energyChangeKcal,
-                        ),
-                      ),
-                      onTap:
-                          _editEnergyChange,
-                    ),
-                  ],
                 ],
               ),
 
@@ -2162,4 +2064,4 @@ class _SettingsDivider extends StatelessWidget {
       ),
     );
   }
-}
+}

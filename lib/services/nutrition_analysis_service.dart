@@ -25,6 +25,7 @@ import 'dart:math' as math;
 
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
+import '../models/nutrition_targets.dart';
 import '../models/profile_setup_data.dart';
 import 'energy_requirement.dart';
 
@@ -84,9 +85,26 @@ class AnalysisRules {
   static const double fibreTargetG = 25;
   static const double carbExchangeG = 15;
 
+  // Carbohydrate per main meal in carb counting (Diabetes
+  // Australia NDSS, Nov 2023: women 30-45 g, men 45-60 g).
+  // NutriPal uses the top of each range as the meal budget
+  // for users with diabetes. Unknown sex uses the women's
+  // figure, the more careful one.
+  static const Map<String, double> carbCountingMealG = <String, double>{
+    'female': 45,
+    'male': 60,
+  };
+
   // ---- Layer 3 ----------------------------------------
+  // Daily limits.
   static const double lowShare = 0.10;
   static const double highShare = 0.30;
+
+  // The carbohydrate meal budget: one product is part of a
+  // meal, so up to a quarter of the meal budget is Low and
+  // more than half is High (researcher-defined).
+  static const double mealLowShare = 0.25;
+  static const double mealHighShare = 0.50;
 
   // ---- Health areas -> nutrients (rule order) ---------
   // The first entry is the key nutrient: without it the
@@ -99,12 +117,41 @@ class AnalysisRules {
     HealthArea.weight: <String>['Energy', 'Total Fat', 'Total Sugars'],
   };
 
+  // LDL cholesterol card: the nutrients shown with amount,
+  // share of the daily reference and the product-level
+  // traffic light, but no level (R-LDL-01 v2). Total fat is
+  // context only.
+  static const List<String> cholesterolShown = <String>['Saturated Fat', 'Trans Fat', 'Total Fat'];
+
+  // Diabetes card: carbohydrate and total sugars as amounts
+  // only (carbohydrate also as 15 g exchanges).
+  static const List<String> diabetesShown = <String>['Carbohydrate', 'Total Sugars'];
+
+  /// Nutrients that matter for [area], key nutrient first.
+  static List<String> nutrientsFor(HealthArea area) => areaNutrients[area]!;
+
+  /// Without one of these on the label the area says "not
+  /// enough information".
+  static List<String> keyNutrientsFor(HealthArea area) {
+    if (area == HealthArea.cholesterol) return const <String>['Saturated Fat', 'Total Fat'];
+
+    return <String>[nutrientsFor(area).first];
+  }
+
   // Areas where fibre counts as a benefit.
   static const Set<HealthArea> fibreAreas = <HealthArea>{
     HealthArea.diabetes,
     HealthArea.cholesterol,
     HealthArea.weight,
   };
+
+  // Shown to users who chose general nutrition only.
+  static const List<HealthArea> generalAreas = <HealthArea>[
+    HealthArea.diabetes,
+    HealthArea.bloodPressure,
+    HealthArea.cholesterol,
+    HealthArea.weight,
+  ];
 }
 
 // =======================================================
@@ -119,16 +166,20 @@ class NutritionProfile {
   final String? activityLevel;
   final String? weightGoal; // 'lose' | 'maintain' | 'gain'
 
-  // kcal a day the user chose to take off (lose: 250, 500,
-  // 750) or add (gain: 300, 500); null = the default.
-  final int? energyChangeKcal;
-
   final Set<HealthArea> areas;
 
-  // Limits from the user's doctor or dietitian (optional).
-  final double? providerSodiumMg;
-  final double? providerCarbsPerMealG;
+  // Daily energy from the user's doctor or dietitian.
   final double? providerEnergyKcal;
+
+  // The user's own targets (Profile > Nutrition Targets),
+  // each replacing NutriPal's default. Null = none set.
+  final double? carbsPerMealGoalG;
+  final double? proteinGoalG;
+  final double? fatGoalG;
+  final double? sugarsLimitG;
+  final double? sodiumLimitMg;
+  final double? saturatedFatLimitG;
+  final double? fibreGoalG;
 
   const NutritionProfile({
     this.sex,
@@ -137,11 +188,15 @@ class NutritionProfile {
     this.heightCm,
     this.activityLevel,
     this.weightGoal,
-    this.energyChangeKcal,
     this.areas = const <HealthArea>{},
-    this.providerSodiumMg,
-    this.providerCarbsPerMealG,
     this.providerEnergyKcal,
+    this.carbsPerMealGoalG,
+    this.proteinGoalG,
+    this.fatGoalG,
+    this.sugarsLimitG,
+    this.sodiumLimitMg,
+    this.saturatedFatLimitG,
+    this.fibreGoalG,
   });
 
   factory NutritionProfile.fromSetupData(
@@ -154,6 +209,8 @@ class NutritionProfile {
     final int? age = born == null ? null : AdultAge.yearsOn(born, now);
 
     final String? goal = data.weightGoal?.toLowerCase();
+
+    final NutritionTargets t = data.nutritionTargets;
 
     return NutritionProfile(
       sex: data.genderForEnergyEstimate?.toLowerCase(),
@@ -172,23 +229,27 @@ class NutritionProfile {
               : goal.contains('gain')
                   ? 'gain'
                   : 'maintain',
-      energyChangeKcal: data.energyChangeKcal,
       areas: <HealthArea>{
         if (data.diabetes) HealthArea.diabetes,
         if (data.hypertension) HealthArea.bloodPressure,
         if (data.highCholesterol) HealthArea.cholesterol,
         if (data.weightManagement) HealthArea.weight,
       },
-      providerSodiumMg: data.providerSodiumLimitMg,
-      providerCarbsPerMealG: data.providerCarbsPerMealG,
       providerEnergyKcal: data.providerEnergyKcal,
+      carbsPerMealGoalG: t.carbsPerMealG,
+      proteinGoalG: t.proteinG,
+      fatGoalG: t.fatG,
+      sugarsLimitG: t.sugarsG,
+      sodiumLimitMg: t.sodiumMg,
+      saturatedFatLimitG: t.saturatedFatG,
+      fibreGoalG: t.fibreG,
     );
   }
 
   /// Areas to show: the selected ones, or all four for a
   /// user who chose general nutrition only.
   List<HealthArea> get areasToShow => areas.isEmpty
-      ? HealthArea.values
+      ? AnalysisRules.generalAreas
       : HealthArea.values.where(areas.contains).toList();
 }
 
@@ -248,11 +309,14 @@ class NutritionAnalysisService {
   ///      dietitian (800-5,000 kcal), used as given
   ///   2. the NASEM EER (maintenance), with the weight goal
   ///      applied to the energy target only (GoalEnergy:
-  ///      lose -500 by default with floors, gain +300)
+  ///      lose 500 kcal less with floors, gain 300 more)
   ///   3. the 2,000 kcal reference
-  /// Every other limit is based on 1, 2 (maintenance) or 3.
+  /// Every other limit is based on 1, 2 (maintenance) or 3,
+  /// unless the user entered their own target for it
+  /// (Nutrition Targets), which is used as given.
   static DailyTargets targetsFor(NutritionProfile p) {
     final Set<String> provider = <String>{};
+    final Set<String> user = <String>{};
 
     double energy = AnalysisRules.referenceEnergyKcal;
     bool personal = false;
@@ -275,7 +339,6 @@ class NutritionAnalysisService {
       final GoalEnergyResult g = GoalEnergy.apply(
         maintenanceKcal: eer.kcal,
         goal: p.weightGoal,
-        chosenKcal: p.energyChangeKcal,
         sex: p.sex,
         weightKg: p.weightKg,
         heightCm: p.heightCm,
@@ -287,20 +350,33 @@ class NutritionAnalysisService {
       if (g.requestedKcal > 0) goal = g;
     }
 
-    double sodium = AnalysisRules.sodiumLimitMg;
+    // The user's own target when set (> 0), else [fallback].
+    double pick(double? own, String nutrient, double fallback) {
+      if (own != null && own > 0) {
+        user.add(nutrient);
+        return own;
+      }
 
-    if (p.providerSodiumMg != null && p.providerSodiumMg! > 0) {
-      sodium = p.providerSodiumMg!;
-      provider.add('Sodium');
+      return fallback;
     }
 
     final double carbsPerDay = energy * AnalysisRules.carbsShare / 4;
 
-    double carbsPerMeal = carbsPerDay / AnalysisRules.mainMealsPerDay;
+    // Carbohydrate meal budget: the carb-counting guide for
+    // users with diabetes, otherwise half of the day's
+    // energy over 3 meals.
+    final bool carbCounting = p.areas.contains(HealthArea.diabetes);
 
-    if (p.providerCarbsPerMealG != null && p.providerCarbsPerMealG! > 0) {
-      carbsPerMeal = p.providerCarbsPerMealG!;
-      provider.add('Carbohydrate');
+    CarbBudgetBasis carbsBasis =
+        carbCounting ? CarbBudgetBasis.carbCounting : CarbBudgetBasis.energyShare;
+
+    double carbsPerMeal = carbCounting
+        ? AnalysisRules.carbCountingMealG[p.sex] ?? AnalysisRules.carbCountingMealG['female']!
+        : carbsPerDay / AnalysisRules.mainMealsPerDay;
+
+    if ((p.carbsPerMealGoalG ?? 0) > 0) {
+      carbsPerMeal = pick(p.carbsPerMealGoalG, 'Carbohydrate', carbsPerMeal);
+      carbsBasis = CarbBudgetBasis.userGoal;
     }
 
     return DailyTargets(
@@ -309,15 +385,22 @@ class NutritionAnalysisService {
       energyIsPersonal: personal,
       energyLowKcal: low,
       energyHighKcal: high,
-      sodiumMg: sodium,
-      freeSugarsG: energy * AnalysisRules.freeSugarsShare / 4,
-      totalFatG: energy * AnalysisRules.totalFatShare / 9,
-      saturatedFatG: energy * AnalysisRules.saturatedFatShare / 9,
+      sodiumMg: pick(p.sodiumLimitMg, 'Sodium', AnalysisRules.sodiumLimitMg),
+      freeSugarsG: pick(p.sugarsLimitG, 'Total Sugars', energy * AnalysisRules.freeSugarsShare / 4),
+      totalFatG: pick(p.fatGoalG, 'Total Fat', energy * AnalysisRules.totalFatShare / 9),
+      saturatedFatG: pick(
+        p.saturatedFatLimitG,
+        'Saturated Fat',
+        energy * AnalysisRules.saturatedFatShare / 9,
+      ),
       transFatG: energy * AnalysisRules.transFatShare / 9,
       carbsPerDayG: carbsPerDay,
       carbsPerMealG: carbsPerMeal,
-      fibreG: AnalysisRules.fibreTargetG,
+      carbsBasis: carbsBasis,
+      fibreG: pick(p.fibreGoalG, 'Dietary Fibre', AnalysisRules.fibreTargetG),
+      proteinG: (p.proteinGoalG ?? 0) > 0 ? pick(p.proteinGoalG, 'Protein', 0) : null,
       setByProvider: provider,
+      setByUser: user,
     );
   }
 
@@ -346,12 +429,23 @@ class NutritionAnalysisService {
   // LAYER 3: SHARE BAND
   // =====================================================
 
-  static NutrientLevel shareLevel(double share) {
-    if (share <= AnalysisRules.lowShare) return NutrientLevel.low;
-    if (share <= AnalysisRules.highShare) return NutrientLevel.moderate;
+  /// Band of [share]: daily-limit bands by default; pass
+  /// the meal bands for the carbohydrate meal budget.
+  static NutrientLevel shareLevel(
+    double share, {
+    double low = AnalysisRules.lowShare,
+    double high = AnalysisRules.highShare,
+  }) {
+    if (share <= low) return NutrientLevel.low;
+    if (share <= high) return NutrientLevel.moderate;
 
     return NutrientLevel.high;
   }
+
+  /// [low, high] share bands for a rated nutrient.
+  static (double, double) bandsFor(String nutrient) => nutrient == 'Carbohydrate'
+      ? (AnalysisRules.mealLowShare, AnalysisRules.mealHighShare)
+      : (AnalysisRules.lowShare, AnalysisRules.highShare);
 
   static NutrientLevel combine(
     NutrientLevel? product,
@@ -604,18 +698,21 @@ class NutritionAnalysisService {
         'Trans Fat' => (targets.transFatG, 'daily limit'),
         'Sodium' => (targets.sodiumMg, 'daily limit'),
         'Dietary Fibre' => (targets.fibreG, 'daily target'),
+        'Protein' => (targets.proteinG, 'daily protein goal'),
         _ => (null, null),
       };
 
       final double? share =
           target == null || target <= 0 ? null : amount / target;
 
-      final bool benefit = name == 'Dietary Fibre';
+      final bool benefit = name == 'Dietary Fibre' || name == 'Protein';
+
+      final (double lowMax, double highMax) = bandsFor(name);
 
       NutrientLevel? level;
 
       if (share != null && !benefit) {
-        level = combine(product, shareLevel(share), rule: rule);
+        level = combine(product, shareLevel(share, low: lowMax, high: highMax), rule: rule);
       }
 
       assessed[name] = NutrientAssessment(
@@ -629,6 +726,8 @@ class NutritionAnalysisService {
         targetLabel: label,
         level: level,
         isBenefit: benefit,
+        lowShareMax: lowMax,
+        highShareMax: highMax,
       );
     }
 
@@ -636,55 +735,11 @@ class NutritionAnalysisService {
 
     final List<AreaAssessment> areas = <AreaAssessment>[];
 
+    // Every health area shows key nutrients with no level and
+    // never feeds an overall result (NutriPal does not decide
+    // whether a food is "good" or "suitable").
     for (final HealthArea area in profile.areasToShow) {
-      final List<String> names = AnalysisRules.areaNutrients[area]!;
-
-      final List<NutrientAssessment> rated = <NutrientAssessment>[
-        for (final String n in names)
-          if (assessed[n]?.level != null) assessed[n]!,
-      ];
-
-      final List<String> missing = <String>[
-        for (final String n in names)
-          if (assessed[n] == null) n,
-      ];
-
-      // Cholesterol: saturated fat, or failing that total
-      // fat, is enough to judge.
-      final bool hasKey = area == HealthArea.cholesterol
-          ? assessed['Saturated Fat'] != null || assessed['Total Fat'] != null
-          : assessed[names.first] != null;
-
-      NutrientLevel? level;
-      String? decidedBy;
-
-      if (hasKey) {
-        for (final NutrientAssessment n in rated) {
-          if (level == null || n.level!.index > level.index) {
-            level = n.level;
-            decidedBy = n.name;
-          }
-        }
-      }
-
-      areas.add(AreaAssessment(
-        area: area,
-        level: level,
-        decidedBy: decidedBy,
-        nutrients: rated,
-        benefit: AnalysisRules.fibreAreas.contains(area)
-            ? assessed['Dietary Fibre']
-            : null,
-        missing: missing,
-      ));
-    }
-
-    NutrientLevel? overall;
-
-    for (final AreaAssessment a in areas) {
-      if (a.level == null) continue;
-
-      overall = overall == null ? a.level : overall.worse(a.level!);
+      areas.add(_findingsArea(area, assessed));
     }
 
     return NutritionAnalysis(
@@ -697,8 +752,91 @@ class NutritionAnalysisService {
       targets: targets,
       nutrients: assessed,
       areas: areas,
-      overall: overall,
+      overall: null,
       facts: _facts(data, scale),
+    );
+  }
+
+  // =====================================================
+  // HEALTH-AREA CARDS (findings, no level)
+  // =====================================================
+  //
+  // Every card shows the nutrients that matter for the
+  // condition, with no Low | Moderate | High result:
+  //
+  // * No guideline gives a per-portion limit. The share of
+  //   the daily reference (sodium 2,000 mg, saturated fat
+  //   <10 % of energy, trans fat <1 %, energy need) is shown
+  //   as a plain percentage; the researcher-defined 10 % /
+  //   30 % share bands are NOT applied, so they cannot read
+  //   as clinical classes.
+  // * Diabetes: carbohydrate and total sugars as amounts
+  //   only (carbohydrate also as 15 g exchanges); no meal
+  //   budget, because the right amount depends on the
+  //   person's own plan (and on insulin, for those who use
+  //   it).
+  // * The per-100 UK traffic light stays as product-level
+  //   information on the nutrient.
+  // * Fibre is a supporting factor, never a risk level.
+  //
+  // The area has no level, so it never feeds an overall
+  // result or a "fits" verdict.
+
+  static AreaAssessment _findingsArea(
+    HealthArea area,
+    Map<String, NutrientAssessment> assessed,
+  ) {
+    final bool dm = area == HealthArea.diabetes;
+
+    // names: nutrients shown with share + product level.
+    // primary: nutrients shown first as amounts (diabetes).
+    final List<String> names = switch (area) {
+      HealthArea.cholesterol => AnalysisRules.cholesterolShown,
+      HealthArea.bloodPressure => const <String>['Sodium'],
+      HealthArea.weight => const <String>['Energy'],
+      HealthArea.diabetes => const <String>[],
+    };
+
+    final List<String> primary = dm ? AnalysisRules.diabetesShown : const <String>[];
+
+    final List<NutrientAssessment> shown = <NutrientAssessment>[];
+    final List<NutrientAssessment> watch = <NutrientAssessment>[];
+    final List<String> missing = <String>[];
+
+    for (final String name in names) {
+      final NutrientAssessment? n = assessed[name];
+
+      if (n == null) {
+        missing.add(name);
+      } else {
+        // Amount and share stay; the level is removed.
+        shown.add(n.withLevel(null));
+      }
+    }
+
+    for (final String name in primary) {
+      final NutrientAssessment? n = assessed[name];
+
+      if (n == null) {
+        missing.add(name);
+      } else {
+        // Amount and product-level traffic light only (no
+        // share of a researcher-defined budget).
+        watch.add(n.withoutTarget());
+      }
+    }
+
+    return AreaAssessment(
+      area: area,
+      level: null,
+      decidedBy: null,
+      nutrients: shown,
+      benefit: AnalysisRules.fibreAreas.contains(area) ? assessed['Dietary Fibre'] : null,
+      missing: missing,
+      ruleNutrients: <String>[...names, ...primary],
+      keyNutrients: const <String>[],
+      watch: watch,
+      partial: true,
     );
   }
 

@@ -40,19 +40,6 @@ class _HealthConditionsSettingsState
       Color(0xFFE4D9F7);
 
   // =====================================================
-  // CHOLESTEROL VALUES
-  // =====================================================
-
-  static const String cholesterolLdl =
-      'High LDL cholesterol';
-
-  static const String cholesterolTriglycerides =
-      'High triglycerides';
-
-  static const String cholesterolNotSure =
-      'Not sure';
-
-  // =====================================================
   // CURRENT VALUES
   // =====================================================
 
@@ -60,9 +47,6 @@ class _HealthConditionsSettingsState
   late bool _hypertension;
   late bool _highCholesterol;
   late bool _weightManagement;
-
-  String? _diabetesType;
-  String? _cholesterolType;
 
   String? _weightGoal;
   String? _gender;
@@ -81,9 +65,6 @@ class _HealthConditionsSettingsState
   late bool _originalHypertension;
   late bool _originalHighCholesterol;
   late bool _originalWeightManagement;
-
-  String? _originalDiabetesType;
-  String? _originalCholesterolType;
 
   String? _originalWeightGoal;
   String? _originalGender;
@@ -118,12 +99,6 @@ class _HealthConditionsSettingsState
     _weightManagement =
         widget.data.weightManagement;
 
-    _diabetesType =
-        widget.data.diabetesType;
-
-    _cholesterolType =
-        _readCholesterolType();
-
     _weightGoal =
         widget.data.weightGoal;
 
@@ -154,12 +129,6 @@ class _HealthConditionsSettingsState
     _originalWeightManagement =
         _weightManagement;
 
-    _originalDiabetesType =
-        _diabetesType;
-
-    _originalCholesterolType =
-        _cholesterolType;
-
     _originalWeightGoal =
         _weightGoal;
 
@@ -180,185 +149,6 @@ class _HealthConditionsSettingsState
   }
 
   // =====================================================
-  // CHOLESTEROL STORAGE
-  // =====================================================
-
-  // The profile keeps the cholesterol details as three
-  // yes/no fields (set in setup, Step 3): highLdl,
-  // highTriglycerides and cholesterolNotSure. This screen
-  // works with one text value ("High LDL cholesterol",
-  // "High triglycerides", "Both" or "Not sure"), so these
-  // two methods translate between them.
-
-  String? _readCholesterolType() {
-    final ProfileSetupData data =
-        widget.data;
-
-    if (data.cholesterolNotSure) {
-      return cholesterolNotSure;
-    }
-
-    if (data.highLdl &&
-        data.highTriglycerides) {
-      return 'Both';
-    }
-
-    if (data.highLdl) {
-      return cholesterolLdl;
-    }
-
-    if (data.highTriglycerides) {
-      return cholesterolTriglycerides;
-    }
-
-    return null;
-  }
-
-  void _writeCholesterolType(
-    String? value,
-  ) {
-    final Set<String> selected =
-        _cholesterolSelectionsFromStoredValue(
-      value,
-    );
-
-    final bool notSure =
-        selected.contains(
-      cholesterolNotSure,
-    );
-
-    widget.data.cholesterolNotSure =
-        notSure;
-
-    widget.data.highLdl =
-        !notSure &&
-            selected.contains(
-              cholesterolLdl,
-            );
-
-    widget.data.highTriglycerides =
-        !notSure &&
-            selected.contains(
-              cholesterolTriglycerides,
-            );
-  }
-
-  // =====================================================
-  // CHOLESTEROL HELPERS
-  // =====================================================
-
-  Set<String>
-      _cholesterolSelectionsFromStoredValue(
-    String? value,
-  ) {
-    if (value == null ||
-        value.trim().isEmpty) {
-      return <String>{};
-    }
-
-    final String stored =
-        value.trim();
-
-    if (stored == 'Both') {
-      return <String>{
-        cholesterolLdl,
-        cholesterolTriglycerides,
-      };
-    }
-
-    if (stored ==
-        cholesterolLdl) {
-      return <String>{
-        cholesterolLdl,
-      };
-    }
-
-    if (stored ==
-        cholesterolTriglycerides) {
-      return <String>{
-        cholesterolTriglycerides,
-      };
-    }
-
-    if (stored ==
-        cholesterolNotSure) {
-      return <String>{
-        cholesterolNotSure,
-      };
-    }
-
-    if (stored.contains('|')) {
-      return stored
-          .split('|')
-          .map(
-            (item) =>
-                item.trim(),
-          )
-          .where(
-            (item) =>
-                item.isNotEmpty,
-          )
-          .toSet();
-    }
-
-    if (stored.contains('·')) {
-      return stored
-          .split('·')
-          .map(
-            (item) =>
-                item.trim(),
-          )
-          .where(
-            (item) =>
-                item.isNotEmpty,
-          )
-          .toSet();
-    }
-
-    return <String>{};
-  }
-
-  String?
-      _cholesterolStoredValueFromSelections(
-    Set<String> selections,
-  ) {
-    if (selections.isEmpty) {
-      return null;
-    }
-
-    if (selections.contains(
-      cholesterolNotSure,
-    )) {
-      return cholesterolNotSure;
-    }
-
-    final bool hasLdl =
-        selections.contains(
-      cholesterolLdl,
-    );
-
-    final bool hasTriglycerides =
-        selections.contains(
-      cholesterolTriglycerides,
-    );
-
-    if (hasLdl &&
-        hasTriglycerides) {
-      return 'Both';
-    }
-
-    if (hasLdl) {
-      return cholesterolLdl;
-    }
-
-    if (hasTriglycerides) {
-      return cholesterolTriglycerides;
-    }
-
-    return null;
-  }
-
-  // =====================================================
   // CHANGES
   // =====================================================
 
@@ -371,10 +161,6 @@ class _HealthConditionsSettingsState
             _originalHighCholesterol ||
         _weightManagement !=
             _originalWeightManagement ||
-        _diabetesType !=
-            _originalDiabetesType ||
-        _cholesterolType !=
-            _originalCholesterolType ||
         _weightGoal !=
             _originalWeightGoal ||
         _gender !=
@@ -393,58 +179,6 @@ class _HealthConditionsSettingsState
   // SUBTITLES
   // =====================================================
 
-  String? get _diabetesSubtitle {
-    if (!_diabetes) {
-      return null;
-    }
-
-    return _diabetesType;
-  }
-
-  String? get _cholesterolSubtitle {
-    if (!_highCholesterol) {
-      return null;
-    }
-
-    final Set<String> selections =
-        _cholesterolSelectionsFromStoredValue(
-      _cholesterolType,
-    );
-
-    if (selections.isEmpty) {
-      return null;
-    }
-
-    if (selections.contains(
-      cholesterolNotSure,
-    )) {
-      return cholesterolNotSure;
-    }
-
-    final List<String> labels =
-        [];
-
-    if (selections.contains(
-      cholesterolLdl,
-    )) {
-      labels.add(
-        cholesterolLdl,
-      );
-    }
-
-    if (selections.contains(
-      cholesterolTriglycerides,
-    )) {
-      labels.add(
-        cholesterolTriglycerides,
-      );
-    }
-
-    return labels.join(
-      ' · ',
-    );
-  }
-
   String? get _weightSubtitle {
     if (!_weightManagement) {
       return null;
@@ -454,78 +188,13 @@ class _HealthConditionsSettingsState
   }
 
   // =====================================================
-  // DIABETES
+  // DIABETES (no follow-up questions)
   // =====================================================
 
-  Future<void>
-      _handleDiabetesTap() async {
-    if (_diabetes) {
-      setState(() {
-        _diabetes =
-            false;
-      });
-
-      return;
-    }
-
-    final String? result =
-        await _showChoiceSheet(
-      title:
-          'Diabetes or prediabetes',
-      question:
-          'Which best describes your condition?',
-      options:
-          const [
-        'Prediabetes',
-        'Type 1 diabetes',
-        'Type 2 diabetes',
-        'Not sure',
-      ],
-      currentValue:
-          _diabetesType,
-    );
-
-    if (result == null ||
-        !mounted) {
-      return;
-    }
-
+  void _handleDiabetesTap() {
     setState(() {
       _diabetes =
-          true;
-
-      _diabetesType =
-          result;
-    });
-  }
-
-  Future<void>
-      _editDiabetesType() async {
-    final String? result =
-        await _showChoiceSheet(
-      title:
-          'Diabetes or prediabetes',
-      question:
-          'Which best describes your condition?',
-      options:
-          const [
-        'Prediabetes',
-        'Type 1 diabetes',
-        'Type 2 diabetes',
-        'Not sure',
-      ],
-      currentValue:
-          _diabetesType,
-    );
-
-    if (result == null ||
-        !mounted) {
-      return;
-    }
-
-    setState(() {
-      _diabetesType =
-          result;
+          !_diabetes;
     });
   }
 
@@ -541,454 +210,14 @@ class _HealthConditionsSettingsState
   }
 
   // =====================================================
-  // HIGH CHOLESTEROL
+  // HIGH LDL CHOLESTEROL (no follow-up questions)
   // =====================================================
 
-  Future<void>
-      _handleCholesterolTap() async {
-    if (_highCholesterol) {
-      setState(() {
-        _highCholesterol =
-            false;
-      });
-
-      return;
-    }
-
-    final String? result =
-        await _showCholesterolMultiSelectSheet(
-      currentValue:
-          _cholesterolType,
-    );
-
-    if (result == null ||
-        !mounted) {
-      return;
-    }
-
+  void _handleCholesterolTap() {
     setState(() {
       _highCholesterol =
-          true;
-
-      _cholesterolType =
-          result;
+          !_highCholesterol;
     });
-  }
-
-  Future<void>
-      _editCholesterolType() async {
-    final String? result =
-        await _showCholesterolMultiSelectSheet(
-      currentValue:
-          _cholesterolType,
-    );
-
-    if (result == null ||
-        !mounted) {
-      return;
-    }
-
-    setState(() {
-      _cholesterolType =
-          result;
-    });
-  }
-
-  // =====================================================
-  // HIGH CHOLESTEROL SHEET
-  // =====================================================
-
-  Future<String?>
-      _showCholesterolMultiSelectSheet({
-    required String? currentValue,
-  }) {
-    final Set<String> selected =
-        _cholesterolSelectionsFromStoredValue(
-      currentValue,
-    );
-
-    return showModalBottomSheet<String>(
-      context:
-          context,
-
-      backgroundColor:
-          Colors.transparent,
-
-      isScrollControlled:
-          true,
-
-      builder: (
-        BuildContext sheetContext,
-      ) {
-        return StatefulBuilder(
-          builder: (
-            BuildContext context,
-            StateSetter setSheetState,
-          ) {
-            void toggleSelection(
-              String option,
-            ) {
-              setSheetState(() {
-                if (option ==
-                    cholesterolNotSure) {
-                  if (selected.contains(
-                    cholesterolNotSure,
-                  )) {
-                    selected.remove(
-                      cholesterolNotSure,
-                    );
-                  } else {
-                    selected
-                      ..clear()
-                      ..add(
-                        cholesterolNotSure,
-                      );
-                  }
-
-                  return;
-                }
-
-                selected.remove(
-                  cholesterolNotSure,
-                );
-
-                if (selected.contains(
-                  option,
-                )) {
-                  selected.remove(
-                    option,
-                  );
-                } else {
-                  selected.add(
-                    option,
-                  );
-                }
-              });
-            }
-
-            return SafeArea(
-              top:
-                  false,
-
-              child:
-                  Container(
-                constraints:
-                    BoxConstraints(
-                  maxHeight:
-                      MediaQuery.of(
-                            context,
-                          )
-                          .size
-                          .height *
-                      0.80,
-                ),
-
-                decoration:
-                    const BoxDecoration(
-                  color:
-                      backgroundColor,
-
-                  borderRadius:
-                      BorderRadius.vertical(
-                    top:
-                        Radius.circular(
-                      30,
-                    ),
-                  ),
-                ),
-
-                child:
-                    Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
-
-                  children: [
-                    const SizedBox(
-                      height:
-                          13,
-                    ),
-
-                    Container(
-                      width:
-                          44,
-
-                      height:
-                          5,
-
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            lightPurple,
-
-                        borderRadius:
-                            BorderRadius.circular(
-                          20,
-                        ),
-                      ),
-                    ),
-
-                    Flexible(
-                      child:
-                          SingleChildScrollView(
-                        padding:
-                            const EdgeInsets.fromLTRB(
-                          22,
-                          20,
-                          22,
-                          10,
-                        ),
-
-                        child:
-                            Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-
-                          children: [
-                            Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-
-                              children: [
-                                const Expanded(
-                                  child:
-                                      Text(
-                                    'High cholesterol',
-
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          darkPurple,
-
-                                      fontSize:
-                                          25,
-
-                                      fontWeight:
-                                          FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-
-                                IconButton(
-                                  onPressed:
-                                      () {
-                                    Navigator.pop(
-                                      sheetContext,
-                                    );
-                                  },
-
-                                  icon:
-                                      const Icon(
-                                    Icons
-                                        .close_rounded,
-
-                                    color:
-                                        primaryPurple,
-
-                                    size:
-                                        31,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  5,
-                            ),
-
-                            const Text(
-                              'What are you currently managing?',
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    mediumPurple,
-
-                                fontSize:
-                                    18,
-
-                                fontWeight:
-                                    FontWeight.w700,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  4,
-                            ),
-
-                            const Text(
-                              'Select all that apply.',
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    mediumPurple,
-
-                                fontSize:
-                                    14,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  20,
-                            ),
-
-                            _CholesterolCheckboxOption(
-                              label:
-                                  cholesterolLdl,
-
-                              selected:
-                                  selected.contains(
-                                cholesterolLdl,
-                              ),
-
-                              onTap:
-                                  () {
-                                toggleSelection(
-                                  cholesterolLdl,
-                                );
-                              },
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  11,
-                            ),
-
-                            _CholesterolCheckboxOption(
-                              label:
-                                  cholesterolTriglycerides,
-
-                              selected:
-                                  selected.contains(
-                                cholesterolTriglycerides,
-                              ),
-
-                              onTap:
-                                  () {
-                                toggleSelection(
-                                  cholesterolTriglycerides,
-                                );
-                              },
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  11,
-                            ),
-
-                            _CholesterolCheckboxOption(
-                              label:
-                                  cholesterolNotSure,
-
-                              selected:
-                                  selected.contains(
-                                cholesterolNotSure,
-                              ),
-
-                              onTap:
-                                  () {
-                                toggleSelection(
-                                  cholesterolNotSure,
-                                );
-                              },
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  8,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(
-                        22,
-                        8,
-                        22,
-                        20,
-                      ),
-
-                      child:
-                          SizedBox(
-                        width:
-                            double.infinity,
-
-                        height:
-                            54,
-
-                        child:
-                            ElevatedButton(
-                          onPressed:
-                              selected.isEmpty
-                                  ? null
-                                  : () {
-                                      final String? result =
-                                          _cholesterolStoredValueFromSelections(
-                                        selected,
-                                      );
-
-                                      Navigator.pop(
-                                        sheetContext,
-                                        result,
-                                      );
-                                    },
-
-                          style:
-                              ElevatedButton.styleFrom(
-                            backgroundColor:
-                                primaryPurple,
-
-                            foregroundColor:
-                                Colors.white,
-
-                            disabledBackgroundColor:
-                                lightPurple,
-
-                            disabledForegroundColor:
-                                Colors.white,
-
-                            elevation:
-                                0,
-
-                            shape:
-                                RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                18,
-                              ),
-                            ),
-                          ),
-
-                          child:
-                              const Text(
-                            'Done',
-
-                            style:
-                                TextStyle(
-                              fontSize:
-                                  18,
-
-                              fontWeight:
-                                  FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   // =====================================================
@@ -1015,308 +244,6 @@ class _HealthConditionsSettingsState
   }
 
   // =====================================================
-  // SINGLE CHOICE SHEET
-  // =====================================================
-
-  Future<String?> _showChoiceSheet({
-    required String title,
-    required String question,
-    required List<String> options,
-    required String? currentValue,
-  }) {
-    String? selected =
-        currentValue;
-
-    return showModalBottomSheet<String>(
-      context:
-          context,
-
-      backgroundColor:
-          Colors.transparent,
-
-      isScrollControlled:
-          true,
-
-      builder: (
-        BuildContext sheetContext,
-      ) {
-        return StatefulBuilder(
-          builder: (
-            BuildContext context,
-            StateSetter setSheetState,
-          ) {
-            return SafeArea(
-              top:
-                  false,
-
-              child:
-                  Container(
-                constraints:
-                    BoxConstraints(
-                  maxHeight:
-                      MediaQuery.of(
-                            context,
-                          )
-                          .size
-                          .height *
-                      0.82,
-                ),
-
-                decoration:
-                    const BoxDecoration(
-                  color:
-                      backgroundColor,
-
-                  borderRadius:
-                      BorderRadius.vertical(
-                    top:
-                        Radius.circular(
-                      30,
-                    ),
-                  ),
-                ),
-
-                child:
-                    Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
-
-                  children: [
-                    const SizedBox(
-                      height:
-                          13,
-                    ),
-
-                    Container(
-                      width:
-                          44,
-
-                      height:
-                          5,
-
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            lightPurple,
-
-                        borderRadius:
-                            BorderRadius.circular(
-                          20,
-                        ),
-                      ),
-                    ),
-
-                    Flexible(
-                      child:
-                          SingleChildScrollView(
-                        padding:
-                            const EdgeInsets.fromLTRB(
-                          22,
-                          20,
-                          22,
-                          10,
-                        ),
-
-                        child:
-                            Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-
-                          children: [
-                            Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-
-                              children: [
-                                Expanded(
-                                  child:
-                                      Text(
-                                    title,
-
-                                    style:
-                                        const TextStyle(
-                                      color:
-                                          darkPurple,
-
-                                      fontSize:
-                                          25,
-
-                                      fontWeight:
-                                          FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-
-                                IconButton(
-                                  onPressed:
-                                      () {
-                                    Navigator.pop(
-                                      sheetContext,
-                                    );
-                                  },
-
-                                  icon:
-                                      const Icon(
-                                    Icons
-                                        .close_rounded,
-
-                                    color:
-                                        primaryPurple,
-
-                                    size:
-                                        31,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  6,
-                            ),
-
-                            Text(
-                              question,
-
-                              style:
-                                  const TextStyle(
-                                color:
-                                    mediumPurple,
-
-                                fontSize:
-                                    18,
-
-                                fontWeight:
-                                    FontWeight.w700,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height:
-                                  20,
-                            ),
-
-                            ...options.map(
-                              (
-                                option,
-                              ) {
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.only(
-                                    bottom:
-                                        11,
-                                  ),
-
-                                  child:
-                                      _BottomSheetOption(
-                                    label:
-                                        option,
-
-                                    selected:
-                                        selected ==
-                                            option,
-
-                                    onTap:
-                                        () {
-                                      setSheetState(
-                                        () {
-                                          selected =
-                                              option;
-                                        },
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(
-                        22,
-                        8,
-                        22,
-                        20,
-                      ),
-
-                      child:
-                          SizedBox(
-                        width:
-                            double.infinity,
-
-                        height:
-                            54,
-
-                        child:
-                            ElevatedButton(
-                          onPressed:
-                              selected ==
-                                      null
-                                  ? null
-                                  : () {
-                                      Navigator.pop(
-                                        sheetContext,
-                                        selected,
-                                      );
-                                    },
-
-                          style:
-                              ElevatedButton.styleFrom(
-                            backgroundColor:
-                                primaryPurple,
-
-                            foregroundColor:
-                                Colors.white,
-
-                            disabledBackgroundColor:
-                                lightPurple,
-
-                            disabledForegroundColor:
-                                Colors.white,
-
-                            elevation:
-                                0,
-
-                            shape:
-                                RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                18,
-                              ),
-                            ),
-                          ),
-
-                          child:
-                              const Text(
-                            'Done',
-
-                            style:
-                                TextStyle(
-                              fontSize:
-                                  18,
-
-                              fontWeight:
-                                  FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // =====================================================
   // WEIGHT MANAGEMENT SHEET
   // =====================================================
   //
@@ -1339,7 +266,6 @@ class _HealthConditionsSettingsState
         activity: _activityLevel,
         dateOfBirth: widget.data.dateOfBirth,
         providerEnergyKcal: _providerEnergyKcal,
-        energyChangeKcal: widget.data.energyChangeKcal,
       ),
     );
 
@@ -1363,32 +289,7 @@ class _HealthConditionsSettingsState
   // =====================================================
 
   bool _validate() {
-    if (_diabetes &&
-        (_diabetesType ==
-                null ||
-            _diabetesType!
-                .trim()
-                .isEmpty)) {
-      _showMessage(
-        'Please select your diabetes or prediabetes type.',
-      );
-
-      return false;
-    }
-
-    if (_highCholesterol &&
-        (_cholesterolType ==
-                null ||
-            _cholesterolType!
-                .trim()
-                .isEmpty)) {
-      _showMessage(
-        'Please complete your high cholesterol details.',
-      );
-
-      return false;
-    }
-
+    // Only weight management has details to complete.
     if (_weightManagement &&
         (_weightGoal ==
                 null ||
@@ -1430,13 +331,6 @@ class _HealthConditionsSettingsState
 
     widget.data.weightManagement =
         _weightManagement;
-
-    widget.data.diabetesType =
-        _diabetesType;
-
-    _writeCholesterolType(
-      _cholesterolType,
-    );
 
     widget.data.weightGoal =
         _weightGoal;
@@ -1483,12 +377,6 @@ class _HealthConditionsSettingsState
 
       _originalWeightManagement =
           _weightManagement;
-
-      _originalDiabetesType =
-          _diabetesType;
-
-      _originalCholesterolType =
-          _cholesterolType;
 
       _originalWeightGoal =
           _weightGoal;
@@ -1662,24 +550,16 @@ class _HealthConditionsSettingsState
 
               _ConditionCard(
                 title:
-                    'Diabetes or prediabetes',
+                    'Diabetes',
 
                 icon:
                     Icons.water_drop_outlined,
-
-                subtitle:
-                    _diabetesSubtitle,
 
                 selected:
                     _diabetes,
 
                 onTap:
                     _handleDiabetesTap,
-
-                onEditTap:
-                    _diabetes
-                        ? _editDiabetesType
-                        : null,
               ),
 
               const SizedBox(
@@ -1708,24 +588,16 @@ class _HealthConditionsSettingsState
 
               _ConditionCard(
                 title:
-                    'High cholesterol',
+                    'High LDL cholesterol',
 
                 icon:
                     Icons.favorite_border_rounded,
-
-                subtitle:
-                    _cholesterolSubtitle,
 
                 selected:
                     _highCholesterol,
 
                 onTap:
                     _handleCholesterolTap,
-
-                onEditTap:
-                    _highCholesterol
-                        ? _editCholesterolType
-                        : null,
               ),
 
               const SizedBox(
@@ -2136,366 +1008,6 @@ class _ConditionCard
 // SINGLE SELECT OPTION
 // =======================================================
 
-class _BottomSheetOption
-    extends StatelessWidget {
-  final String label;
-
-  final bool selected;
-
-  final VoidCallback onTap;
-
-  const _BottomSheetOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Material(
-      color:
-          Colors.transparent,
-
-      child:
-          InkWell(
-        onTap:
-            onTap,
-
-        borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
-
-        child:
-            AnimatedContainer(
-          duration:
-              const Duration(
-            milliseconds:
-                180,
-          ),
-
-          width:
-              double.infinity,
-
-          constraints:
-              const BoxConstraints(
-            minHeight:
-                70,
-          ),
-
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal:
-                18,
-
-            vertical:
-                15,
-          ),
-
-          decoration:
-              BoxDecoration(
-            color:
-                selected
-                    ? const Color(
-                        0xFFF8F4FF,
-                      )
-                    : Colors.white,
-
-            borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
-
-            border:
-                Border.all(
-              color:
-                  selected
-                      ? const Color(
-                          0xFF4B2E83,
-                        )
-                      : const Color(
-                          0xFFDCCFF0,
-                        ),
-
-              width:
-                  selected
-                      ? 1.6
-                      : 1.2,
-            ),
-          ),
-
-          child:
-              Row(
-            children: [
-              Expanded(
-                child:
-                    Text(
-                  label,
-
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-
-                    fontSize:
-                        17,
-
-                    fontWeight:
-                        FontWeight.w700,
-                  ),
-                ),
-              ),
-
-              const SizedBox(
-                width:
-                    12,
-              ),
-
-              Container(
-                width:
-                    38,
-
-                height:
-                    38,
-
-                decoration:
-                    BoxDecoration(
-                  shape:
-                      BoxShape.circle,
-
-                  color:
-                      selected
-                          ? const Color(
-                              0xFF5631AE,
-                            )
-                          : Colors.white,
-
-                  border:
-                      Border.all(
-                    color:
-                        const Color(
-                      0xFF4B2E83,
-                    ),
-
-                    width:
-                        2,
-                  ),
-                ),
-
-                child:
-                    selected
-                        ? const Icon(
-                            Icons
-                                .check_rounded,
-
-                            color:
-                                Colors.white,
-
-                            size:
-                                25,
-                          )
-                        : null,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// CHOLESTEROL CHECKBOX
-// =======================================================
-
-class _CholesterolCheckboxOption
-    extends StatelessWidget {
-  final String label;
-
-  final bool selected;
-
-  final VoidCallback onTap;
-
-  const _CholesterolCheckboxOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Material(
-      color:
-          Colors.transparent,
-
-      child:
-          InkWell(
-        onTap:
-            onTap,
-
-        borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
-
-        child:
-            AnimatedContainer(
-          duration:
-              const Duration(
-            milliseconds:
-                180,
-          ),
-
-          width:
-              double.infinity,
-
-          constraints:
-              const BoxConstraints(
-            minHeight:
-                70,
-          ),
-
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal:
-                18,
-
-            vertical:
-                15,
-          ),
-
-          decoration:
-              BoxDecoration(
-            color:
-                selected
-                    ? const Color(
-                        0xFFF8F4FF,
-                      )
-                    : Colors.white,
-
-            borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
-
-            border:
-                Border.all(
-              color:
-                  selected
-                      ? const Color(
-                          0xFF4B2E83,
-                        )
-                      : const Color(
-                          0xFFDCCFF0,
-                        ),
-
-              width:
-                  selected
-                      ? 1.6
-                      : 1.2,
-            ),
-          ),
-
-          child:
-              Row(
-            children: [
-              Expanded(
-                child:
-                    Text(
-                  label,
-
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(
-                      0xFF38138C,
-                    ),
-
-                    fontSize:
-                        17,
-
-                    fontWeight:
-                        FontWeight.w700,
-                  ),
-                ),
-              ),
-
-              const SizedBox(
-                width:
-                    12,
-              ),
-
-              AnimatedContainer(
-                duration:
-                    const Duration(
-                  milliseconds:
-                      180,
-                ),
-
-                width:
-                    32,
-
-                height:
-                    32,
-
-                decoration:
-                    BoxDecoration(
-                  color:
-                      selected
-                          ? const Color(
-                              0xFF5631AE,
-                            )
-                          : Colors.white,
-
-                  borderRadius:
-                      BorderRadius.circular(
-                    8,
-                  ),
-
-                  border:
-                      Border.all(
-                    color:
-                        const Color(
-                      0xFF4B2E83,
-                    ),
-
-                    width:
-                        2,
-                  ),
-                ),
-
-                child:
-                    selected
-                        ? const Icon(
-                            Icons
-                                .check_rounded,
-
-                            color:
-                                Colors.white,
-
-                            size:
-                                22,
-                          )
-                        : null,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================
-// WEIGHT MANAGEMENT SHEET
-// =======================================================
-
 class _WeightSheetResult {
   final String goal;
   final String sex;
@@ -2529,9 +1041,6 @@ class _WeightManagementSheet extends StatefulWidget {
   // Editable in the sheet (optional).
   final double? providerEnergyKcal;
 
-  // Chosen in Weight management settings (null = default).
-  final int? energyChangeKcal;
-
   const _WeightManagementSheet({
     required this.goal,
     required this.sex,
@@ -2540,7 +1049,6 @@ class _WeightManagementSheet extends StatefulWidget {
     required this.activity,
     required this.dateOfBirth,
     required this.providerEnergyKcal,
-    this.energyChangeKcal,
   });
 
   @override
@@ -2594,7 +1102,6 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
         height: _height,
         activityLevel: _activity,
         providerEnergyKcal: WeightPlanOptions.providerKcal(_providerController.text),
-        energyChangeKcal: widget.energyChangeKcal,
       ),
     );
   }

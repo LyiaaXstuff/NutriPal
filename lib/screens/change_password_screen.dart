@@ -227,7 +227,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           icon: const Icon(
                             Icons.arrow_back_ios_new_rounded,
                             color: darkPurple,
-                            size: 21,
+                            size: 24,
                           ),
                         ),
                       ),
@@ -235,7 +235,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         'Security',
                         style: TextStyle(
                           color: darkPurple,
-                          fontSize: 22,
+                          fontSize: 25,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -332,8 +332,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
                       _RuleChecklist(
                         rules: PasswordRules.check(_newController.text),
-                        differentFromCurrent: _newController.text.isEmpty ||
-                            _newController.text != _currentController.text,
                       ),
 
                       const SizedBox(height: 22),
@@ -531,19 +529,14 @@ class _FieldLabel extends StatelessWidget {
 
 class _RuleChecklist extends StatelessWidget {
   final List<PasswordRule> rules;
-  final bool differentFromCurrent;
 
   const _RuleChecklist({
     required this.rules,
-    required this.differentFromCurrent,
   });
 
   @override
   Widget build(BuildContext context) {
-    final List<PasswordRule> all = <PasswordRule>[
-      ...rules,
-      PasswordRule('Different from your current password', differentFromCurrent),
-    ];
+    final List<PasswordRule> all = rules;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

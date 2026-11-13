@@ -13,7 +13,7 @@ import 'saved_scan_navigation.dart';
 // =======================================================
 //
 // Products the user saved on purpose. They are never
-// removed by the 90-day history clean-up; only the user
+// removed by the 30-day history clean-up; only the user
 // removes them (heart button, with Undo).
 // =======================================================
 

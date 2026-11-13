@@ -33,7 +33,8 @@ test('recalculate_portion scales per 100 and gives shares', () => {
   const calcium = result.nutrients.find((n) => n.name === 'Calcium');
 
   assert.equal(carbs.amount, 10.9);
-  assert.equal(carbs.share_of_limit_percent, 12);
+  // 10.86 g of the 45 g meal budget.
+  assert.equal(carbs.share_of_limit_percent, 24);
   assert.equal(sodium.amount, 80.2);
   assert.equal(sodium.share_of_limit_percent, 4);
   assert.equal(calcium.share_of_limit_percent, undefined);
@@ -41,31 +42,163 @@ test('recalculate_portion scales per 100 and gives shares', () => {
 });
 
 // Same answers as the app's own tests
-// (nutrition_analysis_service_test.dart, sample user).
-test('recalculate_portion rates like the app: Homesoy 1 L Moderate, 1.5 L High', () => {
-  const oneLitre = recalculatePortion(CONTEXT, { amount: 1000, unit: 'ml' }).rating;
+// (nutrition_analysis_service_test.dart, sample user
+// with diabetes: carbohydrate against a 45 g meal budget
+// with the meal bands 25% / 50%).
+test('recalculate_portion rates like the app: Homesoy 236 ml Low, 500 ml Moderate, 1 L High', () => {
+  assert.equal(recalculatePortion(CONTEXT, { amount: 236, unit: 'ml' }).rating.overall, 'Low');
 
-  assert.equal(oneLitre.overall, 'Moderate');
-  assert.deepEqual(oneLitre.areas, [
-    // Carbohydrate 23 g of 87.2 g (26%), sugars 7 g of 52.3 g (13%).
+  const half = recalculatePortion(CONTEXT, { amount: 500, unit: 'ml' }).rating;
+
+  // Carbohydrate 11.5 g of 45 g (26%), sugars 3.5 g of 52.3 g (7%).
+  assert.deepEqual(half.areas, [
     { area: 'Diabetes', level: 'Moderate', decided_by: 'Carbohydrate' },
-    // Sodium 170 mg of 2,000 mg (8.5%), traffic light Low.
+    // Sodium 85 mg of 2,000 mg (4%), traffic light Low.
     { area: 'Blood pressure', level: 'Low', decided_by: 'Sodium' },
   ]);
 
-  const bigger = recalculatePortion(CONTEXT, { amount: 1500, unit: 'ml' }).rating;
-  assert.equal(bigger.overall, 'High');
-  assert.equal(bigger.areas[0].decided_by, 'Carbohydrate');
+  // 23 g of 45 g (51%).
+  const oneLitre = recalculatePortion(CONTEXT, { amount: 1000, unit: 'ml' }).rating;
+  assert.equal(oneLitre.overall, 'High');
+  assert.equal(oneLitre.areas[0].decided_by, 'Carbohydrate');
+});
 
-  assert.equal(recalculatePortion(CONTEXT, { amount: 236, unit: 'ml' }).rating.overall, 'Low');
+test('each nutrient uses the target and bands the app sent', () => {
+  // With daily bands (10% / 30%) 11.5 g of 45 g would be
+  // Moderate too, but 5.4 g (12%) would be Moderate, not Low.
+  const daily = {
+    ...CONTEXT,
+    rating: {
+      ...CONTEXT.rating,
+      nutrients: CONTEXT.rating.nutrients.map((n) =>
+        n.name === 'Carbohydrate' ? { ...n, low_share_max: 0.1, moderate_share_max: 0.3 } : n,
+      ),
+    },
+  };
+
+  assert.equal(rateAmount(daily, 236).levels.Carbohydrate, 'Moderate');
+  assert.equal(rateAmount(CONTEXT, 236).levels.Carbohydrate, 'Low');
+});
+
+test('a nutrient the app does not rate (rated: false) gets no level', () => {
+  const unrated = {
+    ...CONTEXT,
+    targets: { ...CONTEXT.targets, carbs_per_meal_g: null },
+    rating: {
+      ...CONTEXT.rating,
+      nutrients: CONTEXT.rating.nutrients.map((n) => {
+        if (n.name !== 'Carbohydrate') return n;
+        const { target: _t, ...rest } = n;
+        return { ...rest, rated: false };
+      }),
+      areas: [
+        { area: 'Diabetes', nutrients: ['Total Sugars'], key_any_of: ['Total Sugars'] },
+        { area: 'Blood pressure', nutrients: ['Sodium'], key_any_of: ['Sodium'] },
+      ],
+    },
+  };
+
+  const r = recalculatePortion(unrated, { amount: 1000, unit: 'ml' });
+
+  assert.equal(r.rating.levels, undefined);
+  assert.equal(rateAmount(unrated, 1000).levels.Carbohydrate, undefined);
+  assert.deepEqual(r.rating.areas[0], { area: 'Diabetes', level: 'Moderate', decided_by: 'Total Sugars' });
+  assert.equal(r.nutrients.find((n) => n.name === 'Carbohydrate').share_of_limit_percent, undefined);
 });
 
 test('the per-100 traffic light is never lowered by a small amount', () => {
   // Total fat is Moderate per 100 ml, so even 10 ml
   // (0.16 g, under 1% of 69.7 g) stays Moderate.
-  const ctx = { ...CONTEXT, targets: { ...CONTEXT.targets, total_fat_g: 69.7 } };
+  const ctx = {
+    ...CONTEXT,
+    targets: { ...CONTEXT.targets, total_fat_g: 69.7 },
+    rating: {
+      ...CONTEXT.rating,
+      areas: [
+        ...CONTEXT.rating.areas,
+        { area: 'Cholesterol', nutrients: ['Saturated Fat', 'Trans Fat', 'Total Fat'], key_any_of: ['Saturated Fat', 'Total Fat'] },
+      ],
+    },
+  };
 
   assert.equal(rateAmount(ctx, 10).levels['Total Fat'], 'Moderate');
+});
+
+test('nutrients no area rates get no level', () => {
+  // Total fat is not used by Diabetes or Blood pressure.
+  assert.equal(rateAmount(CONTEXT, 10).levels['Total Fat'], undefined);
+});
+
+// High LDL cholesterol (rule R-LDL-01 v2): key nutrients
+// with no level, no overall result.
+const LDL = {
+  ...CONTEXT,
+  user: { health_areas: ['Cholesterol'] },
+  rating: {
+    ...CONTEXT.rating,
+    areas: [
+      {
+        area: 'Cholesterol',
+        nutrients: ['Saturated Fat', 'Trans Fat', 'Total Fat'],
+        key_any_of: [],
+        combine: 'findings',
+      },
+    ],
+  },
+};
+
+test('LDL-01 LDL cholesterol: no level for any nutrient and no overall verdict', () => {
+  const r = rateAmount(LDL, 236);
+
+  assert.equal(r.levels['Saturated Fat'], undefined);
+  assert.equal(r.levels['Total Fat'], undefined);
+  assert.equal(r.areas[0].level, 'key nutrients, no level');
+  assert.equal(r.areas[0].decided_by, undefined);
+  assert.match(r.overall, /^review key nutrients/);
+
+  // A bigger portion never produces a level either.
+  assert.match(rateAmount(LDL, 1000).overall, /^review key nutrients/);
+});
+
+test('LDL-02 LDL cholesterol card next to other areas: no level, no overall effect', () => {
+  const both = {
+    ...CONTEXT,
+    rating: {
+      ...CONTEXT.rating,
+      areas: [
+        ...CONTEXT.rating.areas,
+        { area: 'Cholesterol', nutrients: ['Saturated Fat', 'Trans Fat', 'Total Fat'], key_any_of: [], combine: 'findings' },
+      ],
+    },
+  };
+
+  const r = rateAmount(both, 1000);
+  const ldl = r.areas.find((a) => a.area === 'Cholesterol');
+
+  assert.equal(ldl.level, 'key nutrients, no level');
+  assert.equal(r.levels['Saturated Fat'], undefined);
+  assert.equal(r.levels['Total Fat'], undefined);
+  // The other areas still decide the overall result.
+  assert.ok(['Low', 'Moderate', 'High'].includes(r.overall) || /^review/.test(r.overall));
+});
+
+test('ALL-01 every area as findings: no level anywhere, no overall result', () => {
+  const all = {
+    ...CONTEXT,
+    rating: {
+      ...CONTEXT.rating,
+      areas: [
+        { area: 'Diabetes', nutrients: ['Carbohydrate', 'Total Sugars'], key_any_of: [], combine: 'findings' },
+        { area: 'Blood pressure', nutrients: ['Sodium'], key_any_of: [], combine: 'findings' },
+      ],
+    },
+  };
+
+  const r = rateAmount(all, 1500);
+
+  assert.ok(r.areas.every((a) => a.level === 'key nutrients, no level'));
+  assert.deepEqual(r.levels, {});
+  assert.equal(r.overall, 'review key nutrients (no health area has a level)');
 });
 
 test('fibre is a benefit and never gets a level', () => {

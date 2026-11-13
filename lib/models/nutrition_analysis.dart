@@ -26,6 +26,11 @@ extension NutrientLevelText on NutrientLevel {
       index >= other.index ? this : other;
 }
 
+// cholesterol is the high LDL cholesterol card. Its title
+// "Cholesterol" is the area name the Cloud Functions and
+// the knowledge base use; the card says "High LDL
+// cholesterol". Diabetes is one card for every user who
+// selects it (no types).
 enum HealthArea { diabetes, bloodPressure, cholesterol, weight }
 
 extension HealthAreaText on HealthArea {
@@ -37,7 +42,7 @@ extension HealthAreaText on HealthArea {
       };
 
   String get focus => switch (this) {
-        HealthArea.diabetes => 'Carbohydrate and sugar',
+        HealthArea.diabetes => 'Carbohydrate and sugars',
         HealthArea.bloodPressure => 'Sodium',
         HealthArea.cholesterol => 'Saturated and trans fat',
         HealthArea.weight => 'Energy, fat and sugar',
@@ -49,6 +54,16 @@ extension HealthAreaText on HealthArea {
         HealthArea.cholesterol => 'CH',
         HealthArea.weight => 'WT',
       };
+}
+
+/// Where the carbohydrate meal budget comes from.
+enum CarbBudgetBasis {
+  // The user's own Carbohydrate goal (Nutrition Targets).
+  userGoal,
+  // Carb-counting guide by sex (users with diabetes).
+  carbCounting,
+  // 50 % of energy over 3 meals (no diabetes).
+  energyShare,
 }
 
 /// Food or drink decides which Layer 1 table is used.
@@ -243,8 +258,20 @@ class DailyTargets {
 
   final double fibreG;
 
-  // Targets that came from the user's doctor or dietitian.
+  // Where carbsPerMealG comes from.
+  final CarbBudgetBasis carbsBasis;
+
+  // The user's protein goal (a benefit, not a limit), or
+  // null when not set.
+  final double? proteinG;
+
+  // The daily energy figure from the user's doctor or
+  // dietitian ('Energy'), when set.
   final Set<String> setByProvider;
+
+  // Nutrients whose target the user entered in Nutrition
+  // Targets ('Carbohydrate', 'Sodium', ...).
+  final Set<String> setByUser;
 
   const DailyTargets({
     required this.energyKcal,
@@ -260,7 +287,10 @@ class DailyTargets {
     required this.carbsPerDayG,
     required this.carbsPerMealG,
     required this.fibreG,
+    this.carbsBasis = CarbBudgetBasis.energyShare,
+    this.proteinG,
     this.setByProvider = const <String>{},
+    this.setByUser = const <String>{},
   });
 }
 
@@ -297,8 +327,16 @@ class NutrientAssessment {
   // fibre, which is a benefit instead.
   final NutrientLevel? level;
 
-  // Fibre: a share above 10 % is good, not a warning.
+  // Fibre and protein: a share above 10 % is good, not a
+  // warning.
   final bool isBenefit;
+
+  // Share bands for this nutrient: up to [lowShareMax] is
+  // Low, up to [highShareMax] Moderate, above is High.
+  // Daily limits use 10 % / 30 %; the carbohydrate meal
+  // budget uses 25 % / 50 % (one product is part of a meal).
+  final double lowShareMax;
+  final double highShareMax;
 
   const NutrientAssessment({
     required this.name,
@@ -311,7 +349,49 @@ class NutrientAssessment {
     this.targetLabel,
     this.level,
     this.isBenefit = false,
+    this.lowShareMax = 0.10,
+    this.highShareMax = 0.30,
   });
+
+  /// The same nutrient with another final level (null on
+  /// the health-area cards, which show findings only).
+  NutrientAssessment withLevel(NutrientLevel? newLevel) => NutrientAssessment(
+        name: name,
+        amount: amount,
+        unit: unit,
+        per100: per100,
+        productLevel: productLevel,
+        share: share,
+        target: target,
+        targetLabel: targetLabel,
+        level: newLevel,
+        isBenefit: isBenefit,
+        lowShareMax: lowShareMax,
+        highShareMax: highShareMax,
+      );
+
+  /// The same nutrient with no level, share or target: amount
+  /// and product-level traffic light only (diabetes cards).
+  NutrientAssessment withoutTarget() => NutrientAssessment(
+        name: name,
+        amount: amount,
+        unit: unit,
+        per100: per100,
+        productLevel: productLevel,
+        isBenefit: isBenefit,
+      );
+
+  /// Layer 3 band of [share] alone, or null without a
+  /// target.
+  NutrientLevel? get bandLevel {
+    final double? s = share;
+
+    if (s == null) return null;
+    if (s <= lowShareMax) return NutrientLevel.low;
+    if (s <= highShareMax) return NutrientLevel.moderate;
+
+    return NutrientLevel.high;
+  }
 }
 
 // =======================================================
@@ -336,6 +416,23 @@ class AreaAssessment {
   // Nutrients this area uses that the label does not show.
   final List<String> missing;
 
+  // Nutrients that can decide this area, in rule order.
+  final List<String> ruleNutrients;
+
+  // At least one of these must be on the label to judge.
+  final List<String> keyNutrients;
+
+  // Shown first as amounts only, with no share of a
+  // target (diabetes: carbohydrate and total sugars).
+  final List<NutrientAssessment> watch;
+
+  // True for every health-area card: they show key
+  // nutrients (amount, share of the daily reference where
+  // there is one, product-level traffic light) with no
+  // level, so [level] is null and no area feeds an overall
+  // result.
+  final bool partial;
+
   const AreaAssessment({
     required this.area,
     required this.level,
@@ -343,6 +440,10 @@ class AreaAssessment {
     required this.nutrients,
     required this.benefit,
     required this.missing,
+    this.ruleNutrients = const <String>[],
+    this.keyNutrients = const <String>[],
+    this.watch = const <NutrientAssessment>[],
+    this.partial = false,
   });
 
   bool get hasEnoughInformation => level != null;
@@ -399,11 +500,17 @@ class NutritionAnalysis {
 
   final List<AreaAssessment> areas;
 
-  // Worst level across the areas shown; null if none of
-  // them had enough information.
+  // Worst level across the areas that have a level. Every
+  // health area shows findings without a level, so this is
+  // null.
   final NutrientLevel? overall;
 
   final List<FactRow> facts;
+
+  /// True when an area shows key nutrients without a level
+  /// (every card), so the summary says "review key
+  /// nutrients" instead of "fits your goals".
+  bool get needsDetails => areas.any((AreaAssessment a) => a.partial);
 
   const NutritionAnalysis({
     required this.portion,

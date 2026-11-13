@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../models/nutrition_targets.dart';
 import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
 import '../services/profile_photo_service.dart';
@@ -11,6 +12,7 @@ import 'change_password_screen.dart';
 import 'health_conditions_settings.dart';
 import 'history_screen.dart';
 import 'login_screen.dart';
+import 'nutrition_targets_screen.dart';
 import 'user_account.dart';
 import 'weight_management_settings.dart';
 
@@ -90,7 +92,7 @@ class _ProfileScreenState
 
     if (widget.data.highCholesterol) {
       conditions.add(
-        'High cholesterol',
+        'High LDL cholesterol',
       );
     }
 
@@ -112,6 +114,33 @@ class _ProfileScreenState
   // =====================================================
   // WEIGHT MANAGEMENT SUBTITLE
   // =====================================================
+
+  /// "Not set" or "Carbohydrate goal, Sodium limit".
+  String get _nutritionTargetsSubtitle {
+    final NutritionTargets t = widget.data.nutritionTargets;
+
+    if (t.isEmpty) return "Not set · using NutriPal's guide";
+
+    return <String>[
+      for (final NutritionTargetField f in NutritionTargets.fields)
+        if (t.valueOf(f.key) != null) f.label,
+    ].join(', ');
+  }
+
+  Future<void> _openNutritionTargets() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NutritionTargetsScreen(data: widget.data),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
+  }
 
   String get _weightManagementSubtitle {
     if (!widget.data.weightManagement) {
@@ -184,7 +213,7 @@ class _ProfileScreenState
   // =====================================================
 
   // =====================================================
-  // SCAN HISTORY (90 days; not a bottom tab)
+  // SCAN HISTORY (30 days; not a bottom tab)
   // =====================================================
 
   Future<void> _openScanHistory() async {
@@ -546,7 +575,7 @@ class _ProfileScreenState
     final List<(String, IconData)> areas = <(String, IconData)>[
       if (d.diabetes) ('Diabetes', Icons.water_drop_outlined),
       if (d.hypertension) ('Hypertension', Icons.monitor_heart_outlined),
-      if (d.highCholesterol) ('High cholesterol', Icons.favorite_border_rounded),
+      if (d.highCholesterol) ('High LDL cholesterol', Icons.favorite_border_rounded),
       if (d.weightManagement) ('Weight management', weightIcon),
     ];
 
@@ -994,7 +1023,7 @@ class _ProfileScreenState
                     title:
                         'Scan History',
                     subtitle:
-                        'Scans from the last 90 days',
+                        'Scans from the last 30 days',
                     onTap:
                         _openScanHistory,
                   ),
@@ -1054,6 +1083,23 @@ class _ProfileScreenState
                         _weightManagementSubtitle,
                     onTap:
                         _handleWeightManagementTap,
+                  ),
+
+                  const Divider(
+                    height: 1,
+                    color:
+                        lightPurple,
+                  ),
+
+                  _ProfileMenuTile(
+                    icon:
+                        Icons.tune_rounded,
+                    title:
+                        'Nutrition Targets',
+                    subtitle:
+                        _nutritionTargetsSubtitle,
+                    onTap:
+                        _openNutritionTargets,
                   ),
                 ],
               ),

@@ -147,7 +147,7 @@ function userAreas(context) {
     ? context.user.health_areas
     : [];
 
-  return list.filter((a) => AREAS.includes(a));
+  return [...new Set(list)].filter((a) => AREAS.includes(a));
 }
 
 /**

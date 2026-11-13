@@ -2,11 +2,11 @@
 // HISTORY RETENTION POLICY
 // =======================================================
 //
-//   History    = temporary: a scan is kept for 90 days
+//   History    = temporary: a scan is kept for 30 days
 //                from its latest scannedAt.
 //   Favourites = persistent: never removed automatically,
 //                only when the user un-favourites them
-//                (the 90 days then count from scannedAt).
+//                (the 30 days then count from scannedAt).
 //
 // Pure rules, unit tested. The same rule is meant for the
 // future backend clean-up (see ScanHistoryRepository).
@@ -16,7 +16,7 @@ import '../models/scan_record.dart';
 
 class HistoryRetentionPolicy {
   const HistoryRetentionPolicy({
-    this.retention = const Duration(days: 90),
+    this.retention = const Duration(days: 30),
     this.maxHistoryRecords = 200,
   });
 

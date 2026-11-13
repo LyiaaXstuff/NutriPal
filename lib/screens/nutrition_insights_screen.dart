@@ -25,7 +25,7 @@ import 'scan_flow.dart';
 // NutritionAnalysisService (Layers 1-3); the AI only
 // explains (Ask NutriPal).
 //
-// A fresh scan is saved to history (90 days) when this
+// A fresh scan is saved to history (30 days) when this
 // screen opens; the heart keeps it in Favourites. Saved
 // scans reopen here too (savedRecordId) without being
 // recorded again.
@@ -249,28 +249,6 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
     return s == 1 ? 'One serving' : '${NutritionAnalysisService.formatAmount(s, 'g')} servings';
   }
 
-  ExplainText _explain(NutritionAnalysis a) {
-    final String amount = a.portionAmount == null || a.portionUnit == null
-        ? ''
-        : '${NutritionAnalysisService.formatAmount(a.portionAmount!, a.portionUnit!)} ${a.portionUnit}';
-
-    final String? household = a.portionServings == null
-        ? null
-        : NutritionAnalysisService.householdText(_data, a.portionServings!);
-
-    final String portion = household != null && amount.isNotEmpty
-        ? 'your $household ($amount)'
-        : (amount.isNotEmpty ? 'your $amount' : _portionText(a).toLowerCase());
-
-    return InsightTextService.explain(
-      a,
-      data: _data,
-      profile: _profile,
-      portionText: portion,
-      weightGoal: _profile.weightGoal,
-    );
-  }
-
   // ---- household measure counter --------------------
 
   static bool _isWholeCount(HouseholdMeasure m, double servings) {
@@ -312,9 +290,14 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
     final List<String> parts = <String>[];
 
     if (_data.servingSizeAmount != null && _data.servingSizeUnit != null) {
+      // The label's own everyday measure, only when it
+      // prints one: "30 g (3 biscuits) per serving".
+      final HouseholdMeasure? m = NutritionAnalysisService.householdMeasure(_data);
+      final String measureText = m == null ? '' : ' (${m.label(m.perServing)})';
+
       parts.add(
         '${NutritionAnalysisService.formatAmount(_data.servingSizeAmount!, _data.servingSizeUnit!)} '
-        '${_data.servingSizeUnit} per serving',
+        '${_data.servingSizeUnit}$measureText per serving',
       );
     }
 
@@ -750,7 +733,11 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
             const SizedBox(height: 16),
 
             // ---- overall verdict -------------------------
-            _OverallCard(level: a.overall, text: overall),
+            _OverallCard(
+              // "See your details" uses the neutral colour.
+              level: a.needsDetails && a.overall == NutrientLevel.low ? null : a.overall,
+              text: overall,
+            ),
             const SizedBox(height: 16),
 
             // ---- portion picker --------------------------
@@ -829,11 +816,14 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
                 text: InsightTextService.plainArea(area, a, weightGoal: _profile.weightGoal),
                 weightGoal: _profile.weightGoal,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 22),
             ],
             const SizedBox(height: 4),
 
-            // ---- NutriPal explains -----------------------
+            // ---- Ask NutriPal -----------------------------
+            // The health-area cards above already give the
+            // amounts and what to compare, so this card only
+            // opens questions (no repeated numbers).
             NpCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -842,14 +832,24 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
                     children: [
                       Image.asset('assets/images/NutriPal Mascot3.png', width: 52, height: 52),
                       const SizedBox(width: 10),
-                      const Text(
-                        'NutriPal explains',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: NpColors.ink),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Questions about this product?',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: NpColors.ink),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Ask NutriPal about portions, swaps or what a nutrient means.',
+                              style: TextStyle(fontSize: 13, height: 1.35, color: NpColors.muted),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  _ExplainBody(text: _explain(a)),
                   const SizedBox(height: 14),
                   // Chips sit closer together: no extra tap
                   // padding around each one.
@@ -889,27 +889,6 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // ---- choosing similar products ---------------
-            if (InsightTextService.tips(a).isNotEmpty) ...[
-              NpCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Choosing similar products',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: NpColors.ink),
-                    ),
-                    const SizedBox(height: 10),
-                    for (final ProductTip tip in InsightTextService.tips(a)) ...[
-                      _TipRow(tip: tip),
-                      const SizedBox(height: 10),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
 
             // ---- nutrition facts -------------------------
             _FactsCard(
@@ -1343,12 +1322,20 @@ class _AreaCard extends StatelessWidget {
   // 'lose' | 'maintain' | 'gain' from the profile.
   final String? weightGoal;
 
-  const _AreaCard({required this.area, required this.text, this.weightGoal});
+  const _AreaCard({
+    required this.area,
+    required this.text,
+    this.weightGoal,
+  });
 
   /// Weight shows the user's own goal; other areas their
   /// usual title.
-  String get _title =>
-      area.area == HealthArea.weight ? 'Weight management' : area.area.title;
+  String get _title => switch (area.area) {
+        HealthArea.weight => 'Weight management',
+        HealthArea.bloodPressure => 'Hypertension',
+        HealthArea.cholesterol => 'High LDL cholesterol',
+        _ => area.area.title,
+      };
 
   String get _subtitle {
     if (area.area != HealthArea.weight) return area.area.focus;
@@ -1374,63 +1361,94 @@ class _AreaCard extends StatelessWidget {
       HealthArea.weight => Icons.monitor_weight_outlined,
     };
 
-    final (Color iconBg, Color iconInk) = switch (area.area) {
-      HealthArea.diabetes => (const Color(0xFFE8F7F6), const Color(0xFF0B5E5A)),
-      HealthArea.bloodPressure => (const Color(0xFFEFE7FA), NpColors.purple),
-      HealthArea.cholesterol => (const Color(0xFFFFF1D6), const Color(0xFF8A5200)),
-      HealthArea.weight => (const Color(0xFFFDE8F1), const Color(0xFF9C1F5C)),
+    final Color iconBg = switch (area.area) {
+      HealthArea.diabetes => const Color(0xFFE8F7F6),
+      HealthArea.bloodPressure => const Color(0xFFEFE7FA),
+      HealthArea.cholesterol => const Color(0xFFFFF1D6),
+      HealthArea.weight => const Color(0xFFFDE8F1),
     };
 
-    return NpCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(14)),
-                child: Icon(icon, size: 24, color: iconInk),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _title,
-                      style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: NpColors.ink),
-                    ),
-                    Text(
-                      _subtitle,
-                      style: const TextStyle(fontSize: 12.5, color: NpColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-              NpPill.level(area.level),
-            ],
+    // One strong colour per area so the cards read as
+    // separate blocks.
+    final Color accent = switch (area.area) {
+      HealthArea.diabetes => const Color(0xFF0E8F89),
+      HealthArea.bloodPressure => NpColors.purple,
+      HealthArea.cholesterol => const Color(0xFFC77700),
+      HealthArea.weight => const Color(0xFFC2336F),
+    };
+
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(iconBg.withValues(alpha: 0.45), Colors.white),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: accent, width: 1.6),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
-          // ---- plain answer first ----------------------
-          const SizedBox(height: 14),
-          Text(
-            text.headline,
-            style: const TextStyle(
-              fontSize: 18.5,
-              height: 1.25,
-              fontWeight: FontWeight.w900,
-              color: NpColors.ink,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ---- coloured header band, one colour per area
+          Container(
+            color: accent,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(icon, size: 25, color: accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _title,
+                        style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                      Text(
+                        _subtitle,
+                        style: const TextStyle(fontSize: 12.5, color: Color(0xE6FFFFFF)),
+                      ),
+                    ],
+                  ),
+                ),
+                // Every card: key nutrients with no Low |
+                // Moderate | High result.
+                if (area.partial)
+                  NpPill(text: 'Key nutrients', background: Colors.white, ink: accent)
+                else
+                  NpPill.level(area.level),
+              ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+          // ---- plain answer first ----------------------
           if (text.marker != null) ...[
             const SizedBox(height: 14),
             _LevelMeter(position: text.marker!),
           ],
           for (final PlainFact fact in text.facts) ...[
-            const SizedBox(height: 12),
-            _FactRow(fact: fact),
+            const SizedBox(height: 14),
+            _FactRow(fact: fact, accent: accent, tint: iconBg),
           ],
           if (text.tip != null) ...[
             const SizedBox(height: 14),
@@ -1438,7 +1456,7 @@ class _AreaCard extends StatelessWidget {
               icon: Icons.lightbulb_outline_rounded,
               lead: 'Tip: ',
               text: text.tip!,
-              background: NpColors.lilac,
+              background: Colors.white,
               ink: NpColors.bodyInk,
             ),
           ],
@@ -1446,20 +1464,119 @@ class _AreaCard extends StatelessWidget {
             const SizedBox(height: 10),
             _NoteBox(
               icon: Icons.check_circle_outline_rounded,
-              lead: 'Good news: ',
+              lead: 'Bonus: ',
               text: text.goodNews!,
               background: NpColors.okBg,
               ink: NpColors.okInk,
             ),
           ],
-          if (text.note != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              text.note!,
-              style: const TextStyle(fontSize: 12.5, height: 1.4, color: NpColors.muted),
+          if (text.evidence != null) ...[
+            const SizedBox(height: 12),
+            _EvidenceBlock(evidence: text.evidence!, accent: accent, tint: iconBg),
+          ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Why it matters and what to look for. Tap to open or
+/// close.
+class _EvidenceBlock extends StatefulWidget {
+  final PlainEvidence evidence;
+  final Color accent;
+  final Color tint;
+
+  const _EvidenceBlock({
+    required this.evidence,
+    required this.accent,
+    required this.tint,
+  });
+
+  @override
+  State<_EvidenceBlock> createState() => _EvidenceBlockState();
+}
+
+class _EvidenceBlockState extends State<_EvidenceBlock> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const TextStyle body = TextStyle(fontSize: 13.5, height: 1.4, color: NpColors.bodyInk);
+    const TextStyle lead = TextStyle(fontWeight: FontWeight.w800, color: NpColors.ink);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: widget.accent.withValues(alpha: 0.4)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _open = !_open),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
+                child: Row(
+                  children: [
+                    Icon(Icons.menu_book_outlined, size: 18, color: widget.accent),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Why it matters and what to look for',
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: NpColors.ink),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _open ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(Icons.keyboard_arrow_down_rounded, color: widget.accent),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: _open
+                  ? Container(
+                      color: widget.tint.withValues(alpha: 0.35),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text.rich(
+                            TextSpan(children: [
+                              const TextSpan(text: 'Why it matters: ', style: lead),
+                              TextSpan(text: widget.evidence.why),
+                            ]),
+                            style: body,
+                          ),
+                          const SizedBox(height: 8),
+                          Text.rich(
+                            TextSpan(children: [
+                              const TextSpan(text: 'What to look for: ', style: lead),
+                              TextSpan(text: widget.evidence.lookFor),
+                            ]),
+                            style: body,
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1556,8 +1673,10 @@ class _LevelMeter extends StatelessWidget {
 
 class _FactRow extends StatelessWidget {
   final PlainFact fact;
+  final Color accent;
+  final Color tint;
 
-  const _FactRow({required this.fact});
+  const _FactRow({required this.fact, required this.accent, required this.tint});
 
   static IconData _icon(String nutrient) => switch (nutrient) {
         'Carbohydrate' => Icons.rice_bowl_outlined,
@@ -1569,37 +1688,53 @@ class _FactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: NpColors.lilac,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(_icon(fact.nutrient), size: 18, color: NpColors.purple),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${fact.label} ${fact.amount}',
-                    style: const TextStyle(fontWeight: FontWeight.w800, color: NpColors.ink),
-                  ),
-                  TextSpan(text: ' · ${fact.meaning}'),
-                ],
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 5, color: accent),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+                child: Icon(_icon(fact.nutrient), size: 19, color: accent),
               ),
-              style: const TextStyle(fontSize: 14, height: 1.35, color: NpColors.bodyInk),
             ),
-          ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fact.label,
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: NpColors.muted),
+                    ),
+                    Text(
+                      fact.amount,
+                      style: const TextStyle(fontSize: 22, height: 1.15, fontWeight: FontWeight.w900, color: NpColors.ink),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      fact.meaning,
+                      style: const TextStyle(fontSize: 13.5, height: 1.35, color: NpColors.bodyInk),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -1650,43 +1785,6 @@ class _NoteBox extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TipRow extends StatelessWidget {
-  final ProductTip tip;
-
-  const _TipRow({required this.tip});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: tip.ok ? const Color(0xFFDDF4E7) : NpColors.warnBg,
-            shape: BoxShape.circle,
-          ),
-          child: tip.ok
-              ? const Icon(Icons.check_rounded, size: 15, color: Color(0xFF155E39))
-              : const Text(
-                  '!',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: NpColors.warnInk),
-                ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            tip.text,
-            style: const TextStyle(fontSize: 13.5, height: 1.45, color: NpColors.bodyInk),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1999,116 +2097,6 @@ class _PortionGrid extends StatelessWidget {
           if (r > 0) const SizedBox(height: _gap),
           rows[r],
         ],
-      ],
-    );
-  }
-}
-
-// =======================================================
-// NUTRIPAL EXPLAINS BODY
-// =======================================================
-//
-// The portion at a glance: what is in it, its share of the
-// day's energy, and one worked-out tip (what twice or
-// half the portion would do). Good news and what to watch are on the health area
-// cards above, so they are not repeated here.
-
-class _ExplainBody extends StatelessWidget {
-  final ExplainText text;
-
-  const _ExplainBody({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          text.portion,
-          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: NpColors.ink),
-        ),
-        if (text.amounts.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final String v in text.amounts)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: NpColors.softBorder),
-                  ),
-                  child: Text(
-                    v,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: NpColors.bodyInk),
-                  ),
-                ),
-            ],
-          ),
-        ],
-        if (text.energy != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            text.energy!,
-            style: const TextStyle(fontSize: 13.5, height: 1.4, color: NpColors.muted),
-          ),
-        ],
-        const SizedBox(height: 12),
-        _ExplainLine(
-          icon: Icons.lightbulb_outline_rounded,
-          background: NpColors.lilac,
-          ink: NpColors.purple,
-          text: text.tip,
-        ),
-        if (text.note != null) ...[
-          const SizedBox(height: 10),
-          Text(
-            text.note!,
-            style: const TextStyle(fontSize: 12.5, height: 1.4, color: NpColors.muted),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _ExplainLine extends StatelessWidget {
-  final IconData icon;
-  final Color background;
-  final Color ink;
-  final String text;
-
-  const _ExplainLine({
-    required this.icon,
-    required this.background,
-    required this.ink,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(color: background, shape: BoxShape.circle),
-          child: Icon(icon, size: 16, color: ink),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 14, height: 1.4, color: NpColors.bodyInk),
-            ),
-          ),
-        ),
       ],
     );
   }

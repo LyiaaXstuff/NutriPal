@@ -74,8 +74,7 @@ class ComparedNutrient {
   final double? first;
   final double? second;
 
-  // Per 100: FSA colour. Per serving: the combined level
-  // shown on the insights screen.
+  // FSA traffic light (product level) on either basis.
   final NutrientLevel? firstLevel;
   final NutrientLevel? secondLevel;
 
@@ -250,7 +249,12 @@ class CompareService {
         NutritionAnalysisService.analyse(data: second, profile: profile);
 
     final List<HealthArea> areas = profile.areasToShow;
-    final Map<String, NutrientDirection> directions = _directionsFor(areas);
+
+    List<String> namesFor(HealthArea area) => AnalysisRules.nutrientsFor(area);
+
+    List<String> keysFor(HealthArea area) => AnalysisRules.keyNutrientsFor(area);
+
+    final Map<String, NutrientDirection> directions = _directionsFor(areas, namesFor);
 
     final String basisText = basisLabel(basis, a.form, b.form);
 
@@ -293,7 +297,15 @@ class CompareService {
 
     final List<AreaComparison> areaResults = <AreaComparison>[
       for (final HealthArea area in areas)
-        _compareArea(area, byName, firstName, secondName, basisText),
+        _compareArea(
+          area,
+          namesFor(area),
+          keysFor(area),
+          byName,
+          firstName,
+          secondName,
+          basisText,
+        ),
     ];
 
     // ---- overall ---------------------------------------
@@ -346,16 +358,21 @@ class CompareService {
   static NutrientLevel? _level(NutrientAssessment? n, CompareBasis basis) {
     if (n == null) return null;
 
-    return basis == CompareBasis.per100 ? n.productLevel : n.level;
+    // The UK traffic light only: it describes the product.
+    // The share-band levels are no longer shown anywhere.
+    return n.productLevel;
   }
 
   /// Nutrients the user's areas care about. Fibre is a
   /// benefit (more is better) where the rules count it.
-  static Map<String, NutrientDirection> _directionsFor(List<HealthArea> areas) {
+  static Map<String, NutrientDirection> _directionsFor(
+    List<HealthArea> areas,
+    List<String> Function(HealthArea) namesFor,
+  ) {
     final Map<String, NutrientDirection> d = <String, NutrientDirection>{};
 
     for (final HealthArea area in areas) {
-      for (final String n in AnalysisRules.areaNutrients[area]!) {
+      for (final String n in namesFor(area)) {
         d[n] = NutrientDirection.lowerIsBetter;
       }
 
@@ -414,23 +431,21 @@ class CompareService {
 
   static AreaComparison _compareArea(
     HealthArea area,
+    List<String> names,
+    List<String> keys,
     Map<String, ComparedNutrient> rows,
     String firstName,
     String secondName,
     String basisText,
   ) {
-    final List<String> names = AnalysisRules.areaNutrients[area]!;
-
     bool onBoth(String n) => rows[n]?.first != null && rows[n]?.second != null;
 
     // Key nutrient (cholesterol: saturated fat, or failing
     // that total fat, as in the analysis rules).
-    final bool hasKey = area == HealthArea.cholesterol
-        ? onBoth('Saturated Fat') || onBoth('Total Fat')
-        : onBoth(names.first);
+    final bool hasKey = keys.any(onBoth);
 
     if (!hasKey) {
-      final String key = area == HealthArea.cholesterol ? 'Saturated Fat' : names.first;
+      final String key = keys.first;
       final ComparedNutrient? row = rows[key];
 
       String missingFrom;

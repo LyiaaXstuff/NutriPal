@@ -116,11 +116,10 @@ void main() {
 
   group('Energy for a weight goal (rule R-EN-02)', () {
     GoalEnergyResult apply(String? goal, double eerKcal,
-            {int? chosen, String sex = 'female', double kg = 65, double cm = 158}) =>
+            {String sex = 'female', double kg = 65, double cm = 158}) =>
         GoalEnergy.apply(
           maintenanceKcal: eerKcal,
           goal: goal,
-          chosenKcal: chosen,
           sex: sex,
           weightKg: kg,
           heightCm: cm,
@@ -131,13 +130,6 @@ void main() {
       expect(apply('Gain weight', 2000).kcal, 2300);
       expect(apply('Maintain weight', 2000).kcal, 2000);
       expect(apply(null, 2000).requestedKcal, 0);
-    });
-
-    test('only the listed amounts are used; others fall back to the default', () {
-      expect(apply('lose', 2000, chosen: 750).kcal, 1250);
-      expect(apply('lose', 2000, chosen: 600).kcal, 1500);
-      expect(apply('gain', 2000, chosen: 500).kcal, 2500);
-      expect(apply('gain', 2000, chosen: 750).kcal, 2300);
     });
 
     test('floors: 1,200 kcal for women, 1,500 kcal for men', () {

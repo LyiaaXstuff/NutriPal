@@ -14,11 +14,12 @@
 //
 // The EER is the energy needed to keep the current
 // weight. For a weight goal NutriPal then applies a
-// general, adjustable change (GoalEnergy below):
-//   lose  500 kcal less by default (250 / 500 / 750),
-//         never below 1,200 kcal (women) or 1,500 kcal
-//         (men), and none when BMI is below 18.5
-//   gain  300 kcal more by default (300 / 500)
+// fixed, general change (GoalEnergy below; not a user
+// setting, a provider's daily figure replaces it):
+//   lose  500 kcal less, never below 1,200 kcal (women)
+//         or 1,500 kcal (men), and none when BMI is below
+//         18.5
+//   gain  300 kcal more
 // Only the energy target changes; the other limits stay
 // based on the EER. A daily figure from the user's doctor
 // or dietitian replaces all of this when one is entered.
@@ -223,11 +224,13 @@ class EnergyRequirement {
 // A general guide for judging products, not a diet plan.
 //   lose  MOH obesity CPG 2023: 500-750 kcal a day less,
 //         1,200-1,500 kcal (women) / 1,500-1,800 kcal
-//         (men) [WT-13]. Default 500 = lower end.
+//         (men) [WT-13]. NutriPal uses 500 (lower end).
 //   gain  NHS: about 300-500 kcal a day more [WT-08].
-//         Default 300 = lower end.
-// The choices, defaults and the use of the floors are
-// researcher-defined (rule R-EN-02).
+//         NutriPal uses 300 (lower end).
+// Both amounts are fixed and applied internally; a user's
+// own figure is entered as the daily energy from their
+// doctor or dietitian. The amounts and the use of the
+// floors are researcher-defined (rule R-EN-02).
 
 class GoalEnergyResult {
   /// Energy target for judging each product's energy.
@@ -236,7 +239,7 @@ class GoalEnergyResult {
   /// Maintenance energy it was worked out from.
   final double maintenanceKcal;
 
-  /// Amount the user chose or the default (positive), or
+  /// Amount applied for the goal (positive), or
   /// 0 for "maintain" / no goal.
   final int requestedKcal;
 
@@ -269,9 +272,9 @@ class GoalEnergyResult {
 class GoalEnergy {
   GoalEnergy._();
 
-  static const List<int> loseOptions = <int>[250, 500, 750];
-  static const List<int> gainOptions = <int>[300, 500];
-
+  // Fixed amounts applied internally (not a user setting;
+  // a user with their own figure enters it as the daily
+  // energy from their doctor or dietitian).
   static const int defaultLoseKcal = 500;
   static const int defaultGainKcal = 300;
 
@@ -298,19 +301,13 @@ class GoalEnergy {
     return null;
   }
 
-  /// The amount for this goal: the user's choice when it
-  /// is one of the options, else the default; 0 for
-  /// maintain or no goal.
-  static int amountFor(String? goal, int? chosen) {
-    switch (goalKey(goal)) {
-      case 'lose':
-        return loseOptions.contains(chosen) ? chosen! : defaultLoseKcal;
-      case 'gain':
-        return gainOptions.contains(chosen) ? chosen! : defaultGainKcal;
-      default:
-        return 0;
-    }
-  }
+  /// The amount for this goal: 500 for lose, 300 for
+  /// gain, 0 for maintain or no goal.
+  static int amountFor(String? goal) => switch (goalKey(goal)) {
+        'lose' => defaultLoseKcal,
+        'gain' => defaultGainKcal,
+        _ => 0,
+      };
 
   static double? bmi(double? weightKg, double? heightCm) {
     if (weightKg == null || heightCm == null || weightKg <= 0 || heightCm <= 0) return null;
@@ -324,13 +321,12 @@ class GoalEnergy {
   static GoalEnergyResult apply({
     required double maintenanceKcal,
     required String? goal,
-    int? chosenKcal,
     String? sex,
     double? weightKg,
     double? heightCm,
   }) {
     final String? key = goalKey(goal);
-    final int amount = amountFor(goal, chosenKcal);
+    final int amount = amountFor(goal);
 
     if (key == 'gain') {
       return GoalEnergyResult(

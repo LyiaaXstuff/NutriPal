@@ -36,15 +36,34 @@ void main() {
     expect(nutrient('Dietary Fibre')['rated'], isFalse);
   });
 
-  test('R-T03 areas list their nutrients and key nutrient', () {
+  test('R-T05 sodium carries its daily reference', () {
+    expect(nutrient('Sodium')['target'], 2000);
+    expect(nutrient('Sodium')['low_share_max'], AnalysisRules.lowShare);
+  });
+
+  test('R-T06 diabetes: carbohydrate and sugars are sent as display-only, never rated', () {
+    final Map<String, dynamic> dm = (rules['areas'] as List<Map<String, dynamic>>)
+        .firstWhere((Map<String, dynamic> a) => a['area'] == 'Diabetes');
+
+    expect(dm['display_only'], <String>['Carbohydrate', 'Total Sugars']);
+    expect(nutrient('Carbohydrate')['rated'], isFalse);
+    expect(nutrient('Total Sugars')['rated'], isFalse);
+  });
+
+  test('R-T03 every area is sent as findings: its nutrients, no level', () {
     final List<Map<String, dynamic>> areas = rules['areas'] as List<Map<String, dynamic>>;
 
     expect(areas.map((Map<String, dynamic> a) => a['area']), <String>['Diabetes', 'Blood pressure']);
     expect(areas.first['nutrients'], <String>['Carbohydrate', 'Total Sugars']);
-    expect(areas.first['key_any_of'], <String>['Carbohydrate']);
+    expect(areas.first['combine'], 'findings');
+    expect(areas.last['nutrients'], <String>['Sodium']);
+    expect(areas.last['combine'], 'findings');
   });
 
-  test('R-T04 the app itself rates 1 L as Moderate (server must match)', () {
-    expect(analysis.overall, NutrientLevel.moderate);
+  test('R-T04 no nutrient is rated by any area and the app gives no overall level', () {
+    final List<Map<String, dynamic>> nutrients = rules['nutrients'] as List<Map<String, dynamic>>;
+
+    expect(nutrients.every((Map<String, dynamic> n) => n['rated'] == false), isTrue);
+    expect(analysis.overall, isNull);
   });
 }

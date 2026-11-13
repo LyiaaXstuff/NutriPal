@@ -57,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Scan history).
   int _selectedIndex = 0;
 
-  // Recent scans, History and Favourites (90-day history,
+  // Recent scans, History and Favourites (30-day history,
   // favourites kept until removed).
   final ScanHistoryService _history =
       ScanHistoryService.instance;
@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Loads this user's saved scans and removes the ones
-    // older than 90 days (favourites are kept).
+    // older than 30 days (favourites are kept).
     _history.load();
   }
 

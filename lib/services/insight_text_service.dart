@@ -60,6 +60,17 @@ class PlainFact {
   });
 }
 
+/// The evidence layer of a health-area card: one sentence on
+/// why the nutrient matters, what to compare when shopping,
+/// and the guideline it comes from (knowledge-base IDs).
+class PlainEvidence {
+  final String why;
+  final String lookFor;
+  final String source;
+
+  const PlainEvidence({required this.why, required this.lookFor, required this.source});
+}
+
 /// A health area card in plain words ("plain answer first").
 class PlainAreaText {
   /// One-line answer: "A lot of sugar for you in this portion".
@@ -81,6 +92,9 @@ class PlainAreaText {
   /// the portion alone, or what the label does not show.
   final String? note;
 
+  /// Why it matters, what to look for, and the source.
+  final PlainEvidence? evidence;
+
   const PlainAreaText({
     required this.headline,
     required this.marker,
@@ -88,7 +102,18 @@ class PlainAreaText {
     this.tip,
     this.goodNews,
     this.note,
+    this.evidence,
   });
+
+  PlainAreaText withEvidence(PlainEvidence? e) => PlainAreaText(
+        headline: headline,
+        marker: marker,
+        facts: facts,
+        tip: tip,
+        goodNews: goodNews,
+        note: note,
+        evidence: e,
+      );
 }
 
 /// "NutriPal explains" in short, plain parts.
@@ -180,59 +205,41 @@ class InsightTextService {
   /// weight area by the user's own goal, e.g. "your
   /// weight-loss goal" instead of "weight".
   static OverallText overall(NutritionAnalysis a, {String? weightGoal}) {
-    final List<AreaAssessment> judged =
-        a.areas.where((AreaAssessment x) => x.level != null).toList();
+    // No health area gives a Low | Moderate | High result, so
+    // there is no overall verdict: the summary points the
+    // user to the key-nutrient cards.
+    final List<String> shown = <String>[
+      for (final AreaAssessment x in a.areas) _findingsName(x.area, weightGoal),
+    ];
 
-    String nameOf(HealthArea area) {
-      if (area != HealthArea.weight) return area.title.toLowerCase();
-
-      return switch (weightGoal) {
-        'lose' => 'your weight-loss goal',
-        'maintain' => 'your weight-maintenance goal',
-        'gain' => 'your weight-gain goal',
-        _ => 'weight',
-      };
+    if (shown.isEmpty) {
+      return const OverallText(
+        'Check the label',
+        'Not enough information',
+        'This label does not show the nutrients NutriPal needs for your '
+            'health areas.',
+      );
     }
 
-    String names(NutrientLevel level) {
-      final List<String> list = <String>[
-        for (final AreaAssessment x in judged)
-          if (x.level == level) nameOf(x.area),
-      ];
-
-      if (list.length <= 1) return list.join();
-
-      return '${list.sublist(0, list.length - 1).join(', ')} and ${list.last}';
-    }
-
-    switch (a.overall) {
-      case NutrientLevel.low:
-        return const OverallText(
-          'Fits your goals',
-          'Good choice for you',
-          'This portion is low for every health area NutriPal checked.',
-        );
-      case NutrientLevel.moderate:
-        return OverallText(
-          'Fits with care',
-          'OK in this portion',
-          'Watch ${names(NutrientLevel.moderate)} at this amount.',
-        );
-      case NutrientLevel.high:
-        return OverallText(
-          'Watch out',
-          'Too much for you',
-          'High for ${names(NutrientLevel.high)}. Try a smaller portion.',
-        );
-      case null:
-        return const OverallText(
-          'Check the label',
-          'Not enough information',
-          'This label does not show the nutrients NutriPal needs for your '
-              'health areas.',
-        );
-    }
+    return OverallText(
+      'Review key nutrients',
+      'Look at the nutrient findings',
+      'NutriPal shows the key nutrients in this portion for ${_joinAnd(shown)} below, '
+          'without an overall result.',
+    );
   }
+
+  static String _findingsName(HealthArea area, [String? weightGoal]) => switch (area) {
+        HealthArea.cholesterol => 'LDL cholesterol',
+        HealthArea.bloodPressure => 'hypertension',
+        HealthArea.diabetes => 'diabetes',
+        HealthArea.weight => switch (weightGoal) {
+            'lose' => 'your weight-loss goal',
+            'maintain' => 'your weight-maintenance goal',
+            'gain' => 'your weight-gain goal',
+            _ => 'weight',
+          },
+      };
 
   // =====================================================
   // ONE HEALTH AREA CARD, PLAIN WORDS
@@ -297,16 +304,19 @@ class InsightTextService {
   }
 
   /// 0..1 on the Low | Moderate | High bar: inside the
-  /// level's third, by how big the share is.
-  static double _marker(NutrientLevel level, double share) {
-    final NutrientLevel byShare = NutritionAnalysisService.shareLevel(share);
+  /// level's third, by how big the share is (in the
+  /// nutrient's own bands).
+  static double _marker(NutrientLevel level, NutrientAssessment? n) {
+    final double share = n?.share ?? 0;
+    final double low = n?.lowShareMax ?? AnalysisRules.lowShare;
+    final double high = n?.highShareMax ?? AnalysisRules.highShare;
+
+    final NutrientLevel byShare =
+        NutritionAnalysisService.shareLevel(share, low: low, high: high);
 
     // Rated higher because of the product itself: middle of
     // that level.
     if (byShare != level) return (level.index + 0.5) / 3;
-
-    final double low = AnalysisRules.lowShare;
-    final double high = AnalysisRules.highShare;
 
     final double t = switch (level) {
       NutrientLevel.low => (share / low),
@@ -322,6 +332,12 @@ class InsightTextService {
     NutritionAnalysis a, {
     String? weightGoal,
   }) {
+    if (area.partial) {
+      final PlainAreaText t = _plainFindings(area, a, weightGoal: weightGoal);
+
+      return t.facts.isEmpty ? t : t.withEvidence(_evidenceFor(area.area, a, weightGoal));
+    }
+
     final NutrientLevel? level = area.level;
 
     if (level == null) {
@@ -382,7 +398,7 @@ class InsightTextService {
 
     // ---- marker -----------------------------------------
     final NutrientAssessment? main = a.nutrients[area.decidedBy] ?? _mainNutrient(area, a);
-    final double marker = _marker(level, main?.share ?? 0);
+    final double marker = _marker(level, main);
 
     // ---- tip --------------------------------------------
     final String? tip = switch (level) {
@@ -414,6 +430,17 @@ class InsightTextService {
           '${fraction(fibre.share!)} of what you need each day. $helps';
     }
 
+    // Protein goal (Nutrition Targets): shown on the weight
+    // card, where it helps most.
+    final NutrientAssessment? protein = a.nutrients['Protein'];
+
+    if (area.area == HealthArea.weight && protein?.share != null && protein!.share! > 0.10) {
+      final String line = 'It gives ${_f(protein.amount, 'g')} g of protein, '
+          '${fraction(protein.share!)} of your daily protein goal.';
+
+      goodNews = goodNews == null ? line : '$goodNews $line';
+    }
+
     // ---- note -------------------------------------------
     final List<String> notes = <String>[];
 
@@ -421,7 +448,7 @@ class InsightTextService {
 
     if (d != null &&
         d.productLevel == level &&
-        NutritionAnalysisService.shareLevel(d.share ?? 0).index < level.index &&
+        (d.bandLevel ?? NutrientLevel.low).index < level.index &&
         d.per100 != null) {
       notes.add(
         'The product itself is ${level.label.toLowerCase()} in ${_lower(d.name)} '
@@ -441,6 +468,234 @@ class InsightTextService {
       goodNews: goodNews,
       note: notes.isEmpty ? null : notes.join(' '),
     );
+  }
+
+  // =====================================================
+  // HEALTH-AREA CARDS, PLAIN WORDS (findings, no level)
+  // (rule R-LDL-01 v2 for the LDL cholesterol card)
+  // =====================================================
+  //
+  // Key nutrients with their amounts, no level and no bar.
+  // Saturated and trans fat show the plain percentage of the
+  // daily reference; the per-100 traffic light is product-
+  // level information. It never says a food is safe,
+  // suitable or unsuitable, and never calls total sugars
+  // added or free sugar.
+
+  static const String _ldlAdvice =
+      'Saturated and trans fat are important for LDL cholesterol. Fibre may '
+      'give a helpful supporting contribution.';
+
+  static const String _ldlFibre = 'Fibre can help lower cholesterol.';
+
+  /// "5% of your daily limit" - a plain figure, no band word.
+  static String _plainShare(NutrientAssessment n, NutritionAnalysis a) {
+    final String pct = _pct(n.share ?? 0);
+
+    if (n.name == 'Sodium' && n.target != null) {
+      return '$pct of the ${_big(n.target!, 'mg')} mg daily sodium reference';
+    }
+
+    if (n.name == 'Energy') {
+      final GoalEnergyResult? goal = a.targets.goalAdjusted ? a.targets.goal : null;
+      final String of = goal == null
+          ? 'your estimated daily energy need'
+          : goal.changeKcal < 0
+              ? 'your daily energy guide for weight loss'
+              : 'your daily energy guide for weight gain';
+
+      return '$pct of $of';
+    }
+
+    return '$pct of your ${n.targetLabel ?? 'daily limit'}';
+  }
+
+  /// Share of the daily reference, then the product traffic
+  /// light as a separate piece of information.
+  static String _findingMeaning(NutrientAssessment n, NutritionAnalysis a) {
+    final List<String> parts = <String>[
+      if (n.share != null && n.name != 'Total Fat') _plainShare(n, a),
+    ];
+
+    return parts.isEmpty ? 'in this portion' : parts.join(', ');
+  }
+
+  static PlainAreaText _plainFindings(
+    AreaAssessment area,
+    NutritionAnalysis a, {
+    String? weightGoal,
+  }) {
+    final HealthArea kind = area.area;
+
+    if (area.nutrients.isEmpty && area.watch.isEmpty) {
+      final String missing = area.missing.isEmpty
+          ? 'the nutrients it needs'
+          : area.missing.map(_lower).join(' or ');
+
+      return PlainAreaText(
+        headline: 'Not enough information',
+        marker: null,
+        facts: const <PlainFact>[],
+        note: 'This label does not show $missing, so NutriPal cannot show this area.',
+      );
+    }
+
+    final List<PlainFact> facts = <PlainFact>[
+      // Diabetes: carbohydrate and total sugars first, as
+      // amounts only.
+      for (final NutrientAssessment n in area.watch)
+        PlainFact(
+          nutrient: n.name,
+          label: n.name == 'Total Sugars' ? 'Total sugars' : _label(n.name),
+          amount: '${_f(n.amount, n.unit)} ${n.unit}',
+          meaning: _watchMeaning(n, a),
+        ),
+      for (final NutrientAssessment n in area.nutrients)
+        PlainFact(
+          nutrient: n.name,
+          label: _label(n.name),
+          amount: '${_f(n.amount, n.unit)} ${n.unit}',
+          meaning: _findingMeaning(n, a),
+        ),
+    ];
+
+    // Fibre: a supporting factor, never a risk.
+    String? goodNews;
+    final NutrientAssessment? fibre = area.benefit;
+
+    // Only when the product actually has fibre.
+    if (fibre != null && fibre.amount > 0) {
+      final String why = switch (kind) {
+        HealthArea.cholesterol => _ldlFibre,
+        HealthArea.diabetes => 'Fibre-rich carbohydrate foods are generally preferred.',
+        _ => 'Fibre can help you feel full.',
+      };
+
+      goodNews = 'It has ${_f(fibre.amount, 'g')} g of fibre. $why';
+    }
+
+    // Weight card: a protein goal from Nutrition Targets.
+    final NutrientAssessment? protein = a.nutrients['Protein'];
+
+    if (kind == HealthArea.weight && protein?.share != null && protein!.share! > 0.10) {
+      final String line = 'It gives ${_f(protein.amount, 'g')} g of protein, '
+          '${fraction(protein.share!)} of your daily protein goal.';
+
+      goodNews = goodNews == null ? line : '$goodNews $line';
+    }
+
+    final String headline = switch (kind) {
+      HealthArea.cholesterol => 'Saturated and trans fat in this portion',
+      HealthArea.bloodPressure => 'Sodium in this portion',
+      HealthArea.weight => 'Energy in this portion',
+      HealthArea.diabetes => 'Carbohydrate and sugars in this portion',
+    };
+
+    final String tip = switch (kind) {
+      HealthArea.cholesterol => _ldlAdvice,
+      HealthArea.bloodPressure =>
+        'Sodium (salt) adds up through the day. Compare this portion with the '
+            'rest of what you eat.',
+      HealthArea.weight =>
+        'Energy adds up through the day. Compare this portion with the rest of '
+            'what you eat.',
+      HealthArea.diabetes =>
+        'Count these carbohydrates as part of your meal, following your own plan '
+            'from your doctor or dietitian. NutriPal never works out insulin or '
+            'medicine doses.',
+    };
+
+    final List<String> notes = <String>[
+      if (area.watch.any((NutrientAssessment n) => n.name == 'Total Sugars'))
+        'Total sugars include natural and added sugars. This is the amount in your '
+            'portion; the amount ${a.per100Label} is in Nutrition facts.',
+      if (kind == HealthArea.weight)
+        'The energy guide is general; a figure from your doctor or dietitian '
+            'replaces it.',
+      if (area.missing.isNotEmpty) 'Not on the label: ${area.missing.map(_lower).join(', ')}.',
+    ];
+
+    return PlainAreaText(
+      headline: headline,
+      marker: null,
+      facts: facts,
+      tip: tip,
+      goodNews: goodNews,
+      note: notes.isEmpty ? null : notes.join(' '),
+    );
+  }
+
+  /// One evidence-based sentence per health area, paraphrased
+  /// from the validated knowledge base (IDs in the source).
+  /// No threshold is invented here.
+  static PlainEvidence _evidenceFor(
+    HealthArea kind,
+    NutritionAnalysis a,
+    String? weightGoal,
+  ) {
+    switch (kind) {
+      case HealthArea.diabetes:
+        return const PlainEvidence(
+          why: 'Guidelines suggest reducing carbohydrate for some adults with diabetes '
+              'and minimising sugar-sweetened foods and drinks. One product is only '
+              'part of a meal.',
+          lookFor: 'When comparing similar products, choose less total sugars and more '
+              'fibre.',
+          source: 'ADA 2026 (DM-02, DM-04, DM-05)',
+        );
+      case HealthArea.bloodPressure:
+        return const PlainEvidence(
+          why: 'Malaysian and WHO guidance recommend keeping sodium below 2,000 mg '
+              '(5 g salt) a day.',
+          lookFor: 'When comparing similar products, choose the one with less sodium per '
+              'serving.',
+          source: 'MOH Malaysia / Academy of Medicine 2023 (HT-02); MDA 2026 (HT-01); '
+              'WHO 2025 (HT-03)',
+        );
+      case HealthArea.cholesterol:
+        return const PlainEvidence(
+          why: 'Malaysian dietitian guidance limits saturated fat to under 10% of energy '
+              'and trans fat to under 1%.',
+          lookFor: 'When comparing similar products, choose less saturated and trans fat; '
+              'fibre also helps.',
+          source: 'MDA 2026 (LD-01, LD-03, LD-07)',
+        );
+      case HealthArea.weight:
+        return switch (weightGoal) {
+          'gain' => const PlainEvidence(
+              why: 'Healthy weight gain is gradual, about 300 to 500 extra kcal a day, '
+                  'from nutritious foods rather than sugary ones.',
+              lookFor: 'When comparing similar products, compare energy for the portion '
+                  'you plan to eat and favour nutrient-rich choices.',
+              source: 'NHS 2023 (WT-08)',
+            ),
+          'lose' => const PlainEvidence(
+              why: 'Losing weight comes from taking in fewer calories overall, so the '
+                  'portion you choose changes your energy intake.',
+              lookFor: 'When comparing similar products, compare energy for the portion '
+                  'you plan to eat.',
+              source: 'NIDDK 2023 (WT-02)',
+            ),
+          _ => const PlainEvidence(
+              why: 'Your estimated energy need is for maintaining your current weight, '
+                  'so the portion you choose changes how much of it you use.',
+              lookFor: 'When comparing similar products, compare energy for the portion '
+                  'you plan to eat.',
+              source: 'NASEM 2023 (WT-11)',
+            ),
+        };
+    }
+  }
+
+  /// "about 1.5 carb exchanges" / "Low per 100 ml (product)".
+  static String _watchMeaning(NutrientAssessment n, NutritionAnalysis a) {
+    if (n.name == 'Carbohydrate') {
+      final String ex = NutritionAnalysisService.exchanges(n.amount);
+
+      return 'about $ex carb ${ex == '1' ? 'exchange' : 'exchanges'} in this portion';
+    }
+
+    return 'in this portion';
   }
 
   // =====================================================
@@ -484,20 +739,23 @@ class InsightTextService {
     // Main sentence from the share band.
     final String label = main.targetLabel ?? 'daily limit';
 
+    final NutrientLevel band = main.bandLevel ?? NutrientLevel.low;
+
     if (main.name == 'Carbohydrate') {
       final String ex = NutritionAnalysisService.exchanges(main.amount);
       final String exWord = ex == '1' ? 'exchange' : 'exchanges';
+      final String highPct = '${(main.highShareMax * 100).round()}%';
 
-      why.add(switch (NutritionAnalysisService.shareLevel(share)) {
+      why.add(switch (band) {
         NutrientLevel.low =>
           'About $ex carb $exWord, a small part of your meal budget.',
         NutrientLevel.moderate =>
           '$ex carb $exWord, ${_pct(share)} of your meal budget. Count it in your meal.',
         NutrientLevel.high =>
-          '$ex carb $exWord, more than 30% of your meal budget. A smaller portion fits better.',
+          '$ex carb $exWord, more than $highPct of your meal budget. A smaller portion fits better.',
       });
     } else {
-      why.add(switch (NutritionAnalysisService.shareLevel(share)) {
+      why.add(switch (band) {
         NutrientLevel.low => 'A small part of your $label for this portion.',
         NutrientLevel.moderate => '${_pct(share)} of your $label in this portion.',
         NutrientLevel.high =>
@@ -508,9 +766,9 @@ class InsightTextService {
     // Why the level is higher than the main share says.
     final String? decider = area.decidedBy;
 
-    if (decider != null && area.level!.index > NutritionAnalysisService.shareLevel(share).index) {
+    if (decider != null && area.level!.index > band.index) {
       final NutrientAssessment d = a.nutrients[decider]!;
-      final NutrientLevel dShare = NutritionAnalysisService.shareLevel(d.share ?? 0);
+      final NutrientLevel dShare = d.bandLevel ?? NutrientLevel.low;
 
       if (d.productLevel == area.level && dShare.index < area.level!.index && d.per100 != null) {
         why.add(
@@ -538,7 +796,7 @@ class InsightTextService {
       };
 
       why.add(
-        'Good news: it has ${_f(fibre.amount, 'g')} g of fibre, about '
+        'Bonus: it has ${_f(fibre.amount, 'g')} g of fibre, about '
         '${_pct(fibre.share!)} of what you need each day. $helps',
       );
     }
@@ -559,7 +817,10 @@ class InsightTextService {
   static NutrientAssessment? _mainNutrient(AreaAssessment area, NutritionAnalysis a) {
     switch (area.area) {
       case HealthArea.diabetes:
-        return a.nutrients['Carbohydrate'];
+        // The area's key nutrient (carbohydrate).
+        final String key = area.ruleNutrients.isEmpty ? 'Carbohydrate' : area.ruleNutrients.first;
+
+        return a.nutrients[key] ?? a.nutrients['Carbohydrate'];
       case HealthArea.bloodPressure:
         return a.nutrients['Sodium'];
       case HealthArea.cholesterol:
@@ -682,9 +943,22 @@ class InsightTextService {
             '(${_pct(energy.share!)}).';
 
     // ---- good: rated nutrients that are low --------------
+    // Only nutrients a health area rated (never the carbs
+    // and sugar the diabetes card shows as amounts).
+    final Map<String, NutrientLevel> rated = <String, NutrientLevel>{};
+
+    for (final AreaAssessment x in a.areas) {
+      for (final NutrientAssessment n in x.nutrients) {
+        if (n.level == null) continue;
+
+        final NutrientLevel? before = rated[n.name];
+        rated[n.name] = before == null ? n.level! : before.worse(n.level!);
+      }
+    }
+
     final List<String> low = <String>[
       for (final String name in <String>['Total Sugars', 'Sodium', 'Saturated Fat', 'Total Fat'])
-        if (a.nutrients[name]?.level == NutrientLevel.low) _plainName(name),
+        if (rated[name] == NutrientLevel.low) _plainName(name),
     ];
 
     final String? good = low.isEmpty ? null : 'Low in ${_joinAnd(low)} for you.';
@@ -731,7 +1005,11 @@ class InsightTextService {
   }) {
     final NutrientLevel? now = a.overall;
 
-    if (now == null) return 'Check the label values with Edit if anything looks wrong.';
+    // Findings have no level, so no "twice is fine" claim.
+    if (now == null) {
+      return 'A smaller or larger portion changes every amount above. '
+          'Check the label values with Edit if anything looks wrong.';
+    }
 
     // Same portion scaled by [factor] (½ or 2).
     Portion? scaled(double factor) => a.portionServings != null
@@ -811,6 +1089,10 @@ class InsightTextService {
 
     if (flagged != null) {
       q.add('Why is ${flagged.area.title.toLowerCase()} ${flagged.level!.label.toLowerCase()}?');
+    }
+
+    if (flagged == null && a.areas.isNotEmpty) {
+      q.add('What should I watch for ${_findingsName(a.areas.first.area)}?');
     }
 
     if (a.portionServings != null) {

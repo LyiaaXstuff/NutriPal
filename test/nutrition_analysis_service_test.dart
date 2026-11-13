@@ -60,6 +60,7 @@ NutritionLabelData homesoy() {
 
 // Female, 45, 65 kg, 158 cm, low active, maintaining
 // weight, diabetes + blood pressure (rules document).
+// Diabetes: the carb-counting guide (45 g meal budget).
 const NutritionProfile sampleUser = NutritionProfile(
   sex: 'female',
   ageYears: 45,
@@ -105,25 +106,28 @@ void main() {
       expect(t.energyHighKcal, closeTo(2333.2, 0.1));
       expect(t.sodiumMg, 2000);
       expect(t.freeSugarsG, closeTo(52.3, 0.1));
-      expect(t.carbsPerMealG, closeTo(87.2, 0.1));
+      // Diabetes: carb-counting guide for women.
+      expect(t.carbsPerMealG, 45);
+      expect(t.carbsBasis, CarbBudgetBasis.carbCounting);
+      expect(t.carbsPerDayG, closeTo(261.5, 0.1));
       expect(t.saturatedFatG, closeTo(23.2, 0.1));
       expect(t.fibreG, 25);
       expect(t.setByProvider, isEmpty);
+      expect(t.setByUser, isEmpty);
+      expect(t.proteinG, isNull);
     });
 
     test('W-T17 weight goal changes the energy target only', () {
-      NutritionProfile withGoal(String goal, [int? change]) => NutritionProfile(
+      NutritionProfile withGoal(String goal) => NutritionProfile(
             sex: 'male',
             ageYears: 30,
             weightKg: 75,
             heightCm: 175,
             activityLevel: 'Active',
             weightGoal: goal,
-            energyChangeKcal: change,
           );
 
-      DailyTargets t(String goal, [int? change]) =>
-          NutritionAnalysisService.targetsFor(withGoal(goal, change));
+      DailyTargets t(String goal) => NutritionAnalysisService.targetsFor(withGoal(goal));
 
       // Men, active: 1004.82 - 324.9 + 1141 + 1193.25
       for (final String goal in <String>['lose', 'maintain', 'gain']) {
@@ -134,10 +138,9 @@ void main() {
 
       expect(t('maintain').goalEnergyKcal, closeTo(3014.2, 0.1));
       expect(t('maintain').goal, isNull);
+      // Fixed internal amounts: 500 less, 300 more.
       expect(t('lose').goalEnergyKcal, closeTo(2514.2, 0.1));
-      expect(t('lose', 750).goalEnergyKcal, closeTo(2264.2, 0.1));
       expect(t('gain').goalEnergyKcal, closeTo(3314.2, 0.1));
-      expect(t('gain', 500).goalEnergyKcal, closeTo(3514.2, 0.1));
     });
 
     test('W-T18 the energy share uses the goal energy', () {
@@ -161,6 +164,30 @@ void main() {
       expect(a.nutrients['Energy']!.share, closeTo(390 / 1592.2, 0.001));
       // Sugars still use the maintenance limit (52.3 g).
       expect(a.nutrients['Total Sugars']!.share, closeTo(7 / 52.3, 0.001));
+    });
+
+    test('W-T19 the weight card shows energy and its share, no level', () {
+      const NutritionProfile loser = NutritionProfile(
+        sex: 'female',
+        ageYears: 45,
+        weightKg: 65,
+        heightCm: 158,
+        activityLevel: 'Low active',
+        weightGoal: 'lose',
+        areas: <HealthArea>{HealthArea.weight},
+      );
+
+      final AreaAssessment w = NutritionAnalysisService.analyse(
+        data: homesoy(),
+        profile: loser,
+        portion: const Portion.amount(1000, 'ml'),
+      ).areas.single;
+
+      expect(w.level, isNull);
+      expect(w.nutrients.map((NutrientAssessment n) => n.name), <String>['Energy']);
+      expect(w.nutrients.single.level, isNull);
+      expect(w.nutrients.single.share, closeTo(390 / 1592.2, 0.001));
+      expect(w.benefit?.name, 'Dietary Fibre');
     });
 
     test('a daily figure from the doctor or dietitian replaces the EER', () {
@@ -226,13 +253,52 @@ void main() {
       expect(t.freeSugarsG, 50);
     });
 
-    test('a limit from the doctor replaces the default', () {
-      const NutritionProfile p = NutritionProfile(providerSodiumMg: 1500);
+    test('NT-T01 the user\'s own targets replace the defaults', () {
+      const NutritionProfile p = NutritionProfile(
+        sodiumLimitMg: 1500,
+        sugarsLimitG: 25,
+        fatGoalG: 50,
+        saturatedFatLimitG: 13,
+        fibreGoalG: 30,
+        proteinGoalG: 60,
+        carbsPerMealGoalG: 40,
+      );
 
       final DailyTargets t = NutritionAnalysisService.targetsFor(p);
 
       expect(t.sodiumMg, 1500);
-      expect(t.setByProvider, contains('Sodium'));
+      expect(t.freeSugarsG, 25);
+      expect(t.totalFatG, 50);
+      expect(t.saturatedFatG, 13);
+      expect(t.fibreG, 30);
+      expect(t.proteinG, 60);
+      expect(t.carbsPerMealG, 40);
+      expect(t.carbsBasis, CarbBudgetBasis.userGoal);
+      expect(t.setByUser, containsAll(<String>[
+        'Sodium',
+        'Total Sugars',
+        'Total Fat',
+        'Saturated Fat',
+        'Dietary Fibre',
+        'Protein',
+        'Carbohydrate',
+      ]));
+      // Trans fat has no user target.
+      expect(t.transFatG, closeTo(2000 * 0.01 / 9, 0.01));
+      expect(t.setByProvider, isEmpty);
+    });
+
+    test('NT-T02 a protein goal is shown as a benefit, never a level', () {
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(
+        data: homesoy(),
+        profile: const NutritionProfile(proteinGoalG: 60),
+      );
+
+      final NutrientAssessment protein = a.nutrients['Protein']!;
+
+      expect(protein.share, closeTo(7.1 / 60, 0.001));
+      expect(protein.isBenefit, isTrue);
+      expect(protein.level, isNull);
     });
 
     test('profile form data is converted (age, units, areas)', () {
@@ -299,10 +365,24 @@ void main() {
       expect(NutritionAnalysisService.shareLevel(0.30), NutrientLevel.moderate);
       expect(NutritionAnalysisService.shareLevel(0.31), NutrientLevel.high);
     });
+
+    test('carbohydrate meal budget: 25 % and 50 % edges', () {
+      double share(double v, String name) {
+        final (double low, double high) = NutritionAnalysisService.bandsFor(name);
+
+        return NutritionAnalysisService.shareLevel(v, low: low, high: high).index.toDouble();
+      }
+
+      expect(share(0.25, 'Carbohydrate'), NutrientLevel.low.index);
+      expect(share(0.26, 'Carbohydrate'), NutrientLevel.moderate.index);
+      expect(share(0.50, 'Carbohydrate'), NutrientLevel.moderate.index);
+      expect(share(0.51, 'Carbohydrate'), NutrientLevel.high.index);
+      expect(share(0.26, 'Total Sugars'), NutrientLevel.moderate.index);
+    });
   });
 
   group('Worked example: Homesoy', () {
-    test('one 236 ml serving is Low for diabetes and blood pressure', () {
+    test('one 236 ml serving: key nutrients for diabetes and blood pressure, no level', () {
       final NutritionAnalysis a = NutritionAnalysisService.analyse(
         data: homesoy(),
         profile: sampleUser,
@@ -314,9 +394,6 @@ void main() {
       // One serving uses the per serving column as printed.
       final NutrientAssessment carbs = a.nutrients['Carbohydrate']!;
       expect(carbs.amount, closeTo(5.4, 0.001));
-      // 5.4 g of an 87.2 g meal budget.
-      expect(carbs.share, closeTo(0.0619, 0.0005));
-      expect(carbs.level, NutrientLevel.low);
 
       final NutrientAssessment sodium = a.nutrients['Sodium']!;
       expect(sodium.amount, closeTo(40, 0.001));
@@ -329,13 +406,40 @@ void main() {
 
       expect(a.areas.map((AreaAssessment x) => x.area),
           <HealthArea>[HealthArea.diabetes, HealthArea.bloodPressure]);
-      expect(a.areas[0].level, NutrientLevel.low);
-      expect(a.areas[0].benefit?.name, 'Dietary Fibre');
-      expect(a.areas[1].level, NutrientLevel.low);
-      expect(a.overall, NutrientLevel.low);
+
+      // Diabetes: carbohydrate and sugars as amounts, no level.
+      final AreaAssessment dm = a.areas[0];
+      expect(dm.partial, isTrue);
+      expect(dm.level, isNull);
+      expect(dm.watch.map((NutrientAssessment n) => n.name), <String>['Carbohydrate', 'Total Sugars']);
+      expect(dm.watch.every((NutrientAssessment n) => n.level == null && n.share == null), isTrue);
+      expect(dm.watch.last.productLevel, NutrientLevel.low);
+      expect(dm.benefit?.name, 'Dietary Fibre');
+
+      // Blood pressure: sodium with its share and traffic light.
+      final AreaAssessment bp = a.areas[1];
+      expect(bp.level, isNull);
+      expect(bp.nutrients.single.name, 'Sodium');
+      expect(bp.nutrients.single.level, isNull);
+      expect(bp.nutrients.single.share, closeTo(0.020, 0.001));
+      expect(bp.nutrients.single.productLevel, NutrientLevel.low);
+
+      expect(a.overall, isNull);
+      expect(a.needsDetails, isTrue);
     });
 
-    test('one litre is Moderate for diabetes, 1.5 litres High', () {
+    test('no portion size ever gives an area level or an overall result', () {
+      for (final double ml in <double>[236, 500, 1000, 3000]) {
+        final NutritionAnalysis a = NutritionAnalysisService.analyse(
+          data: homesoy(),
+          profile: sampleUser,
+          portion: Portion.amount(ml, 'ml'),
+        );
+
+        expect(a.overall, isNull);
+        expect(a.areas.every((AreaAssessment x) => x.level == null && x.decidedBy == null), isTrue);
+      }
+
       final NutritionAnalysis litre = NutritionAnalysisService.analyse(
         data: homesoy(),
         profile: sampleUser,
@@ -343,19 +447,70 @@ void main() {
       );
 
       expect(litre.nutrients['Carbohydrate']!.amount, closeTo(23, 0.01));
-      expect(litre.nutrients['Carbohydrate']!.share, closeTo(0.264, 0.001));
-      expect(litre.areas[0].level, NutrientLevel.moderate);
-      expect(litre.areas[0].decidedBy, 'Carbohydrate');
+    });
+  });
 
-      final NutritionAnalysis more = NutritionAnalysisService.analyse(
+  group('Diabetes (one card, no types; D-T01 to D-T04)', () {
+    NutritionProfile user({String sex = 'female', double? carbGoal}) => NutritionProfile(
+          sex: sex,
+          ageYears: 45,
+          weightKg: 65,
+          heightCm: 158,
+          activityLevel: 'Low active',
+          areas: const <HealthArea>{HealthArea.diabetes},
+          carbsPerMealGoalG: carbGoal,
+        );
+
+    NutritionAnalysis litre(NutritionProfile p) => NutritionAnalysisService.analyse(
+          data: homesoy(),
+          profile: p,
+          portion: const Portion.amount(1000, 'ml'),
+        );
+
+    test('D-T01 carbohydrate and sugars as amounts only, no level', () {
+      final NutritionAnalysis a = litre(user());
+      final AreaAssessment area = a.areas.single;
+
+      expect(area.partial, isTrue);
+      expect(area.level, isNull);
+      expect(area.decidedBy, isNull);
+      expect(area.ruleNutrients, <String>['Carbohydrate', 'Total Sugars']);
+      expect(area.watch.map((NutrientAssessment n) => n.name), <String>['Carbohydrate', 'Total Sugars']);
+      expect(area.watch.first.amount, closeTo(23, 0.01));
+      // Amounts only on the card: no share of a meal budget.
+      expect(area.watch.every((NutrientAssessment n) => n.share == null && n.level == null), isTrue);
+      expect(area.nutrients, isEmpty);
+    });
+
+    test('D-T02 the same card for every user with diabetes (men and women)', () {
+      final AreaAssessment woman = litre(user()).areas.single;
+      final AreaAssessment man = litre(user(sex: 'male')).areas.single;
+
+      expect(man.watch.map((NutrientAssessment n) => n.name), woman.watch.map((NutrientAssessment n) => n.name));
+      expect(man.level, isNull);
+      // The background meal budget still follows the
+      // carb-counting guide by sex.
+      expect(litre(user(sex: 'male')).targets.carbsPerMealG, 60);
+      expect(litre(user()).targets.carbsPerMealG, 45);
+    });
+
+    test('D-T03 a user\'s own carbohydrate goal does not rate the diabetes card', () {
+      final NutritionAnalysis a = litre(user(carbGoal: 60));
+      final AreaAssessment area = a.areas.single;
+
+      expect(a.targets.carbsBasis, CarbBudgetBasis.userGoal);
+      expect(a.nutrients['Carbohydrate']!.share, closeTo(23 / 60, 0.001));
+      expect(area.level, isNull);
+      expect(area.watch.every((NutrientAssessment n) => n.share == null), isTrue);
+    });
+
+    test('D-T04 no diabetes selected: healthy-eating share for the meal budget', () {
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(
         data: homesoy(),
-        profile: sampleUser,
-        portion: const Portion.amount(1500, 'ml'),
+        profile: const NutritionProfile(),
       );
 
-      expect(more.nutrients['Carbohydrate']!.share, closeTo(0.396, 0.001));
-      expect(more.areas[0].level, NutrientLevel.high);
-      expect(more.areas[0].decidedBy, 'Carbohydrate');
+      expect(a.targets.carbsBasis, CarbBudgetBasis.energyShare);
     });
 
     test('servings and amounts give the same numbers', () {
@@ -524,28 +679,19 @@ void main() {
       areas: <HealthArea>{HealthArea.bloodPressure},
     );
 
-    test('worse of both: a small portion of salty crisps stays High', () {
+    test('salty crisps: sodium share and High traffic light, no area level', () {
       final NutritionAnalysis a = NutritionAnalysisService.analyse(
         data: crisps(),
         profile: bp,
         portion: const Portion.amount(20, 'g'),
-        rule: CombineRule.worseOfBoth,
       );
 
       expect(a.nutrients['Sodium']!.share, closeTo(0.08, 0.001));
       expect(a.nutrients['Sodium']!.productLevel, NutrientLevel.high);
-      expect(a.areas.single.level, NutrientLevel.high);
-    });
-
-    test('portion decides: the same 20 g is Low', () {
-      final NutritionAnalysis a = NutritionAnalysisService.analyse(
-        data: crisps(),
-        profile: bp,
-        portion: const Portion.amount(20, 'g'),
-        rule: CombineRule.portionDecides,
-      );
-
-      expect(a.areas.single.level, NutrientLevel.low);
+      expect(a.areas.single.level, isNull);
+      expect(a.areas.single.nutrients.single.level, isNull);
+      expect(a.areas.single.nutrients.single.productLevel, NutrientLevel.high);
+      expect(a.overall, isNull);
     });
 
     test('missing key nutrient: not enough information', () {
@@ -558,6 +704,7 @@ void main() {
 
       expect(a.areas.single.hasEnoughInformation, isFalse);
       expect(a.areas.single.missing, contains('Carbohydrate'));
+      expect(a.areas.single.watch, isEmpty);
       expect(a.overall, isNull);
     });
 
@@ -568,6 +715,107 @@ void main() {
       );
 
       expect(a.areas.length, 4);
+    });
+  });
+
+  group('High LDL cholesterol (R-LDL-01)', () {
+    test('LDL-T00 selecting high LDL cholesterol gives one LDL card, no sub-types', () {
+      final NutritionProfile p = NutritionProfile.fromSetupData(ProfileSetupData(highCholesterol: true));
+
+      expect(p.areas, <HealthArea>{HealthArea.cholesterol});
+
+      // An older profile that saved cholesterol details
+      // (LDL / triglycerides / not sure) still gets only the
+      // LDL card; the old details are ignored.
+      final ProfileSetupData old = ProfileSetupData.fromJson(<String, dynamic>{
+        'conditions': <String, dynamic>{'highCholesterol': true},
+        'diabetesType': 'Prediabetes',
+        'cholesterol': <String, dynamic>{'highLdl': false, 'highTriglycerides': true, 'notSure': false},
+      });
+
+      expect(NutritionProfile.fromSetupData(old).areas, <HealthArea>{HealthArea.cholesterol});
+    });
+
+    test('LDL-T03 the card shows the plain share and keeps the traffic light separate', () {
+      // Saturated fat 6 g per 100 g (traffic light High),
+      // 10 g portion: 0.6 g of 22.2 g (3%).
+      final NutritionLabelData biscuit = NutritionLabelData(
+        rawText: '',
+        columns: const <NutritionColumn>[
+          NutritionColumn(id: 'per_100g', label: 'Per 100 g', basis: NutritionColumnBasis.per100g, xCenter: 0),
+        ],
+        nutrients: const <NutrientRow>[
+          NutrientRow(name: 'Saturated Fat', order: 0, valuesByColumn: <List<NutritionValue>>[
+            <NutritionValue>[NutritionValue(amount: 6, unit: 'g', rawText: '6')],
+          ]),
+        ],
+      );
+
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(
+        data: biscuit,
+        profile: const NutritionProfile(areas: <HealthArea>{HealthArea.cholesterol}),
+        portion: const Portion.amount(10, 'g'),
+      );
+
+      final AreaAssessment x = a.areas.single;
+
+      expect(a.nutrients['Saturated Fat']!.productLevel, NutrientLevel.high);
+      expect(x.area, HealthArea.cholesterol);
+      expect(x.level, isNull);
+      expect(x.partial, isTrue);
+      expect(x.nutrients.single.name, 'Saturated Fat');
+      expect(x.nutrients.single.level, isNull);
+      expect(x.nutrients.single.share, closeTo(0.027, 0.002));
+      expect(x.nutrients.single.productLevel, NutrientLevel.high);
+      expect(a.overall, isNull);
+    });
+
+    test('LDL-T01 LDL card: key nutrients with no level, total fat as context', () {
+      const NutritionProfile ldlUser = NutritionProfile(areas: <HealthArea>{HealthArea.cholesterol});
+
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(data: homesoy(), profile: ldlUser);
+      final AreaAssessment ldl = a.areas.single;
+
+      expect(ldl.area, HealthArea.cholesterol);
+      expect(ldl.level, isNull);
+      expect(ldl.decidedBy, isNull);
+      expect(ldl.partial, isTrue);
+      expect(ldl.nutrients.map((NutrientAssessment n) => n.name), <String>['Saturated Fat', 'Total Fat']);
+      expect(ldl.nutrients.every((NutrientAssessment n) => n.level == null), isTrue);
+      expect(ldl.nutrients.first.productLevel, NutrientLevel.low);
+      expect(ldl.nutrients.last.productLevel, NutrientLevel.moderate);
+      expect(ldl.missing, contains('Trans Fat'));
+      expect(ldl.watch, isEmpty);
+      expect(ldl.benefit?.name, 'Dietary Fibre');
+      expect(a.overall, isNull);
+      expect(a.needsDetails, isTrue);
+    });
+
+    test('LDL-T02 no area sets an overall result, even at 1.5 litres', () {
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(
+        data: homesoy(),
+        profile: const NutritionProfile(
+          areas: <HealthArea>{HealthArea.diabetes, HealthArea.cholesterol},
+        ),
+        portion: const Portion.amount(1500, 'ml'),
+      );
+
+      expect(a.areas.where((AreaAssessment x) => x.level != null), isEmpty);
+      expect(a.overall, isNull);
+    });
+
+    test('LDL-T04 general nutrition users see the four cards', () {
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(
+        data: homesoy(),
+        profile: const NutritionProfile(),
+      );
+
+      expect(a.areas.map((AreaAssessment x) => x.area), <HealthArea>[
+        HealthArea.diabetes,
+        HealthArea.bloodPressure,
+        HealthArea.cholesterol,
+        HealthArea.weight,
+      ]);
     });
   });
 
