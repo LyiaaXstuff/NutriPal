@@ -1,0 +1,254 @@
+{
+  "_review_note": "Expected IDs reviewed against KB 1.7.1 on 15 Nov 2026",
+  "kb_version": "1.7.1",
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "I have diabetes. How much fibre should I aim for each day?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": ["DM-03"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q02",
+      "question": "What general carbohydrate amounts and exchanges are suggested for a main meal?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": ["DM-22", "DM-23"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q03",
+      "question": "Can I drink diet soda instead of regular soda for my diabetes?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": ["DM-06", "DM-05", "GEN-16"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q04",
+      "question": "Untuk diabetes, apakah pengganti yang disyorkan bagi minuman manis?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": ["DM-05", "GEN-16"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q05",
+      "question": "Bagi pemakanan diabetes, berapa sasaran minimum serat untuk setiap 1,000 kcal?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": ["DM-03"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q06",
+      "question": "What daily sodium level is recommended for adults in Malaysia to reduce cardiovascular risk?",
+      "health_area": "Blood pressure",
+      "expected_entry_ids": ["HT-01", "HT-02", "HT-03"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q07",
+      "question": "Jika label menyatakan 5 g garam, berapa mg natrium lebih kurang?",
+      "health_area": "Blood pressure",
+      "expected_entry_ids": ["GEN-02", "HT-01", "HT-02", "HT-03", "HT-16"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q08",
+      "question": "Is the DASH eating pattern recommended for high blood pressure?",
+      "health_area": "Blood pressure",
+      "expected_entry_ids": ["HT-05"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q09",
+      "question": "Menurut WHO, siapakah yang perlu mengelakkan garam pengganti yang mengandungi potassium?",
+      "health_area": "Blood pressure",
+      "expected_entry_ids": ["HT-08"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q10",
+      "question": "When eating out, what can I ask for or avoid to reduce sodium in my meal?",
+      "health_area": "Blood pressure",
+      "expected_entry_ids": ["HT-15"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q11",
+      "question": "What is the recommended saturated fat limit as a percentage of total energy?",
+      "health_area": "Cholesterol",
+      "expected_entry_ids": ["LD-01", "WT-03"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q12",
+      "question": "Apakah jenis lemak yang boleh menggantikan lemak tepu untuk membantu menurunkan LDL?",
+      "health_area": "Cholesterol",
+      "expected_entry_ids": ["LD-02", "TG-11", "DM-08"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q13",
+      "question": "What is the recommended trans fat limit as a share of total energy?",
+      "health_area": "Cholesterol",
+      "expected_entry_ids": ["LD-03"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q14",
+      "question": "Can oats or nuts help lower my bad cholesterol?",
+      "health_area": "Cholesterol",
+      "expected_entry_ids": ["LD-09", "LD-02"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q15",
+      "question": "Adakah diet Mediterranean disyorkan untuk dyslipidaemia dengan risiko CVD yang meningkat?",
+      "health_area": "Cholesterol",
+      "expected_entry_ids": ["LD-10"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q16",
+      "question": "I'm 17. Can NutriPal estimate how many calories I need?",
+      "health_area": "Weight",
+      "expected_entry_ids": ["GEN-19", "WT-22", "GEN-11"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q17",
+      "question": "How accurate is the daily calorie estimate?",
+      "health_area": "Weight",
+      "expected_entry_ids": ["GEN-20", "WT-22", "GEN-10"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q18",
+      "question": "Apakah sasaran awal yang realistik untuk penurunan berat badan dalam enam bulan?",
+      "health_area": "Weight",
+      "expected_entry_ids": ["WT-05", "WT-14"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q19",
+      "question": "Are the extra calories suggested for gradual weight gain applied to NutriPal's energy target?",
+      "health_area": "Weight",
+      "expected_entry_ids": ["GEN-22", "WT-08"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q20",
+      "question": "Are crash diets or weight-loss supplements recommended?",
+      "health_area": "Weight",
+      "expected_entry_ids": ["WT-21", "WT-09"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q21",
+      "question": "What do the UK FSA front-of-pack traffic lights measure, and when do the portion thresholds apply?",
+      "health_area": "General",
+      "expected_entry_ids": ["GEN-08", "GEN-23"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q22",
+      "question": "Jika orang dewasa mengambil 2 g natrium sehari, berapa gram garam yang lebih kurang bersamaan?",
+      "health_area": "General",
+      "expected_entry_ids": ["GEN-02", "HT-01", "HT-02", "HT-03"],
+      "should_match": true,
+      "language": "BM/mixed"
+    },
+    {
+      "id": "Q23",
+      "question": "Does a Malaysian low-sodium claim by itself mean that a product is healthy?",
+      "health_area": "General",
+      "expected_entry_ids": ["GEN-03", "GEN-14"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q24",
+      "question": "Which nutrients must Malaysian packaged-food labels declare per 100 g or ml and per serving?",
+      "health_area": "General",
+      "expected_entry_ids": ["GEN-01"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q25",
+      "question": "Does NutriPal give one overall healthy-or-unhealthy verdict based on individual nutrients?",
+      "health_area": "General",
+      "expected_entry_ids": ["GEN-14", "TG-11"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q26",
+      "question": "How many units of insulin should I take for this meal?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": ["DM-14", "DM-22", "DM-23"],
+      "should_match": true,
+      "language": "English"
+    },
+    {
+      "id": "Q27",
+      "question": "Can you diagnose diabetes from these symptoms?",
+      "health_area": "Diabetes",
+      "expected_entry_ids": [],
+      "should_match": false,
+      "language": "English"
+    },
+    {
+      "id": "Q28",
+      "question": "Can I eat this if I have gout?",
+      "health_area": null,
+      "expected_entry_ids": [],
+      "should_match": false,
+      "language": "English"
+    },
+    {
+      "id": "Q29",
+      "question": "Give me a personalized diet plan for chronic kidney disease.",
+      "health_area": null,
+      "expected_entry_ids": [],
+      "should_match": false,
+      "language": "English"
+    },
+    {
+      "id": "Q30",
+      "question": "Give me a seven-day recipe plan for high blood pressure.",
+      "health_area": "Blood pressure",
+      "expected_entry_ids": [],
+      "should_match": false,
+      "language": "English"
+    },
+    {
+      "id": "Q31",
+      "question": "Is this product halal?",
+      "health_area": null,
+      "expected_entry_ids": [],
+      "should_match": false,
+      "language": "English"
+    }
+  ]
+}

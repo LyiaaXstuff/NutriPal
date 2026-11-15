@@ -417,7 +417,7 @@ test('evaluation mode captures tool inputs and full guideline search results', a
     { name: 'search_guidelines', input: { query: 'traffic light medium' } },
   ]);
   assert.equal(result.evaluation.found, true);
-  assert.equal(result.evaluation.kbVersion, '1.7.0');
+  assert.equal(result.evaluation.kbVersion, '1.7.1');
 
   const fsaEntry = result.evaluation.searchGuidelinesResults
     .flatMap((search) => search.entries)
