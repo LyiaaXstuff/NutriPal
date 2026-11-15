@@ -11,13 +11,15 @@ import '../services/scan_history_service.dart';
 import '../widgets/nutripal_ui.dart';
 import '../widgets/scan_record_card.dart';
 import 'saved_scan_navigation.dart';
+import 'scan_flow.dart';
+import 'scan_screen.dart';
 
 // =======================================================
 // COMPARE (bottom-navigation tab)
 // =======================================================
 //
-// The user picks two saved products (History or
-// Favourites) and sees:
+// The user picks two products (from Scan history or
+// Favourites, or by scanning a new one) and sees:
 //
 //   1. Which one fits their health goals better, and why.
 //   2. One line per health area (decided by that area's
@@ -30,6 +32,11 @@ import 'saved_scan_navigation.dart';
 // this screen only shows them. All rules are in
 // CompareService.
 //
+// Only two foods (per 100 g) or two drinks (per 100 ml)
+// can be compared, so products of the other type are
+// greyed out once one product is chosen, and a new scan of
+// the other type is refused.
+//
 // The two chosen products are remembered while the app is
 // open, so switching tabs does not lose them.
 // =======================================================
@@ -37,7 +44,8 @@ import 'saved_scan_navigation.dart';
 class CompareScreen extends StatefulWidget {
   final ProfileSetupData profile;
 
-  // Opens the scanner (empty state).
+  // Opens the scanner from the Home shell. Compare itself
+  // scans for product A or B through the product picker.
   final VoidCallback onScanTap;
 
   const CompareScreen({
@@ -80,33 +88,70 @@ class _CompareScreenState extends State<CompareScreen> {
 
   ScanRecord? get _second => _keptSecondId == null ? null : _history.byId(_keptSecondId!);
 
+  static ProductForm _formOf(ScanRecord r) => NutritionAnalysisService.formOf(r.label);
+
   Future<void> _pick({required bool first}) async {
     final ScanRecord? other = first ? _second : _first;
 
-    final ScanRecord? chosen = await showModalBottomSheet<ScanRecord>(
+    // A ScanRecord, or _scanNew when the user wants to scan.
+    final Object? chosen = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext sheetContext) => _ProductPickerSheet(
         letter: first ? 'A' : 'B',
         records: _history.history,
+        favourites: _history.favourites,
         disabledId: other?.id,
         otherLetter: first ? 'B' : 'A',
+        requiredForm: other == null ? null : _formOf(other),
       ),
     );
 
     if (chosen == null || !mounted) return;
 
-    setState(() {
-      if (first) {
-        _keptFirstId = chosen.id;
-      } else {
-        _keptSecondId = chosen.id;
-      }
+    if (chosen == _scanNew) {
+      await _scanForCompare(first: first);
+      return;
+    }
 
-      // New pair: start again from the fair default.
-      _keptBasis = null;
-    });
+    if (chosen is ScanRecord) _choose(first: first, record: chosen);
+  }
+
+  void _choose({required bool first, required ScanRecord record}) {
+    if (first) {
+      _keptFirstId = record.id;
+    } else {
+      _keptSecondId = record.id;
+    }
+
+    // New pair: start again from the fair default.
+    _keptBasis = null;
+
+    if (mounted) setState(() {});
+  }
+
+  // Opens the scanner for product A or B. The result
+  // screen's "Use as product A/B" button calls _choose and
+  // returns here.
+  Future<void> _scanForCompare({required bool first}) async {
+    final ScanRecord? other = first ? _second : _first;
+    final Route<dynamic>? here = ModalRoute.of(context);
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ScanScreen(
+          profile: widget.profile,
+          flow: ScanFlowContext(
+            profile: widget.profile,
+            compareLetter: first ? 'A' : 'B',
+            compareForm: other == null ? null : _formOf(other),
+            compareRoute: here,
+            onCompareResult: (ScanRecord record) => _choose(first: first, record: record),
+          ),
+        ),
+      ),
+    );
   }
 
   void _clear({required bool first}) {
@@ -160,7 +205,7 @@ class _CompareScreenState extends State<CompareScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Pick two scanned products to see which fits your health goals better.',
+                  'Pick two foods or two drinks to see which fits your health goals better.',
                   style: TextStyle(color: _muted, fontSize: 14.5, height: 1.35),
                 ),
                 const SizedBox(height: 18),
@@ -168,11 +213,6 @@ class _CompareScreenState extends State<CompareScreen> {
                   const Padding(
                     padding: EdgeInsets.only(top: 40),
                     child: Center(child: CircularProgressIndicator(color: _purple)),
-                  )
-                else if (_history.history.length < 2 && a == null && b == null)
-                  _EmptyCompare(
-                    savedCount: _history.history.length,
-                    onScanTap: widget.onScanTap,
                   )
                 else ...[
                   _buildSlots(a, b),
@@ -869,7 +909,7 @@ class _NutrientTable extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               c.basis == CompareBasis.per100
-                  ? 'Colours: low, moderate or high per 100 (UK FSA traffic lights).'
+                  ? 'Colours: low, moderate or high per 100.'
                   : 'Colours: level for one serving, as on Your nutrition insights.',
               style: const TextStyle(color: NpColors.muted, fontSize: 12),
             ),
@@ -1068,7 +1108,7 @@ class _DetailsButton extends StatelessWidget {
 }
 
 // =======================================================
-// EMPTY STATES
+// EMPTY STATE
 // =======================================================
 
 class _HintCard extends StatelessWidget {
@@ -1083,61 +1123,11 @@ class _HintCard extends StatelessWidget {
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Choose a product for A and B. NutriPal then shows which one suits '
-              'your health areas better, and why.',
+              'Choose product A and B from your scan history or favourites, or scan '
+              'a new product. Compare two foods or two drinks. NutriPal then shows '
+              'which one suits your health areas better, and why.',
               style: TextStyle(color: NpColors.bodyInk, fontSize: 14, height: 1.4),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyCompare extends StatelessWidget {
-  final int savedCount;
-  final VoidCallback onScanTap;
-
-  const _EmptyCompare({required this.savedCount, required this.onScanTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFDCCFF0)),
-      ),
-      child: Column(
-        children: [
-          const CircleAvatar(
-            radius: 31,
-            backgroundColor: Color(0xFFF3ECFF),
-            child: Icon(Icons.compare_arrows_rounded, color: Color(0xFF4B2E83), size: 31),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            savedCount == 0 ? 'No products to compare yet' : 'Scan one more product',
-            style: const TextStyle(
-              color: Color(0xFF38138C),
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Compare needs at least two scanned products. '
-            'Every product you scan is saved here automatically.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF756D7E), fontSize: 14, height: 1.4),
-          ),
-          const SizedBox(height: 18),
-          NpPrimaryButton(
-            label: 'Scan a product',
-            icon: Icons.camera_alt_outlined,
-            onPressed: onScanTap,
           ),
         ],
       ),
@@ -1151,17 +1141,28 @@ class _EmptyCompare extends StatelessWidget {
 
 class _ProductPickerSheet extends StatefulWidget {
   final String letter;
+
+  // All saved scans, newest first.
   final List<ScanRecord> records;
+
+  // Favourites, most recently favourited first.
+  final List<ScanRecord> favourites;
 
   // The product already chosen for the other slot.
   final String? disabledId;
   final String otherLetter;
 
+  // Food or drink of the other chosen product; products of
+  // the other type cannot be picked. Null = any.
+  final ProductForm? requiredForm;
+
   const _ProductPickerSheet({
     required this.letter,
     required this.records,
+    required this.favourites,
     required this.disabledId,
     required this.otherLetter,
+    required this.requiredForm,
   });
 
   @override
@@ -1172,6 +1173,10 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
   final TextEditingController _search = TextEditingController();
 
   String _query = '';
+
+  // Which list to choose from: favourites or the whole scan
+  // history.
+  bool _showFavourites = false;
 
   @override
   void dispose() {
@@ -1184,12 +1189,14 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Favourites first, then the rest of history (newest
-    // first).
-    final List<ScanRecord> favourites =
-        widget.records.where((ScanRecord r) => r.isFavourite && _matches(r)).toList();
-    final List<ScanRecord> others =
-        widget.records.where((ScanRecord r) => !r.isFavourite && _matches(r)).toList();
+    final List<ScanRecord> source = _showFavourites ? widget.favourites : widget.records;
+    final List<ScanRecord> shown = source.where(_matches).toList();
+
+    final String emptyText = source.isEmpty
+        ? (_showFavourites
+            ? 'No favourites yet. Tap the heart on a product to save it here.'
+            : 'No scans in the last 30 days.')
+        : 'No ${_showFavourites ? 'favourites' : 'scans'} match your search.';
 
     return DraggableScrollableSheet(
       initialChildSize: 0.8,
@@ -1236,13 +1243,51 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                   ),
                 ],
               ),
+              if (widget.requiredForm != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Product ${widget.otherLetter} is a '
+                  '${widget.requiredForm == ProductForm.drink ? 'drink' : 'food'}, '
+                  'so choose another '
+                  '${widget.requiredForm == ProductForm.drink ? 'drink' : 'food'}.',
+                  style: const TextStyle(color: NpColors.muted, fontSize: 13.5, height: 1.35),
+                ),
+              ],
               const SizedBox(height: 14),
+              _ScanNewButton(
+                onTap: () => Navigator.pop<Object>(context, _scanNew),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PickerFilterChip(
+                      label: 'Scan history',
+                      icon: Icons.history_rounded,
+                      count: widget.records.length,
+                      selected: !_showFavourites,
+                      onTap: () => setState(() => _showFavourites = false),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _PickerFilterChip(
+                      label: 'Favourites',
+                      icon: Icons.favorite_rounded,
+                      count: widget.favourites.length,
+                      selected: _showFavourites,
+                      onTap: () => setState(() => _showFavourites = true),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _search,
                 textInputAction: TextInputAction.search,
                 onChanged: (String v) => setState(() => _query = v.trim().toLowerCase()),
                 decoration: InputDecoration(
-                  hintText: 'Search your scans',
+                  hintText: _showFavourites ? 'Search your favourites' : 'Search your scans',
                   prefixIcon: const Icon(Icons.search_rounded, color: NpColors.purple),
                   filled: true,
                   fillColor: Colors.white,
@@ -1262,24 +1307,16 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              if (favourites.isEmpty && others.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 30),
+              if (shown.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
                   child: Text(
-                    'No scans match your search.',
+                    emptyText,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: NpColors.muted, fontSize: 14),
+                    style: const TextStyle(color: NpColors.muted, fontSize: 14, height: 1.4),
                   ),
                 ),
-              if (favourites.isNotEmpty) ...[
-                const _PickerHeading('Favourites'),
-                for (final ScanRecord r in favourites) _pickerTile(r),
-                const SizedBox(height: 8),
-              ],
-              if (others.isNotEmpty) ...[
-                const _PickerHeading('Scan history'),
-                for (final ScanRecord r in others) _pickerTile(r),
-              ],
+              for (final ScanRecord r in shown) _pickerTile(r),
             ],
           ),
         );
@@ -1289,37 +1326,129 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
 
   Widget _pickerTile(ScanRecord r) {
     final bool taken = r.id == widget.disabledId;
+    final ProductForm? need = widget.requiredForm;
+    final bool otherType =
+        !taken && need != null && NutritionAnalysisService.formOf(r.label) != need;
+    final bool blocked = taken || otherType;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Opacity(
-        opacity: taken ? 0.45 : 1,
+        opacity: blocked ? 0.45 : 1,
         child: ScanRecordCard(
           record: r,
           showSummary: true,
-          note: taken ? 'Already chosen as ${widget.otherLetter}' : null,
-          onTap: taken ? null : () => Navigator.pop<ScanRecord>(context, r),
+          note: taken
+              ? 'Already chosen as ${widget.otherLetter}'
+              : otherType
+                  ? (need == ProductForm.drink
+                      ? 'Food - compare with another food'
+                      : 'Drink - compare with another drink')
+                  : null,
+          onTap: blocked ? null : () => Navigator.pop<Object>(context, r),
         ),
       ),
     );
   }
 }
 
-class _PickerHeading extends StatelessWidget {
-  final String text;
+// Returned by the picker when the user taps "Scan a new
+// product".
+const Object _scanNew = 'scan-new-product';
 
-  const _PickerHeading(this.text);
+class _ScanNewButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ScanNewButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 2),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: NpColors.muted,
-          fontSize: 13.5,
-          fontWeight: FontWeight.w800,
+    return Material(
+      color: NpColors.purple,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(Icons.document_scanner_outlined, color: Colors.white, size: 24),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Scan a new product',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Nutrition label or barcode',
+                      style: TextStyle(color: Color(0xFFE4D9F7), fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerFilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PickerFilterChip({
+    required this.label,
+    required this.icon,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = selected ? Colors.white : NpColors.purple;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? NpColors.purple : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 46,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: selected ? NpColors.purple : NpColors.softBorder),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: fg, size: 18),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    '$label ($count)',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: fg, fontSize: 14, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/profile_setup_data.dart';
 import '../services/user_profile_service.dart';
+import 'energy_details_form.dart';
 import 'weight_management_form.dart';
 import 'home_screen.dart';
 
@@ -26,11 +27,25 @@ class _HealthConditionsFormState
   // CLEAR CONDITIONAL DATA
   // =====================================================
   //
-  // Only weight management has follow-up questions;
-  // diabetes and high LDL cholesterol have none.
+  // Weight management has follow-up questions (goal, body
+  // details, activity). High LDL cholesterol without weight
+  // management asks the same details except the goal, for
+  // the saturated fat and trans fat limits. Diabetes and
+  // hypertension have none.
 
+  // The weight goal only (weight management turned off).
+  void _clearWeightGoal() {
+    widget.data.weightGoal =
+        null;
+  }
+
+  // Everything the energy estimate needs. Used when no
+  // selected area needs it.
   void _clearWeightData() {
     widget.data.weightGoal =
+        null;
+
+    widget.data.providerEnergyKcal =
         null;
 
     widget.data
@@ -82,6 +97,12 @@ class _HealthConditionsFormState
               !widget.data
                   .highCholesterol;
 
+          // No area needs the energy details any more.
+          if (!widget.data.highCholesterol &&
+              !widget.data.weightManagement) {
+            _clearWeightData();
+          }
+
           break;
 
         case 'weight':
@@ -91,7 +112,13 @@ class _HealthConditionsFormState
 
           if (!widget.data
               .weightManagement) {
-            _clearWeightData();
+            // Keep the body details when LDL cholesterol
+            // still needs them.
+            if (widget.data.highCholesterol) {
+              _clearWeightGoal();
+            } else {
+              _clearWeightData();
+            }
           }
 
           break;
@@ -203,8 +230,25 @@ class _HealthConditionsFormState
       return;
     }
 
-    // DIABETES, HYPERTENSION AND HIGH LDL CHOLESTEROL:
-    // no follow-up questions.
+    // HIGH LDL CHOLESTEROL WITHOUT WEIGHT MANAGEMENT:
+    // the same details as weight management, no goal.
+    if (widget.data
+        .highCholesterol) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              EnergyDetailsForm(
+            data:
+                widget.data,
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    // DIABETES AND HYPERTENSION: no follow-up questions.
     _goToHome();
   }
 

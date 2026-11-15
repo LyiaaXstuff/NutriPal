@@ -22,12 +22,11 @@ import '../services/nutrition_analysis_service.dart';
 // activity levels ("Inactive", "Low active", "Active",
 // "Very active"). Weight is kg, height cm.
 //
-// Energy (rules document, Layer 2): the NASEM 2023
-// maintenance estimate, adjusted for a weight goal (lose
-// 500 kcal less, gain 300 kcal more by default, with the
-// guideline floors), or a daily figure from the user's
-// doctor or dietitian ("Set by your healthcare provider").
-// See GoalEnergy in services/energy_requirement.dart.
+// Energy: the NASEM 2023 maintenance estimate for every
+// weight goal (lose, maintain and gain), or the user's own
+// daily energy target. NutriPal no longer subtracts or adds
+// a fixed amount for the goal (Weight Management Analysis
+// Guidance); the goal changes the explanation instead.
 // =======================================================
 
 class WeightPlanColors {
@@ -128,35 +127,25 @@ class WeightPlanOptions {
     return out.toString();
   }
 
-  /// The line under the energy number.
+  /// The line under the energy number. Maintenance is the
+  /// reference for every goal; the goal changes only the
+  /// wording.
   static String energyNote(DailyTargets t, String? goal) {
     if (t.setByProvider.contains('Energy')) {
       return 'NutriPal uses this instead of its own estimate to judge each '
           'product’s energy for you.';
     }
 
-    final GoalEnergyResult? g = t.goal;
+    final String g = (goal ?? '').toLowerCase();
 
-    if (g != null && g.lowBmi) {
-      return 'Your weight is already in the low range, so NutriPal doesn’t take '
-          'calories off. Please talk to a doctor or dietitian before trying to '
-          'lose weight.';
+    if (g.contains('lose') || g.contains('gain')) {
+      return 'A general guide to the energy needed to keep your current weight, '
+          'not a weight-${g.contains('lose') ? 'loss' : 'gain'} target. NutriPal '
+          'shows how much of it each portion gives.';
     }
 
-    if (g != null && !g.adjusted && g.floorApplied && g.floorKcal != null) {
-      return 'NutriPal doesn’t set weight-loss guides below '
-          '${exactKcalText(g.floorKcal!)} kcal a day, so it uses the energy to '
-          'keep your current weight. A doctor or dietitian can set a plan that '
-          'suits you.';
-    }
-
-    if (g != null && g.adjusted) {
-      return 'A general guide, not a prescription. NutriPal uses it to judge each '
-          'product’s energy; your other limits stay based on maintenance. If your '
-          'doctor or dietitian gave you a daily calorie figure, enter it instead.';
-    }
-
-    return 'NutriPal uses this to judge each product’s energy for you.';
+    return 'A general guide to the energy needed to keep your current weight. '
+        'NutriPal shows how much of it each portion gives.';
   }
 
   // ---- daily figure from a doctor or dietitian ---------
@@ -186,7 +175,7 @@ class WeightPlanOptions {
     final double? kcal = parseKcal(text);
 
     if (kcal != null && kcal < EnergyRequirement.providerMinimumKcal) {
-      return 'NutriPal can’t use targets below 800 kcal a day. Very low calorie '
+      return 'NutriPal can’t use targets below 800 kcal a day. Very low energy '
           'diets need close medical supervision.';
     }
 
@@ -204,13 +193,13 @@ class WeightPlanOptions {
     }
 
     return 'This is lower than most guideline plans. NutriPal will use it '
-        'because your healthcare provider set it.';
+        'because you set it as your own target.';
   }
 
   // ---- what guidelines say for each goal ----------------
   //
   // General information only, never a plan for the user
-  // (the applied change is in GoalEnergy). Sources: MOH obesity CPG 2023 and ADA 2026
+  // (NutriPal does not apply these amounts). Sources: MOH obesity CPG 2023 and ADA 2026
   // Section 8 (lose, WT-13 / WT-14 / WT-19), NHS (gain,
   // WT-08), maintenance activity (WT-02, WT-15).
 
@@ -232,6 +221,7 @@ class WeightPlanOptions {
     required String? sex,
     required double? weightKg,
     required double? heightCm,
+    bool diabetes = false,
   }) {
     if (goal == 'Lose weight') {
       final double? b = bmi(weightKg, heightCm);
@@ -247,10 +237,11 @@ class WeightPlanOptions {
       final String range = sex == 'Male' ? '1,500–1,800' : '1,200–1,500';
 
       return (
-        'Guidelines suggest eating 500–750 kcal a day less than usual, or about '
-            '$range kcal a day, aiming to lose 0.5–1 kg a week. A doctor or '
-            'dietitian can set a plan that suits you. If you take insulin or other '
-            'diabetes medicines, ask your doctor before eating less.',
+        'For adults with obesity, guidelines suggest eating 500–750 kcal a day less '
+            'than usual, or about $range kcal a day, aiming to lose 0.5–1 kg a week. '
+            'This depends on the person, so a doctor or '
+            'dietitian can set a plan that suits you.'
+            '${diabetes ? ' If you take insulin or other diabetes medicines, ask your doctor before eating less.' : ''}',
         true,
       );
     }
@@ -805,7 +796,7 @@ class EnergyGuideCard extends StatelessWidget {
     super.key,
     required this.kcalText,
     required this.note,
-    this.label = 'Estimated daily maintenance energy',
+    this.label = 'Estimated daily energy need',
     this.rangeText,
     this.approximate = true,
   });
@@ -820,34 +811,16 @@ class EnergyGuideCard extends StatelessWidget {
   }) {
     final bool byProvider = t.setByProvider.contains('Energy');
     final String note = WeightPlanOptions.energyNote(t, goal);
-    final GoalEnergyResult? g = byProvider ? null : t.goal;
 
-    // Lose or gain with a change applied: show the goal
-    // energy and how it was worked out.
-    if (g != null && g.adjusted) {
-      final bool losing = g.changeKcal < 0;
-      final String maintenance = WeightPlanOptions.kcalText(g.maintenanceKcal);
-
-      return EnergyGuideCard(
-        key: key,
-        kcalText: WeightPlanOptions.kcalText(g.kcal),
-        label: losing ? 'Daily energy guide for weight loss' : 'Daily energy guide for weight gain',
-        rangeText: g.floorApplied
-            ? 'Maintenance ≈ $maintenance kcal; set to the '
-                '${WeightPlanOptions.exactKcalText(g.kcal)} kcal minimum'
-            : 'Maintenance ≈ $maintenance kcal '
-                '${losing ? '−' : '+'} ${g.requestedKcal} kcal',
-        note: extraNote == null ? note : '$note $extraNote',
-      );
-    }
-
+    // The same maintenance figure for lose, maintain and
+    // gain (no fixed amount is taken off or added).
     return EnergyGuideCard(
       key: key,
       kcalText: byProvider
           ? WeightPlanOptions.exactKcalText(t.energyKcal)
           : WeightPlanOptions.kcalText(t.energyKcal),
       approximate: !byProvider,
-      label: byProvider ? 'Set by your healthcare provider' : 'Estimated daily maintenance energy',
+      label: byProvider ? 'Your own energy target' : 'Estimated daily energy need',
       rangeText: !byProvider && t.energyLowKcal != null && t.energyHighKcal != null
           ? 'Likely ${WeightPlanOptions.kcalText(t.energyLowKcal!)}–'
               '${WeightPlanOptions.kcalText(t.energyHighKcal!)} kcal'
@@ -935,7 +908,7 @@ class EnergyGuideCard extends StatelessWidget {
 // DAILY FIGURE FROM A DOCTOR OR DIETITIAN (optional)
 // =======================================================
 
-/// Optional box for a daily calorie figure from the user's
+/// Optional box for a daily energy figure from the user's
 /// doctor or dietitian. When filled in, it replaces
 /// NutriPal's estimate as the energy base.
 class ProviderEnergyField extends StatelessWidget {
@@ -981,7 +954,7 @@ class ProviderEnergyField extends StatelessWidget {
           children: [
             Expanded(
               child: WeightPlanLabel(
-                'Calorie target from your doctor or dietitian',
+                'Own energy target per day',
                 asSectionTitle: labelAsSectionTitle,
               ),
             ),
@@ -997,11 +970,6 @@ class ProviderEnergyField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Only fill this in if a healthcare provider gave you a daily calorie '
-          'figure. NutriPal then uses it instead of its own estimate.',
-          style: TextStyle(color: WeightPlanColors.muted, fontSize: 13, height: 1.4),
-        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -1081,12 +1049,17 @@ class GoalGuidanceCard extends StatelessWidget {
   final double? weightKg;
   final double? heightCm;
 
+  // The insulin / diabetes-medicine line shows only for users
+  // who selected diabetes.
+  final bool diabetes;
+
   const GoalGuidanceCard({
     super.key,
     required this.goal,
     required this.sex,
     required this.weightKg,
     required this.heightCm,
+    this.diabetes = false,
   });
 
   @override
@@ -1096,6 +1069,7 @@ class GoalGuidanceCard extends StatelessWidget {
       sex: sex,
       weightKg: weightKg,
       heightCm: heightCm,
+      diabetes: diabetes,
     );
 
     if (guidance == null) return const SizedBox.shrink();

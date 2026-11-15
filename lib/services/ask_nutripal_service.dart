@@ -6,7 +6,6 @@ import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
 import '../models/profile_setup_data.dart';
 import 'agent_summary.dart';
-import 'energy_requirement.dart' show GoalEnergyResult;
 import 'nutrition_analysis_service.dart';
 
 // =======================================================
@@ -115,24 +114,20 @@ class AskNutriPalService {
               'sugars are not added or free sugars.',
       },
       'targets': <String, dynamic>{
-        // The energy target each product is judged against
-        // (with the weight goal applied).
-        'energy_kcal': _r(t.goalEnergyKcal),
+        // The energy reference each portion is compared with:
+        // maintenance energy for every weight goal (lose,
+        // maintain, gain), or the user's own target.
+        'energy_kcal': _r(t.energyKcal),
         'energy_is_personal': t.energyIsPersonal,
         // Where the energy figure comes from, so the chatbot
         // never calls an estimate a prescription.
         'energy_basis': t.setByProvider.contains('Energy')
-            ? 'set by healthcare provider'
+            ? "user's own daily energy target"
             : !t.energyIsPersonal
                 ? 'standard 2,000 kcal reference'
-                : t.goalAdjusted
-                    ? 'NASEM 2023 maintenance estimate '
-                        '${t.goal!.changeKcal < 0 ? 'minus' : 'plus'} '
-                        '${t.goal!.changeKcal.abs().round()} kcal for the weight goal '
-                        '(general guide; a doctor\'s or dietitian\'s figure can replace it)'
-                    : 'NASEM 2023 estimated maintenance energy',
-        if (t.goal != null) 'maintenance_energy_kcal': _r(t.goal!.maintenanceKcal),
-        if (_goalNote(t) != null) 'energy_goal_note': _goalNote(t),
+                : 'NASEM 2023 estimated maintenance energy (used for lose, maintain and '
+                    'gain; no fixed amount is taken off or added for the goal, and it is '
+                    'a general guide, not a calorie target)',
         if (t.energyLowKcal != null && t.energyHighKcal != null)
           'maintenance_likely_range_kcal': <int>[
             (t.energyLowKcal! / 10).round() * 10,
@@ -221,20 +216,6 @@ class AskNutriPalService {
       // the rules on the server).
       'rating': ratingRules(analysis),
     };
-  }
-
-  /// Why the weight goal changed the energy less than
-  /// asked, or null.
-  static String? _goalNote(DailyTargets t) {
-    final GoalEnergyResult? g = t.goal;
-
-    if (g == null) return null;
-    if (g.lowBmi) return 'no deficit because BMI is below 18.5';
-    if (g.floorApplied && g.floorKcal != null) {
-      return 'weight-loss guide kept at or above ${g.floorKcal!.round()} kcal';
-    }
-
-    return null;
   }
 
   /// Layer 1 + Layer 3 inputs for rating any amount.

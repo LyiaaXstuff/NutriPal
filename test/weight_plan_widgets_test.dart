@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nutripal/models/nutrition_analysis.dart';
-import 'package:nutripal/services/energy_requirement.dart';
 import 'package:nutripal/services/nutrition_analysis_service.dart';
 import 'package:nutripal/widgets/weight_plan_widgets.dart';
 
@@ -26,11 +25,11 @@ void main() {
 
       expect(card.kcalText, '2,090');
       expect(card.approximate, isTrue);
-      expect(card.label, 'Estimated daily maintenance energy');
+      expect(card.label, 'Estimated daily energy need');
       expect(card.rangeText, 'Likely 1,850–2,330 kcal');
     });
 
-    test('W-T11 a provider figure is exact and "Set by your healthcare provider"', () {
+    test('W-T11 an own energy target is exact and labelled "Your own energy target"', () {
       final DailyTargets t = NutritionAnalysisService.targetsFor(
         const NutritionProfile(providerEnergyKcal: 1234),
       );
@@ -39,7 +38,7 @@ void main() {
 
       expect(card.kcalText, '1,234');
       expect(card.approximate, isFalse);
-      expect(card.label, 'Set by your healthcare provider');
+      expect(card.label, 'Your own energy target');
       expect(card.rangeText, isNull);
     });
 
@@ -55,40 +54,35 @@ void main() {
           ),
         );
 
-    test('W-T09 lose: 500 kcal less by default, shown with maintenance', () {
+    test('W-T09 lose: the same maintenance energy, not a weight-loss target', () {
       final DailyTargets t = targets('lose');
       final EnergyGuideCard card = EnergyGuideCard.fromTargets(t, goal: 'Lose weight');
 
-      // 2092.2 - 500 = 1592.2
       expect(t.energyKcal, closeTo(2092.2, 0.1));
-      expect(card.kcalText, '1,590');
-      expect(card.label, 'Daily energy guide for weight loss');
-      expect(card.rangeText, 'Maintenance ≈ 2,090 kcal − 500 kcal');
-      expect(card.note, contains('not a prescription'));
+      expect(t.goalEnergyKcal, closeTo(2092.2, 0.1));
+      expect(card.kcalText, '2,090');
+      expect(card.label, 'Estimated daily energy need');
+      expect(card.rangeText, 'Likely 1,850–2,330 kcal');
+      expect(card.note, contains('not a weight-loss target'));
     });
 
-    test('W-T10 gain: 300 kcal more', () {
+    test('W-T10 gain: the same maintenance energy, nothing added', () {
       final EnergyGuideCard card = EnergyGuideCard.fromTargets(targets('gain'), goal: 'Gain weight');
 
-      expect(card.kcalText, '2,390');
-      expect(card.label, 'Daily energy guide for weight gain');
-      expect(card.rangeText, 'Maintenance ≈ 2,090 kcal + 300 kcal');
+      expect(card.kcalText, '2,090');
+      expect(card.label, 'Estimated daily energy need');
+      expect(card.note, contains('not a weight-gain target'));
     });
 
-    test('W-T19 lose with BMI under 18.5: no deficit, referral note', () {
+    test('W-T19 lose with BMI under 18.5: still maintenance, no deficit', () {
       // 45 kg, 158 cm -> BMI 18.0
       final DailyTargets t = targets('lose', weightKg: 45);
-      final EnergyGuideCard card = EnergyGuideCard.fromTargets(t, goal: 'Lose weight');
 
       expect(t.goalEnergyKcal, closeTo(t.energyKcal, 0.01));
-      expect(card.label, 'Estimated daily maintenance energy');
-      expect(card.note, contains('talk to a doctor or dietitian'));
+      expect(t.goal, isNull);
     });
 
-    test('W-T20 lose: never below 1,200 kcal for a woman', () {
-      // An inactive woman of 70, 47 kg at 158 cm (BMI 18.8):
-      // EER 584.90 - 490.70 + 903.76 + 550.37 = 1548.3;
-      // 1548.3 - 500 = 1048.3 -> 1,200.
+    test('W-T20 no floor is needed: the energy is never cut', () {
       final DailyTargets t = NutritionAnalysisService.targetsFor(
         const NutritionProfile(
           sex: 'female',
@@ -99,20 +93,13 @@ void main() {
           weightGoal: 'lose',
         ),
       );
-      final EnergyGuideCard card = EnergyGuideCard.fromTargets(t, goal: 'Lose weight');
 
-      expect(t.goalEnergyKcal, 1200);
-      expect(card.rangeText, contains('1,200 kcal minimum'));
-    });
-
-    test('the weight-goal amount is fixed: no user choice', () {
-      expect(GoalEnergy.amountFor('Lose weight'), 500);
-      expect(GoalEnergy.amountFor('Gain weight'), 300);
-      expect(GoalEnergy.amountFor('Maintain weight'), 0);
+      // EER 584.90 - 490.70 + 903.76 + 550.37 = 1548.3.
+      expect(t.goalEnergyKcal, closeTo(1548.3, 0.1));
     });
   });
 
-  group('Calorie target from a doctor or dietitian', () {
+  group('Energy target from a doctor or dietitian', () {
     test('empty is fine; 800 to 5,000 is accepted', () {
       expect(WeightPlanOptions.providerTextOk(''), isTrue);
       expect(WeightPlanOptions.providerKcal('1500'), 1500);

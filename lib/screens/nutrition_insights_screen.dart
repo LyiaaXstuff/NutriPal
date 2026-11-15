@@ -591,6 +591,79 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
       );
   }
 
+  // =====================================================
+  // SCANNING FOR COMPARE
+  // =====================================================
+
+  String get _compareLetter => widget.flow.compareLetter ?? 'A';
+
+  Widget _compareBar() {
+    final bool ready = _recordId != null;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        color: NpColors.background,
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
+        child: SizedBox(
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: ready ? _useForCompare : null,
+            icon: const Icon(Icons.compare_arrows_rounded),
+            label: Text(
+              ready ? 'Use as product $_compareLetter' : 'Saving scan...',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: NpColors.purple,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFFE4D9F7),
+              disabledForegroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _useForCompare() {
+    final ScanRecord? record = _recordId == null ? null : _history.byId(_recordId!);
+
+    if (record == null) return;
+
+    // Compare pairs two foods or two drinks only.
+    final ProductForm? needed = widget.flow.compareForm;
+    final ProductForm form = NutritionAnalysisService.formOf(record.label);
+
+    if (needed != null && form != needed) {
+      final String other = _compareLetter == 'A' ? 'B' : 'A';
+      final String want = needed == ProductForm.drink ? 'drink' : 'food';
+      final String got = form == ProductForm.drink ? 'drink' : 'food';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This product is a $got, but product $other is a $want. '
+            'Choose a $want to compare. This scan is still saved in your history.',
+          ),
+          backgroundColor: NpColors.purple,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      return;
+    }
+
+    widget.flow.onCompareResult!(record);
+
+    final Object? compareRoute = widget.flow.compareRoute;
+
+    Navigator.of(context).popUntil(
+      (Route<dynamic> route) => compareRoute == null ? route.isFirst : route == compareRoute,
+    );
+  }
+
   void _openDetails() {
     Navigator.push(
       context,
@@ -607,8 +680,6 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
   @override
   Widget build(BuildContext context) {
     final NutritionAnalysis a = _analysis;
-    final OverallText overall =
-        InsightTextService.overall(a, weightGoal: _profile.weightGoal);
     final List<PortionOption> options = NutritionAnalysisService.portionOptions(_data);
     final HouseholdMeasure? measure = NutritionAnalysisService.householdMeasure(_data);
     final bool countSelected = measure != null &&
@@ -619,6 +690,7 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
 
     return Scaffold(
       backgroundColor: NpColors.background,
+      bottomNavigationBar: widget.flow.forCompare ? _compareBar() : null,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
@@ -732,14 +804,6 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ---- overall verdict -------------------------
-            _OverallCard(
-              // "See your details" uses the neutral colour.
-              level: a.needsDetails && a.overall == NutrientLevel.low ? null : a.overall,
-              text: overall,
-            ),
-            const SizedBox(height: 16),
-
             // ---- portion picker --------------------------
             NpCard(
               child: Column(
@@ -800,6 +864,12 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
               ),
             ),
             const SizedBox(height: 22),
+
+            // ---- nutrient categories for the portion -----
+            if (a.trafficLights.results.isNotEmpty) ...[
+              _TrafficLightCard(lights: a.trafficLights, portionText: _portionText(a)),
+              const SizedBox(height: 22),
+            ],
 
             // ---- health areas ----------------------------
             Padding(
@@ -1204,60 +1274,6 @@ class _PhotoViewerState extends State<_PhotoViewer> {
   }
 }
 
-class _OverallCard extends StatelessWidget {
-  final NutrientLevel? level;
-  final OverallText text;
-
-  const _OverallCard({required this.level, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final (Color bg, Color ink) = switch (level) {
-      NutrientLevel.low => (const Color(0xFF5FE3DE), const Color(0xFF06302E)),
-      NutrientLevel.moderate => (const Color(0xFFFFD27A), const Color(0xFF4A2C00)),
-      NutrientLevel.high => (const Color(0xFFFFB4AC), const Color(0xFF5C0E07)),
-      null => (const Color(0xFFE6DDF7), NpColors.purple),
-    };
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 14, 20),
-      decoration: BoxDecoration(
-        color: NpColors.purple,
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                NpPill(text: text.tag, background: bg, ink: ink),
-                const SizedBox(height: 8),
-                Text(
-                  text.title,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    height: 1.2,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  text.text,
-                  style: const TextStyle(fontSize: 14, height: 1.45, color: Color(0xFFE6DDF7)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Image.asset('assets/images/NutriPal Mascot7.png', width: 100, height: 116, fit: BoxFit.contain),
-        ],
-      ),
-    );
-  }
-}
-
 class _PortionButton extends StatelessWidget {
   final String label;
   final String sub;
@@ -1315,6 +1331,249 @@ class _PortionButton extends StatelessWidget {
   }
 }
 
+// =======================================================
+// NUTRIENT CATEGORIES IN THE INTENDED PORTION
+// =======================================================
+//
+// Fat, saturated fat, total sugars and salt in a low
+// (green), medium (amber) or high (red) category, using the
+// UK front-of-pack traffic-light criteria and the high-per-
+// portion rule (food over 100 g, drinks over 150 ml). The
+// category word is always shown, so colour is never the
+// only signal.
+
+class _TrafficColors {
+  _TrafficColors._();
+
+  // FSA guidance colours (PMS 375, PMS 143, Red 032).
+  static const Color green = Color(0xFF78B73A);
+  static const Color amber = Color(0xFFEB9635);
+  static const Color red = Color(0xFFD1282A);
+
+  static Color fill(TrafficCategory c) => switch (c) {
+        TrafficCategory.low => green,
+        TrafficCategory.medium => amber,
+        TrafficCategory.high => red,
+      };
+
+  // Readable text on each colour.
+  static Color ink(TrafficCategory c) => switch (c) {
+        TrafficCategory.low => const Color(0xFF16300A),
+        TrafficCategory.medium => const Color(0xFF3A1F00),
+        TrafficCategory.high => Colors.white,
+      };
+
+  static Color tint(TrafficCategory c) => switch (c) {
+        TrafficCategory.low => const Color(0xFFEEF7E5),
+        TrafficCategory.medium => const Color(0xFFFDF1E3),
+        TrafficCategory.high => const Color(0xFFFBE5E5),
+      };
+}
+
+class _TrafficLightCard extends StatelessWidget {
+  final PortionTrafficLights lights;
+  final String portionText;
+
+  const _TrafficLightCard({required this.lights, required this.portionText});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool knownPortion = lights.portionSize != null;
+
+    return NpCard(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: NpColors.lilac,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.traffic_rounded, color: NpColors.purple, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Nutrient levels in your portion',
+                      style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: NpColors.ink),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      knownPortion ? 'For $portionText' : 'Based on ${lights.unit == 'ml' ? '100 ml' : '100 g'}',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: NpColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (final TrafficLightResult r in lights.results) ...[
+            _TrafficRow(result: r, lights: lights),
+            const SizedBox(height: 10),
+          ],
+          if (!knownPortion)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'The portion size in ${lights.unit} is not known, so the per 100 ${lights.unit} '
+                'criteria are used.',
+                style: const TextStyle(fontSize: 12.5, height: 1.4, color: NpColors.muted),
+              ),
+            ),
+          if (lights.missing.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Not on the label: ${lights.missing.join(', ').toLowerCase()}.',
+                style: const TextStyle(fontSize: 12.5, height: 1.4, color: NpColors.muted),
+              ),
+            ),
+          const Divider(height: 18, color: NpColors.cardBorder),
+          const Row(
+            children: [
+              _TrafficLegend(category: TrafficCategory.low),
+              SizedBox(width: 14),
+              _TrafficLegend(category: TrafficCategory.medium),
+              SizedBox(width: 14),
+              _TrafficLegend(category: TrafficCategory.high),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Each nutrient is rated on its own. This describes nutrient levels, '
+            'not an overall rating of the product.',
+            style: TextStyle(fontSize: 12, height: 1.4, color: NpColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrafficRow extends StatelessWidget {
+  final TrafficLightResult result;
+  final PortionTrafficLights lights;
+
+  const _TrafficRow({required this.result, required this.lights});
+
+  /// 1 decimal (2 below 1 g), without trailing zeros.
+  static String _g(double v) {
+    final String t = v.toStringAsFixed(v < 1 ? 2 : 1);
+
+    return t.contains('.') ? t.replaceFirst(RegExp(r'\.?0+$'), '') : t;
+  }
+
+  String get _amount {
+    final double? portion = result.portionAmount;
+
+    return portion == null
+        ? '${_g(result.per100)} g per 100 ${lights.unit}'
+        : '${_g(portion)} g in this portion';
+  }
+
+  String get _reason {
+    final String per100 = '${_g(result.per100)} g per 100 ${lights.unit}';
+
+    if (result.basis == TrafficBasis.portionThreshold) {
+      final String size = lights.unit == 'ml' ? 'drink portions over 150 ml' : 'food portions over 100 g';
+
+      return 'Above ${_g(result.portionHighThreshold)} g, the high level for $size';
+    }
+
+    return result.portionAmount == null ? 'Per 100 ${lights.unit} criteria' : per100;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final TrafficCategory c = result.category;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _TrafficColors.tint(c),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _TrafficColors.fill(c).withValues(alpha: 0.55)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  result.name,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: NpColors.muted),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _amount,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: NpColors.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _reason,
+                  style: const TextStyle(fontSize: 12.5, height: 1.35, color: NpColors.bodyInk),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            constraints: const BoxConstraints(minWidth: 78),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: _TrafficColors.fill(c),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              c.label,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: _TrafficColors.ink(c)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrafficLegend extends StatelessWidget {
+  final TrafficCategory category;
+
+  const _TrafficLegend({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: _TrafficColors.fill(category),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          category.label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: NpColors.bodyInk),
+        ),
+      ],
+    );
+  }
+}
+
 class _AreaCard extends StatelessWidget {
   final AreaAssessment area;
   final PlainAreaText text;
@@ -1347,7 +1606,10 @@ class _AreaCard extends StatelessWidget {
       _ => null,
     };
 
-    return goal == null ? area.area.focus : '$goal · ${area.area.focus}';
+    // The weight card shows energy only (fat and sugars are
+    // in the nutrient levels card), so its subtitle says
+    // Energy rather than the shared "Energy, fat and sugar".
+    return goal == null ? 'Energy' : '$goal · Energy';
   }
 
   @override
@@ -1464,7 +1726,7 @@ class _AreaCard extends StatelessWidget {
             const SizedBox(height: 10),
             _NoteBox(
               icon: Icons.check_circle_outline_rounded,
-              lead: 'Bonus: ',
+              lead: 'Good to know: ',
               text: text.goodNews!,
               background: NpColors.okBg,
               ink: NpColors.okInk,
@@ -1683,6 +1945,8 @@ class _FactRow extends StatelessWidget {
         'Total Sugars' => Icons.cookie_outlined,
         'Sodium' => Icons.grain_rounded,
         'Energy' => Icons.local_fire_department_outlined,
+        'Protein' => Icons.egg_alt_outlined,
+        'Dietary Fibre' => Icons.eco_outlined,
         _ => Icons.opacity_rounded,
       };
 

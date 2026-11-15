@@ -269,6 +269,10 @@ class GoalEnergyResult {
   bool get adjusted => changeKcal.abs() >= 0.5;
 }
 
+// NOT USED BY THE ANALYSIS ANY MORE. Following the Weight
+// Management Analysis Guidance, lose, maintain and gain all
+// use maintenance energy; NutriPal no longer subtracts 500
+// or adds 300 kcal. Kept (with its tests) for reference.
 class GoalEnergy {
   GoalEnergy._();
 

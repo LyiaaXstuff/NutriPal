@@ -70,6 +70,30 @@ class AnalysisRules {
   // Salt (g) = sodium (g) x 2.5.
   static const double saltPerSodium = 2.5;
 
+  // ---- Portion categories: high-per-portion (FSA) ------
+  // Above these amounts in the intended portion a nutrient
+  // is high (red), but only for food portions over 100 g
+  // and drink portions over 150 ml (Chapter 3, Tables 3.1
+  // and 3.2).
+  static const Map<String, double> foodPortionHigh = <String, double>{
+    'Total Fat': 21.0,
+    'Saturated Fat': 6.0,
+    'Total Sugars': 27.0,
+    'Salt': 1.8,
+  };
+
+  static const Map<String, double> drinkPortionHigh = <String, double>{
+    'Total Fat': 10.5,
+    'Saturated Fat': 3.0,
+    'Total Sugars': 13.5,
+    'Salt': 0.9,
+  };
+
+  // Portion sizes above which the high-per-portion
+  // thresholds apply.
+  static const double foodPortionRuleAboveG = 100;
+  static const double drinkPortionRuleAboveMl = 150;
+
   // ---- Layer 2 ----------------------------------------
   // Used only when NutriPal cannot estimate the user's
   // energy (no weight details, or an older profile under
@@ -126,6 +150,14 @@ class AnalysisRules {
   // Diabetes card: carbohydrate and total sugars as amounts
   // only (carbohydrate also as 15 g exchanges).
   static const List<String> diabetesShown = <String>['Carbohydrate', 'Total Sugars'];
+
+  /// Amounts shown on the weight card after energy, by
+  /// goal ('lose' | 'maintain' | 'gain'; null = maintain).
+  static List<String> weightSupportingFor(String? goal) => switch (goal) {
+        'lose' => const <String>['Protein', 'Dietary Fibre', 'Total Sugars', 'Total Fat'],
+        'gain' => const <String>['Protein', 'Total Sugars'],
+        _ => const <String>['Protein'],
+      };
 
   /// Nutrients that matter for [area], key nutrient first.
   static List<String> nutrientsFor(HealthArea area) => areaNutrients[area]!;
@@ -307,9 +339,10 @@ class NutritionAnalysisService {
   /// Energy base, in this order:
   ///   1. a daily figure from the user's doctor or
   ///      dietitian (800-5,000 kcal), used as given
-  ///   2. the NASEM EER (maintenance), with the weight goal
-  ///      applied to the energy target only (GoalEnergy:
-  ///      lose 500 kcal less with floors, gain 300 more)
+  ///   2. the NASEM EER (maintenance) for every weight goal.
+  ///      Lose, maintain and gain all use maintenance as the
+  ///      reference; NutriPal does not subtract or add a
+  ///      fixed amount (Weight Management Analysis Guidance)
   ///   3. the 2,000 kcal reference
   /// Every other limit is based on 1, 2 (maintenance) or 3,
   /// unless the user entered their own target for it
@@ -322,7 +355,10 @@ class NutritionAnalysisService {
     bool personal = false;
     double? low;
     double? high;
-    GoalEnergyResult? goal;
+    // No weight-goal change is applied any more, so this
+    // stays null (maintenance is the reference for lose,
+    // maintain and gain).
+    const GoalEnergyResult? goal = null;
 
     final EnergyEstimate? eer = maintenanceEnergy(p);
 
@@ -335,19 +371,6 @@ class NutritionAnalysisService {
       low = eer.lowKcal;
       high = eer.highKcal;
       personal = true;
-
-      final GoalEnergyResult g = GoalEnergy.apply(
-        maintenanceKcal: eer.kcal,
-        goal: p.weightGoal,
-        sex: p.sex,
-        weightKg: p.weightKg,
-        heightCm: p.heightCm,
-      );
-
-      // Kept for lose and gain, including "no deficit"
-      // because of the floor or a low BMI, so the app can
-      // say why.
-      if (g.requestedKcal > 0) goal = g;
     }
 
     // The user's own target when set (> 0), else [fallback].
@@ -423,6 +446,128 @@ class NutritionAnalysisService {
     if (per100 <= t[1]) return NutrientLevel.moderate;
 
     return NutrientLevel.high;
+  }
+
+  // =====================================================
+  // PORTION CATEGORY (traffic light for the portion)
+  // =====================================================
+  //
+  // Equation 3.1: N_portion = N_100 x P / 100. Food over
+  // 100 g / drink over 150 ml: high when N_portion is above
+  // the high-per-portion threshold; otherwise (and for
+  // smaller portions) the per 100 criteria decide. A small
+  // portion never lowers a high per 100 category.
+
+  /// N_portion from Equation 3.1.
+  static double portionAmountOf(double per100, double portionSize) =>
+      per100 * portionSize / 100;
+
+  /// True when the high-per-portion thresholds apply.
+  static bool portionRuleApplies(ProductForm form, double? portionSize) {
+    if (portionSize == null) return false;
+
+    return form == ProductForm.drink
+        ? portionSize > AnalysisRules.drinkPortionRuleAboveMl
+        : portionSize > AnalysisRules.foodPortionRuleAboveG;
+  }
+
+  /// (category, basis) of one scheme nutrient ('Total Fat',
+  /// 'Saturated Fat', 'Total Sugars', 'Salt'), or null for
+  /// other nutrients. [per100] and the result are in g.
+  static (TrafficCategory, TrafficBasis)? portionCategory(
+    String nutrient,
+    double per100,
+    ProductForm form,
+    double? portionSize,
+  ) {
+    final NutrientLevel? standard = productLevel(nutrient, per100, form);
+
+    if (standard == null) return null;
+
+    final double? high = (form == ProductForm.drink
+        ? AnalysisRules.drinkPortionHigh
+        : AnalysisRules.foodPortionHigh)[nutrient];
+
+    if (high != null &&
+        portionRuleApplies(form, portionSize) &&
+        portionAmountOf(per100, portionSize!) > high) {
+      return (TrafficCategory.high, TrafficBasis.portionThreshold);
+    }
+
+    final TrafficCategory category = switch (standard) {
+      NutrientLevel.low => TrafficCategory.low,
+      NutrientLevel.moderate => TrafficCategory.medium,
+      NutrientLevel.high => TrafficCategory.high,
+    };
+
+    return (category, TrafficBasis.per100);
+  }
+
+  static const List<(String, String)> _trafficNutrients = <(String, String)>[
+    ('Total Fat', 'Fat'),
+    ('Saturated Fat', 'Saturated fat'),
+    ('Total Sugars', 'Total sugars'),
+    ('Salt', 'Salt'),
+  ];
+
+  /// Categories of the four scheme nutrients for the
+  /// intended portion.
+  static PortionTrafficLights portionTrafficLights({
+    required NutritionLabelData data,
+    required Map<String, NutrientAssessment> assessed,
+    required ProductForm form,
+    required double? portionSize,
+  }) {
+    final List<TrafficLightResult> results = <TrafficLightResult>[];
+    final List<String> missing = <String>[];
+
+    final Map<String, double> high = form == ProductForm.drink
+        ? AnalysisRules.drinkPortionHigh
+        : AnalysisRules.foodPortionHigh;
+
+    for (final (String key, String display) in _trafficNutrients) {
+      double? per100;
+      bool fromSodium = false;
+
+      if (key == 'Salt') {
+        final double? sodiumMg = assessed['Sodium']?.per100;
+
+        if (sodiumMg != null) {
+          per100 = sodiumMg / 1000 * AnalysisRules.saltPerSodium;
+          fromSodium = _row(data, 'Salt') == null;
+        }
+      } else {
+        per100 = assessed[key]?.per100;
+      }
+
+      if (per100 == null) {
+        missing.add(display);
+        continue;
+      }
+
+      final (TrafficCategory category, TrafficBasis basis) =
+          portionCategory(key, per100, form, portionSize)!;
+
+      results.add(
+        TrafficLightResult(
+          name: display,
+          portionAmount: portionSize == null ? null : portionAmountOf(per100, portionSize),
+          per100: per100,
+          category: category,
+          basis: basis,
+          portionHighThreshold: high[key]!,
+          saltFromSodium: fromSodium,
+        ),
+      );
+    }
+
+    return PortionTrafficLights(
+      results: results,
+      missing: missing,
+      portionSize: portionSize,
+      unit: form == ProductForm.drink ? 'ml' : 'g',
+      portionRuleApplies: portionRuleApplies(form, portionSize),
+    );
   }
 
   // =====================================================
@@ -739,7 +884,7 @@ class NutritionAnalysisService {
     // never feeds an overall result (NutriPal does not decide
     // whether a food is "good" or "suitable").
     for (final HealthArea area in profile.areasToShow) {
-      areas.add(_findingsArea(area, assessed));
+      areas.add(_findingsArea(area, assessed, weightGoal: profile.weightGoal));
     }
 
     return NutritionAnalysis(
@@ -754,6 +899,12 @@ class NutritionAnalysisService {
       areas: areas,
       overall: null,
       facts: _facts(data, scale),
+      trafficLights: portionTrafficLights(
+        data: data,
+        assessed: assessed,
+        form: form,
+        portionSize: scale.amount,
+      ),
     );
   }
 
@@ -784,8 +935,9 @@ class NutritionAnalysisService {
 
   static AreaAssessment _findingsArea(
     HealthArea area,
-    Map<String, NutrientAssessment> assessed,
-  ) {
+    Map<String, NutrientAssessment> assessed, {
+    String? weightGoal,
+  }) {
     final bool dm = area == HealthArea.diabetes;
 
     // names: nutrients shown with share + product level.
@@ -798,6 +950,18 @@ class NutritionAnalysisService {
     };
 
     final List<String> primary = dm ? AnalysisRules.diabetesShown : const <String>[];
+
+    // Weight card: energy with its share of maintenance,
+    // plus amounts the guidance lists for the goal
+    // (Weight Management Analysis Guidance, section 8):
+    //   lose     protein and fibre (support), total sugars
+    //            and total fat (context)
+    //   gain     protein (support), total sugars (context)
+    //   maintain protein (support)
+    // Shown only when on the label; never "missing".
+    final List<String> supporting = area != HealthArea.weight
+        ? const <String>[]
+        : AnalysisRules.weightSupportingFor(weightGoal);
 
     final List<NutrientAssessment> shown = <NutrientAssessment>[];
     final List<NutrientAssessment> watch = <NutrientAssessment>[];
@@ -826,12 +990,22 @@ class NutritionAnalysisService {
       }
     }
 
+    for (final String name in supporting) {
+      final NutrientAssessment? n = assessed[name];
+
+      if (n != null) watch.add(n.withoutTarget());
+    }
+
     return AreaAssessment(
       area: area,
       level: null,
       decidedBy: null,
       nutrients: shown,
-      benefit: AnalysisRules.fibreAreas.contains(area) ? assessed['Dietary Fibre'] : null,
+      // Lose shows fibre in its list, so no separate note.
+      benefit: AnalysisRules.fibreAreas.contains(area) &&
+              !supporting.contains('Dietary Fibre')
+          ? assessed['Dietary Fibre']
+          : null,
       missing: missing,
       ruleNutrients: <String>[...names, ...primary],
       keyNutrients: const <String>[],

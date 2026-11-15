@@ -413,12 +413,13 @@ test('markdown in an answer becomes plain text for the app', () => {
   assert.equal(plainText('## Tip\nChoose *less* salt; 2 * 236 ml.'), 'Tip\nChoose less salt; 2 * 236 ml.');
 });
 
-test('weight goal: the prompt calls the goal energy a general guide', () => {
+test('weight goal: maintenance energy for every goal, called a general guide', () => {
   const system = buildSystem(CONTEXT);
 
-  assert.match(system, /general guide, never a prescription/);
-  assert.match(system, /maintenance_energy_kcal/);
-  assert.doesNotMatch(system, /Never give the user a personal calorie target/);
+  assert.match(system, /same estimated maintenance energy/);
+  assert.match(system, /does not take off or add a fixed amount/);
+  assert.match(system, /a general guide, never a calorie target/);
+  assert.match(system, /Never rate a product Low, Moderate or High for weight/);
 });
 
 test('weight goal: energy is rated against the goal energy sent by the app', () => {

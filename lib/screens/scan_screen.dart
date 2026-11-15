@@ -24,9 +24,14 @@ class ScanScreen extends StatefulWidget {
   // result after a scan.
   final ProfileSetupData? profile;
 
+  // A ready flow, for example when Compare opens the
+  // scanner for product A or B. Null for a normal scan.
+  final ScanFlowContext? flow;
+
   const ScanScreen({
     super.key,
     this.profile,
+    this.flow,
   });
 
   @override
@@ -73,11 +78,12 @@ class _ScanScreenState extends State<ScanScreen>
       ScanMode.nutritionLabel;
 
   late final ScanFlowContext _flow =
-      ScanFlowContext(
-    profile:
-        widget.profile ??
-            ProfileSetupData(),
-  );
+      widget.flow ??
+          ScanFlowContext(
+            profile:
+                widget.profile ??
+                    ProfileSetupData(),
+          );
 
   // =====================================================
   // INIT

@@ -815,7 +815,7 @@ class _WeightManagementSettingsState
   }
 
   // =====================================================
-  // EDIT CALORIE TARGET FROM A DOCTOR OR DIETITIAN
+  // EDIT ENERGY TARGET FROM A DOCTOR OR DIETITIAN
   // =====================================================
   //
   // Optional. When set, it replaces NutriPal's estimate as
@@ -836,10 +836,9 @@ class _WeightManagementSettingsState
     final double? result =
         await _showNumberDialog(
       title:
-          'Daily calorie target',
+          'Daily energy target',
       helper:
-          'Only enter a figure your doctor or dietitian gave you. '
-          'NutriPal then uses it instead of its own estimate.',
+          'NutriPal uses this figure instead of its own estimate.',
       controller:
           controller,
       suffix:
@@ -1694,7 +1693,7 @@ class _WeightManagementSettingsState
 
               const _SectionTitle(
                 text:
-                    'FROM YOUR DOCTOR OR DIETITIAN',
+                    'OWN ENERGY TARGET PER DAY',
               ),
 
               const SizedBox(
@@ -1706,7 +1705,7 @@ class _WeightManagementSettingsState
                 children: [
                   _SettingsRow(
                     label:
-                        'Daily calorie target',
+                        'Daily energy target',
                     value:
                         _providerEnergyKcal ==
                                 null
@@ -1749,6 +1748,8 @@ class _WeightManagementSettingsState
                       _currentWeight,
                   heightCm:
                       _height,
+                  diabetes:
+                      widget.data.diabetes,
                 ),
               ],
             ],
@@ -2064,4 +2065,4 @@ class _SettingsDivider extends StatelessWidget {
       ),
     );
   }
-}
+}

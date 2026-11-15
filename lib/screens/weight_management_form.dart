@@ -16,7 +16,7 @@ import 'home_screen.dart';
 //   2. About your body  gender, weight (kg), height (cm)
 //   3. Activity level   NASEM's four levels
 //
-// Then one optional box: a daily calorie figure from the
+// Then one optional box: a daily energy figure from the
 // user's doctor or dietitian. When filled in it replaces
 // NutriPal's estimate (shown as "Set by your healthcare
 // provider"). It is not one of the three questions.
@@ -209,17 +209,17 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
 
                 // ---- title -------------------------------
                 const Text(
-                  'Your weight plan',
+                  'Your weight management plan',
                   style: TextStyle(
                     color: WeightPlanColors.ink,
-                    fontSize: 32,
-                    height: 1.05,
+                    fontSize: 24,
+                    height: 1.15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Three quick questions so NutriPal can estimate how much energy you need each day.',
+                  'Tell us a little about you so NutriPal can estimate how much energy you need each day.',
                   style: TextStyle(color: WeightPlanColors.muted, fontSize: 15, height: 1.45),
                 ),
                 const SizedBox(height: 18),
@@ -309,6 +309,7 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
                     sex: widget.data.genderForEnergyEstimate,
                     weightKg: widget.data.currentWeight,
                     heightCm: widget.data.height,
+                    diabetes: widget.data.diabetes,
                   ),
                 ],
               ],
@@ -369,7 +370,7 @@ class _WeightManagementFormState extends State<WeightManagementForm> {
                     ),
                     child: Text(
                       _allDone
-                          ? (_providerOk ? 'Continue' : 'Check the calorie target')
+                          ? (_providerOk ? 'Submit' : 'Check the energy target')
                           : left == 1
                               ? 'Answer 1 more question'
                               : 'Answer $left more questions',

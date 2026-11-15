@@ -219,10 +219,10 @@ class DailyTargets {
   // reference.
   final double energyKcal;
 
-  // The weight goal applied to the maintenance estimate
-  // (lose / gain), or null when none applies (maintain, no
-  // goal, a provider's figure, the 2,000 kcal reference).
-  // Only the energy target uses it.
+  // Always null now: lose, maintain and gain all use the
+  // maintenance estimate (Weight Management Analysis
+  // Guidance), so no goal change is applied. Kept so older
+  // code paths still compile.
   final GoalEnergyResult? goal;
 
   /// Energy target for judging each product's energy.
@@ -473,6 +473,114 @@ class FactRow {
 }
 
 // =======================================================
+// NUTRIENT CATEGORY IN THE INTENDED PORTION
+// (UK front-of-pack traffic-light criteria)
+// =======================================================
+//
+// Fat, saturated fat, total sugars and salt, each put in
+// a low (green), medium (amber) or high (red) category for
+// the user's intended portion (Chapter 3, Equation 3.1):
+//
+//   N_portion = N_100 x P / 100
+//
+// * Food portions over 100 g and drink portions over
+//   150 ml: high when N_portion is above the high-per-
+//   portion threshold, otherwise the per 100 criteria.
+// * Smaller portions: the per 100 criteria only, so a
+//   small portion never lowers a high category.
+//
+// Each nutrient is classified on its own. The categories
+// describe nutrient levels; they are not an overall rating
+// of the product and not a personal intake limit.
+
+enum TrafficCategory { low, medium, high }
+
+extension TrafficCategoryText on TrafficCategory {
+  String get label => switch (this) {
+        TrafficCategory.low => 'Low',
+        TrafficCategory.medium => 'Medium',
+        TrafficCategory.high => 'High',
+      };
+}
+
+/// Why a nutrient got its category.
+enum TrafficBasis {
+  // Standard per 100 g / per 100 ml criteria.
+  per100,
+  // Above the high-per-portion threshold (portion over
+  // 100 g / 150 ml).
+  portionThreshold,
+}
+
+class TrafficLightResult {
+  // 'Fat', 'Saturated fat', 'Total sugars', 'Salt'.
+  final String name;
+
+  // Amount in the intended portion (g), or null when the
+  // portion size in g / ml is not known.
+  final double? portionAmount;
+
+  // Amount per 100 g / 100 ml (g).
+  final double per100;
+
+  final TrafficCategory category;
+
+  final TrafficBasis basis;
+
+  // High-per-portion threshold in g for this nutrient.
+  final double portionHighThreshold;
+
+  // True for salt worked out from sodium (salt = sodium x 2.5).
+  final bool saltFromSodium;
+
+  const TrafficLightResult({
+    required this.name,
+    required this.portionAmount,
+    required this.per100,
+    required this.category,
+    required this.basis,
+    required this.portionHighThreshold,
+    this.saltFromSodium = false,
+  });
+}
+
+/// The four categories for one product and portion.
+class PortionTrafficLights {
+  // Nutrients on the label, in the order fat, saturated
+  // fat, total sugars, salt.
+  final List<TrafficLightResult> results;
+
+  // Scheme nutrients the label does not show.
+  final List<String> missing;
+
+  // Intended portion in g / ml, or null when not known.
+  final double? portionSize;
+
+  // 'g' (food) or 'ml' (drink).
+  final String unit;
+
+  // True when the portion is over 100 g (food) or 150 ml
+  // (drink), so the high-per-portion thresholds apply.
+  final bool portionRuleApplies;
+
+  const PortionTrafficLights({
+    required this.results,
+    required this.missing,
+    required this.portionSize,
+    required this.unit,
+    required this.portionRuleApplies,
+  });
+
+  static const PortionTrafficLights empty = PortionTrafficLights(
+    results: <TrafficLightResult>[],
+    missing: <String>[],
+    portionSize: null,
+    unit: 'g',
+    portionRuleApplies: false,
+  );
+}
+
+// =======================================================
 // THE WHOLE RESULT
 // =======================================================
 
@@ -507,6 +615,10 @@ class NutritionAnalysis {
 
   final List<FactRow> facts;
 
+  // Low / medium / high category of fat, saturated fat,
+  // total sugars and salt in the intended portion.
+  final PortionTrafficLights trafficLights;
+
   /// True when an area shows key nutrients without a level
   /// (every card), so the summary says "review key
   /// nutrients" instead of "fits your goals".
@@ -524,5 +636,6 @@ class NutritionAnalysis {
     required this.areas,
     required this.overall,
     required this.facts,
+    this.trafficLights = PortionTrafficLights.empty,
   });
 }

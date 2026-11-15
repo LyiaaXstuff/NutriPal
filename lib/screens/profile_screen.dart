@@ -2,17 +2,18 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../models/nutrition_targets.dart';
+import '../models/nutrition_analysis.dart';
 import '../models/profile_setup_data.dart';
 import '../services/auth_service.dart';
 import '../services/profile_photo_service.dart';
 import '../services/user_profile_service.dart';
+import '../widgets/weight_plan_widgets.dart';
 import '../widgets/profile_avatar.dart';
 import 'change_password_screen.dart';
+import 'daily_energy_estimation_screen.dart';
 import 'health_conditions_settings.dart';
 import 'history_screen.dart';
 import 'login_screen.dart';
-import 'nutrition_targets_screen.dart';
 import 'user_account.dart';
 import 'weight_management_settings.dart';
 
@@ -112,26 +113,36 @@ class _ProfileScreenState
   }
 
   // =====================================================
-  // WEIGHT MANAGEMENT SUBTITLE
+  // DAILY ENERGY ESTIMATION
   // =====================================================
+  //
+  // Shown when High LDL cholesterol or weight management is
+  // selected (saturated fat and trans fat limits need a daily
+  // energy figure). Hidden only when neither is selected.
 
-  /// "Not set" or "Carbohydrate goal, Sodium limit".
-  String get _nutritionTargetsSubtitle {
-    final NutritionTargets t = widget.data.nutritionTargets;
+  bool get _showDailyEnergyEstimation =>
+      widget.data.highCholesterol ||
+      widget.data.weightManagement;
 
-    if (t.isEmpty) return "Not set · using NutriPal's guide";
+  String get _dailyEnergySubtitle {
+    final DailyTargets? t = WeightPlanOptions.energyTargets(widget.data);
 
-    return <String>[
-      for (final NutritionTargetField f in NutritionTargets.fields)
-        if (t.valueOf(f.key) != null) f.label,
-    ].join(', ');
+    if (t == null) {
+      return 'Not set · using a standard 2,000 kcal day';
+    }
+
+    if (t.setByProvider.contains('Energy')) {
+      return '${WeightPlanOptions.exactKcalText(t.energyKcal)} kcal a day · your own energy target';
+    }
+
+    return '≈ ${WeightPlanOptions.kcalText(t.energyKcal)} kcal a day';
   }
 
-  Future<void> _openNutritionTargets() async {
+  Future<void> _openDailyEnergyEstimation() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => NutritionTargetsScreen(data: widget.data),
+        builder: (context) => DailyEnergyEstimationScreen(data: widget.data),
       ),
     );
 
@@ -1085,22 +1096,26 @@ class _ProfileScreenState
                         _handleWeightManagementTap,
                   ),
 
-                  const Divider(
-                    height: 1,
-                    color:
-                        lightPurple,
-                  ),
+                  // High LDL cholesterol without weight
+                  // management: the daily energy details.
+                  if (_showDailyEnergyEstimation) ...[
+                    const Divider(
+                      height: 1,
+                      color:
+                          lightPurple,
+                    ),
 
-                  _ProfileMenuTile(
-                    icon:
-                        Icons.tune_rounded,
-                    title:
-                        'Nutrition Targets',
-                    subtitle:
-                        _nutritionTargetsSubtitle,
-                    onTap:
-                        _openNutritionTargets,
-                  ),
+                    _ProfileMenuTile(
+                      icon:
+                          Icons.local_fire_department_outlined,
+                      title:
+                          'Daily Energy Estimation',
+                      subtitle:
+                          _dailyEnergySubtitle,
+                      onTap:
+                          _openDailyEnergyEstimation,
+                    ),
+                  ],
                 ],
               ),
 

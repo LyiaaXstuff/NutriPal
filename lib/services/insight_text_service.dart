@@ -10,7 +10,6 @@
 
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
-import 'energy_requirement.dart' show GoalEnergyResult;
 import 'nutrition_analysis_service.dart';
 
 class OverallText {
@@ -496,13 +495,12 @@ class InsightTextService {
       return '$pct of the ${_big(n.target!, 'mg')} mg daily sodium reference';
     }
 
+    // Lose, maintain and gain all use maintenance energy
+    // (or the user's own target) as the reference.
     if (n.name == 'Energy') {
-      final GoalEnergyResult? goal = a.targets.goalAdjusted ? a.targets.goal : null;
-      final String of = goal == null
-          ? 'your estimated daily energy need'
-          : goal.changeKcal < 0
-              ? 'your daily energy guide for weight loss'
-              : 'your daily energy guide for weight gain';
+      final String of = a.targets.setByProvider.contains('Energy')
+          ? 'your own daily energy target'
+          : 'your estimated daily energy need';
 
       return '$pct of $of';
     }
@@ -540,16 +538,27 @@ class InsightTextService {
       );
     }
 
-    final List<PlainFact> facts = <PlainFact>[
-      // Diabetes: carbohydrate and total sugars first, as
-      // amounts only.
+    final bool weightCard = kind == HealthArea.weight;
+    final String goal = _goalKey(weightGoal);
+
+    final List<PlainFact> watchFacts = <PlainFact>[
+      // Diabetes: carbohydrate and total sugars, as amounts
+      // only. Weight: the goal's supporting and context
+      // nutrients, as amounts only.
       for (final NutrientAssessment n in area.watch)
         PlainFact(
           nutrient: n.name,
-          label: n.name == 'Total Sugars' ? 'Total sugars' : _label(n.name),
+          label: n.name == 'Total Sugars'
+              ? 'Total sugars'
+              : n.name == 'Dietary Fibre'
+                  ? 'Fibre'
+                  : _label(n.name),
           amount: '${_f(n.amount, n.unit)} ${n.unit}',
-          meaning: _watchMeaning(n, a),
+          meaning: weightCard ? _weightWatchMeaning(n.name, goal) : _watchMeaning(n, a),
         ),
+    ];
+
+    final List<PlainFact> shownFacts = <PlainFact>[
       for (final NutrientAssessment n in area.nutrients)
         PlainFact(
           nutrient: n.name,
@@ -558,6 +567,12 @@ class InsightTextService {
           meaning: _findingMeaning(n, a),
         ),
     ];
+
+    // Diabetes lists its amounts first; the weight card
+    // starts with energy.
+    final List<PlainFact> facts = weightCard
+        ? <PlainFact>[...shownFacts, ...watchFacts]
+        : <PlainFact>[...watchFacts, ...shownFacts];
 
     // Fibre: a supporting factor, never a risk.
     String? goodNews;
@@ -596,9 +611,16 @@ class InsightTextService {
       HealthArea.bloodPressure =>
         'Sodium (salt) adds up through the day. Compare this portion with the '
             'rest of what you eat.',
-      HealthArea.weight =>
-        'Energy adds up through the day. Compare this portion with the rest of '
-            'what you eat.',
+      HealthArea.weight => switch (goal) {
+          'lose' => 'For weight loss, portion size matters: a smaller or larger portion '
+              'changes this energy. When comparing similar products, consider options '
+              'that give useful protein or fibre without adding unnecessary energy.',
+          'gain' => 'This portion adds energy to your day. For gradual weight gain, choose '
+              'foods that give energy together with useful nutrients such as protein, '
+              'rather than relying mainly on sugary foods or drinks.',
+          _ => 'Consider this together with the energy from the rest of your meals, '
+              'snacks and drinks.',
+        },
       HealthArea.diabetes =>
         'Count these carbohydrates as part of your meal, following your own plan '
             'from your doctor or dietitian. NutriPal never works out insulin or '
@@ -609,9 +631,9 @@ class InsightTextService {
       if (area.watch.any((NutrientAssessment n) => n.name == 'Total Sugars'))
         'Total sugars include natural and added sugars. This is the amount in your '
             'portion; the amount ${a.per100Label} is in Nutrition facts.',
-      if (kind == HealthArea.weight)
-        'The energy guide is general; a figure from your doctor or dietitian '
-            'replaces it.',
+      if (weightCard && !a.targets.setByProvider.contains('Energy'))
+        'Your estimated daily energy need is the energy to keep your current weight. '
+            'It is a general guide, not a target.',
       if (area.missing.isNotEmpty) 'Not on the label: ${area.missing.map(_lower).join(', ')}.',
     ];
 
@@ -665,22 +687,22 @@ class InsightTextService {
           'gain' => const PlainEvidence(
               why: 'Healthy weight gain is gradual, about 300 to 500 extra kcal a day, '
                   'from nutritious foods rather than sugary ones.',
-              lookFor: 'When comparing similar products, compare energy for the portion '
-                  'you plan to eat and favour nutrient-rich choices.',
+              lookFor: 'When comparing similar products, compare energy together with '
+                  'protein, and avoid relying mainly on sugary options.',
               source: 'NHS 2023 (WT-08)',
             ),
           'lose' => const PlainEvidence(
-              why: 'Losing weight comes from taking in fewer calories overall, so the '
-                  'portion you choose changes your energy intake.',
-              lookFor: 'When comparing similar products, compare energy for the portion '
-                  'you plan to eat.',
+              why: 'Losing weight comes from taking in less energy overall while keeping '
+                  'a healthy eating pattern, so the portion you choose matters.',
+              lookFor: 'When comparing similar products, compare energy, protein and '
+                  'fibre for the portion you plan to eat.',
               source: 'NIDDK 2023 (WT-02)',
             ),
           _ => const PlainEvidence(
               why: 'Your estimated energy need is for maintaining your current weight, '
                   'so the portion you choose changes how much of it you use.',
-              lookFor: 'When comparing similar products, compare energy for the portion '
-                  'you plan to eat.',
+              lookFor: 'When comparing similar products, compare energy for the same '
+                  'portion and the overall nutrient quality.',
               source: 'NASEM 2023 (WT-11)',
             ),
         };
@@ -688,6 +710,31 @@ class InsightTextService {
   }
 
   /// "about 1.5 carb exchanges" / "Low per 100 ml (product)".
+  /// 'lose' | 'maintain' | 'gain' from the stored goal.
+  static String _goalKey(String? goal) {
+    final String g = (goal ?? '').toLowerCase();
+
+    if (g.contains('lose')) return 'lose';
+    if (g.contains('gain')) return 'gain';
+
+    return 'maintain';
+  }
+
+  /// Weight card: supporting and context amounts.
+  static String _weightWatchMeaning(String nutrient, String goal) => switch (nutrient) {
+        'Protein' => switch (goal) {
+            'lose' => 'supports fullness and muscle maintenance',
+            'gain' => 'supports healthy tissue growth and maintenance',
+            _ => 'supports muscle maintenance',
+          },
+        'Dietary Fibre' => 'can help you feel full',
+        'Total Sugars' => goal == 'gain'
+            ? 'can add energy, but balance with nutrient-rich foods'
+            : 'part of the portion’s overall energy',
+        'Total Fat' => 'a major contributor to energy',
+        _ => 'in this portion',
+      };
+
   static String _watchMeaning(NutrientAssessment n, NutritionAnalysis a) {
     if (n.name == 'Carbohydrate') {
       final String ex = NutritionAnalysisService.exchanges(n.amount);
@@ -796,7 +843,7 @@ class InsightTextService {
       };
 
       why.add(
-        'Bonus: it has ${_f(fibre.amount, 'g')} g of fibre, about '
+        'Good to know: it has ${_f(fibre.amount, 'g')} g of fibre, about '
         '${_pct(fibre.share!)} of what you need each day. $helps',
       );
     }
@@ -930,12 +977,9 @@ class InsightTextService {
     final NutrientAssessment? energy = a.nutrients['Energy'];
     // With a weight goal applied, the share is of the goal
     // energy, so say which figure it is.
-    final GoalEnergyResult? goal = a.targets.goalAdjusted ? a.targets.goal : null;
-    final String energyOf = goal == null
-        ? 'the energy you need in a day'
-        : goal.changeKcal < 0
-            ? 'your daily energy guide for weight loss'
-            : 'your daily energy guide for weight gain';
+    final String energyOf = a.targets.setByProvider.contains('Energy')
+        ? 'your own daily energy target'
+        : 'the energy you need in a day';
 
     final String? energyLine = energy?.share == null
         ? null

@@ -117,7 +117,7 @@ void main() {
       expect(t.proteinG, isNull);
     });
 
-    test('W-T17 weight goal changes the energy target only', () {
+    test('W-T17 every weight goal uses maintenance energy (no fixed change)', () {
       NutritionProfile withGoal(String goal) => NutritionProfile(
             sex: 'male',
             ageYears: 30,
@@ -136,14 +136,17 @@ void main() {
         expect(t(goal).freeSugarsG, closeTo(75.4, 0.1));
       }
 
-      expect(t('maintain').goalEnergyKcal, closeTo(3014.2, 0.1));
-      expect(t('maintain').goal, isNull);
-      // Fixed internal amounts: 500 less, 300 more.
-      expect(t('lose').goalEnergyKcal, closeTo(2514.2, 0.1));
-      expect(t('gain').goalEnergyKcal, closeTo(3314.2, 0.1));
+      // Weight Management Analysis Guidance: lose, maintain and
+      // gain all compare with maintenance; nothing is taken
+      // off or added.
+      for (final String goal in <String>['lose', 'maintain', 'gain']) {
+        expect(t(goal).goalEnergyKcal, closeTo(3014.2, 0.1));
+        expect(t(goal).goal, isNull);
+        expect(t(goal).goalAdjusted, isFalse);
+      }
     });
 
-    test('W-T18 the energy share uses the goal energy', () {
+    test('W-T18 the energy share uses maintenance energy for weight loss too', () {
       const NutritionProfile loser = NutritionProfile(
         sex: 'female',
         ageYears: 45,
@@ -160,13 +163,13 @@ void main() {
         portion: const Portion.amount(1000, 'ml'),
       );
 
-      // 390 kcal of 2092.2 - 500 = 1592.2 kcal.
-      expect(a.nutrients['Energy']!.share, closeTo(390 / 1592.2, 0.001));
+      // 390 kcal of the 2092.2 kcal maintenance estimate.
+      expect(a.nutrients['Energy']!.share, closeTo(390 / 2092.2, 0.001));
       // Sugars still use the maintenance limit (52.3 g).
       expect(a.nutrients['Total Sugars']!.share, closeTo(7 / 52.3, 0.001));
     });
 
-    test('W-T19 the weight card shows energy and its share, no level', () {
+    test('W-T19 lose: energy and its share, then protein, fibre, sugars and fat', () {
       const NutritionProfile loser = NutritionProfile(
         sex: 'female',
         ageYears: 45,
@@ -186,8 +189,34 @@ void main() {
       expect(w.level, isNull);
       expect(w.nutrients.map((NutrientAssessment n) => n.name), <String>['Energy']);
       expect(w.nutrients.single.level, isNull);
-      expect(w.nutrients.single.share, closeTo(390 / 1592.2, 0.001));
-      expect(w.benefit?.name, 'Dietary Fibre');
+      expect(w.nutrients.single.share, closeTo(390 / 2092.2, 0.001));
+      // Amounts only, no share or level.
+      expect(w.watch.map((NutrientAssessment n) => n.name),
+          <String>['Protein', 'Dietary Fibre', 'Total Sugars', 'Total Fat']);
+      expect(w.watch.every((NutrientAssessment n) => n.share == null && n.level == null), isTrue);
+      // Fibre is in the list, so no separate fibre note.
+      expect(w.benefit, isNull);
+    });
+
+    test('W-T21 maintain adds protein; gain adds protein and sugars', () {
+      AreaAssessment card(String goal) => NutritionAnalysisService.analyse(
+            data: homesoy(),
+            profile: NutritionProfile(
+              sex: 'female',
+              ageYears: 45,
+              weightKg: 65,
+              heightCm: 158,
+              activityLevel: 'Low active',
+              weightGoal: goal,
+              areas: const <HealthArea>{HealthArea.weight},
+            ),
+          ).areas.single;
+
+      expect(card('maintain').watch.map((NutrientAssessment n) => n.name), <String>['Protein']);
+      expect(card('maintain').benefit?.name, 'Dietary Fibre');
+      expect(card('gain').watch.map((NutrientAssessment n) => n.name),
+          <String>['Protein', 'Total Sugars']);
+      expect(card('gain').missing, isEmpty);
     });
 
     test('a daily figure from the doctor or dietitian replaces the EER', () {

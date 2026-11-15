@@ -139,7 +139,49 @@ void main() {
 
     expect(t.headline, 'Energy in this portion');
     expect(t.marker, isNull);
-    expect(t.facts.single.meaning, contains('of your estimated daily energy need'));
+    expect(t.facts.map((PlainFact f) => f.label), <String>['Energy', 'Protein']);
+    expect(t.facts.first.meaning, contains('of your estimated daily energy need'));
+    expect(t.facts[1].meaning, 'supports muscle maintenance');
+    expect(t.tip, contains('rest of your meals, snacks and drinks'));
+  });
+
+  test('W-T22 weight card wording follows the goal', () {
+    PlainAreaText card(String goal) {
+      final NutritionAnalysis a = NutritionAnalysisService.analyse(
+        data: homesoy(),
+        profile: NutritionProfile(
+          areas: const <HealthArea>{HealthArea.weight},
+          sex: 'female',
+          ageYears: 45,
+          weightKg: 65,
+          heightCm: 158,
+          activityLevel: 'Low active',
+          weightGoal: goal,
+        ),
+      );
+
+      return InsightTextService.plainArea(a.areas.single, a, weightGoal: goal);
+    }
+
+    final PlainAreaText lose = card('lose');
+
+    expect(lose.facts.map((PlainFact f) => f.label),
+        <String>['Energy', 'Protein', 'Fibre', 'Total sugars', 'Fat']);
+    expect(lose.tip, contains('portion size matters'));
+    expect(lose.goodNews, isNull);
+    expect(lose.facts[1].meaning, 'supports fullness and muscle maintenance');
+
+    final PlainAreaText gain = card('gain');
+
+    expect(gain.facts.map((PlainFact f) => f.label), <String>['Energy', 'Protein', 'Total sugars']);
+    expect(gain.tip, contains('rather than relying mainly on sugary foods or drinks'));
+    expect(gain.facts[1].meaning, 'supports healthy tissue growth and maintenance');
+
+    // Never a weight-loss or weight-gain energy target.
+    for (final PlainAreaText t in <PlainAreaText>[lose, gain]) {
+      expect(t.facts.first.meaning, contains('of your estimated daily energy need'));
+      expect(t.note, contains('not a target'));
+    }
   });
 
   test('D-T06 one diabetes card for everyone: no type words, never an insulin dose', () {

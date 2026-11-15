@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/nutrition_analysis.dart';
 import '../models/profile_setup_data.dart';
 import '../services/user_profile_service.dart';
+import '../widgets/energy_details_fields.dart';
 import '../widgets/weight_plan_widgets.dart';
 
 class HealthConditionsSettings extends StatefulWidget {
@@ -210,13 +211,80 @@ class _HealthConditionsSettingsState
   }
 
   // =====================================================
-  // HIGH LDL CHOLESTEROL (no follow-up questions)
+  // HIGH LDL CHOLESTEROL
   // =====================================================
+  //
+  // Saturated fat and trans fat are limited as a share of
+  // daily energy, so without weight management (which asks
+  // the same details) a pop-up asks gender, weight, height,
+  // activity level and the optional calorie figure. It is
+  // not asked again when weight management is selected or
+  // the details are already there.
 
-  void _handleCholesterolTap() {
+  // Weight management, or these details, already hold what
+  // the energy estimate needs.
+  bool get _hasEnergyDetails =>
+      _weightManagement ||
+      EnergyDetails(
+            sex: _gender,
+            weightKg: _currentWeight,
+            heightCm: _height,
+            activity: _activityLevel,
+          ).bodyDone &&
+          _activityLevel != null;
+
+  Future<void> _handleCholesterolTap() async {
+    if (_highCholesterol) {
+      setState(() {
+        _highCholesterol =
+            false;
+      });
+
+      return;
+    }
+
+    if (_hasEnergyDetails) {
+      setState(() {
+        _highCholesterol =
+            true;
+      });
+
+      return;
+    }
+
+    await _showEnergyDetailsSheet();
+  }
+
+  // The pencil on the LDL card (only when weight management
+  // is off; weight management edits these in its own sheet).
+  Future<void> _editEnergyDetails() async {
+    await _showEnergyDetailsSheet();
+  }
+
+  Future<void> _showEnergyDetailsSheet() async {
+    final EnergyDetails? result = await EnergyDetailsSheet.show(
+      context,
+      initial: EnergyDetails(
+        sex: _gender,
+        weightKg: _currentWeight,
+        heightCm: _height,
+        activity: _activityLevel,
+        providerText: _providerEnergyKcal == null ? '' : _providerEnergyKcal!.round().toString(),
+      ),
+      dateOfBirth: widget.data.dateOfBirth,
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
     setState(() {
-      _highCholesterol =
-          !_highCholesterol;
+      _gender = result.sex;
+      _currentWeight = result.weightKg;
+      _height = result.heightCm;
+      _activityLevel = result.activity;
+      _providerEnergyKcal = result.providerKcal;
+      _highCholesterol = true;
     });
   }
 
@@ -266,6 +334,7 @@ class _HealthConditionsSettingsState
         activity: _activityLevel,
         dateOfBirth: widget.data.dateOfBirth,
         providerEnergyKcal: _providerEnergyKcal,
+        diabetes: _diabetes,
       ),
     );
 
@@ -308,6 +377,16 @@ class _HealthConditionsSettingsState
       return false;
     }
 
+    // High LDL cholesterol without weight management needs
+    // the energy details (no goal).
+    if (_highCholesterol && !_weightManagement && !_hasEnergyDetails) {
+      _showMessage(
+        'Please complete your daily energy details.',
+      );
+
+      return false;
+    }
+
     return true;
   }
 
@@ -331,6 +410,20 @@ class _HealthConditionsSettingsState
 
     widget.data.weightManagement =
         _weightManagement;
+
+    // Without weight management there is no weight goal;
+    // without an area that needs them, no energy details.
+    if (!_weightManagement) {
+      _weightGoal = null;
+    }
+
+    if (!_weightManagement && !_highCholesterol) {
+      _gender = null;
+      _currentWeight = null;
+      _height = null;
+      _activityLevel = null;
+      _providerEnergyKcal = null;
+    }
 
     widget.data.weightGoal =
         _weightGoal;
@@ -598,6 +691,12 @@ class _HealthConditionsSettingsState
 
                 onTap:
                     _handleCholesterolTap,
+
+                onEditTap:
+                    _highCholesterol &&
+                            !_weightManagement
+                        ? _editEnergyDetails
+                        : null,
               ),
 
               const SizedBox(
@@ -1041,6 +1140,9 @@ class _WeightManagementSheet extends StatefulWidget {
   // Editable in the sheet (optional).
   final double? providerEnergyKcal;
 
+  // Shows the insulin / diabetes-medicine line only for diabetes.
+  final bool diabetes;
+
   const _WeightManagementSheet({
     required this.goal,
     required this.sex,
@@ -1049,6 +1151,7 @@ class _WeightManagementSheet extends StatefulWidget {
     required this.activity,
     required this.dateOfBirth,
     required this.providerEnergyKcal,
+    required this.diabetes,
   });
 
   @override
@@ -1234,6 +1337,7 @@ class _WeightManagementSheetState extends State<_WeightManagementSheet> {
                           sex: _sex,
                           weightKg: _weight,
                           heightCm: _height,
+                          diabetes: widget.diabetes,
                         ),
                       ],
                     ],
