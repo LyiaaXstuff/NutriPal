@@ -65,6 +65,7 @@ const CONCEPTS = {
   tea: ['tea', 'teh'],
   label: ['label', 'labels', 'claim', 'claims', 'pelabelan'],
   low: ['low', 'rendah', 'less', 'kurang', 'reduced'],
+  traffic_light: ['traffic', 'light', 'lights', 'medium', 'lampu', 'isyarat'],
   processed: ['processed', 'ultra-processed', 'diproses'],
   oil: ['oil', 'oils', 'minyak', 'palm', 'sawit', 'coconut', 'kelapa', 'santan', 'butter', 'mentega', 'tropical'],
   portion: ['portion', 'portions', 'serving', 'servings', 'hidangan', 'sajian'],

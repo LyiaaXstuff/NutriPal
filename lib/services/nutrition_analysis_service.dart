@@ -43,6 +43,14 @@ enum CombineRule {
 // =======================================================
 // RULE NUMBERS (rules document, Layers 1-3)
 // =======================================================
+//
+// FSA threshold source: Department of Health, Food Standards Agency, and
+// devolved administrations of Scotland, Northern Ireland and Wales (2016),
+// Guide to creating a front of pack (FoP) nutrition label for pre-packed
+// products sold through retail outlets, Table 2 (food, per 100 g, p. 19)
+// and Table 3 (drinks, per 100 ml, p. 20). Current use of the same
+// thresholds: Dicken, Batterham and Brown (2024), British Journal of
+// Nutrition 131(9), 1619-1632, doi:10.1017/S0007114524000096.
 
 class AnalysisRules {
   AnalysisRules._();
@@ -73,8 +81,7 @@ class AnalysisRules {
   // ---- Portion categories: high-per-portion (FSA) ------
   // Above these amounts in the intended portion a nutrient
   // is high (red), but only for food portions over 100 g
-  // and drink portions over 150 ml (Chapter 3, Tables 3.1
-  // and 3.2).
+  // and drink portions over 150 ml (FSA 2016, Tables 2 and 3).
   static const Map<String, double> foodPortionHigh = <String, double>{
     'Total Fat': 21.0,
     'Saturated Fat': 6.0,

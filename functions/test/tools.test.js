@@ -43,6 +43,27 @@ test('salt question finds the daily sodium limit', () => {
   assert.ok(r.entries.length <= 4);
 });
 
+test('traffic light query finds the FSA thresholds', () => {
+  const r = searchGuidelines({}, { query: 'traffic light' });
+
+  assert.equal(r.found, true);
+  assert.ok(r.evidence_ids.includes('GEN-23'));
+});
+
+test('medium query finds the FSA thresholds', () => {
+  const r = searchGuidelines({}, { query: 'what does medium mean' });
+
+  assert.equal(r.found, true);
+  assert.ok(r.evidence_ids.includes('GEN-23'));
+});
+
+test('Malay traffic light query finds the FSA thresholds', () => {
+  const r = searchGuidelines({}, { query: 'lampu isyarat' });
+
+  assert.equal(r.found, true);
+  assert.ok(r.evidence_ids.includes('GEN-23'));
+});
+
 test('Malay question about sweet drinks finds the drinks guidance', () => {
   const r = searchGuidelines(DM_BP, { query: 'boleh minum air manis? gula tinggi' });
 

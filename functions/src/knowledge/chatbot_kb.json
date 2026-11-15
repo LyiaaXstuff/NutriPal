@@ -1,6 +1,6 @@
 {
   "schema": "nutripal.chatbot_kb",
-  "kb_version": "1.6.0",
+  "kb_version": "1.7.0",
   "rules_version": "2.7.0",
   "generated": "2026-11-13",
   "selection": "Knowledge-base entries with status source-verified or evidence-derived and use class 1-3 (class 4 'not for automated evaluation' and excluded entries are left out).",
@@ -83,6 +83,19 @@
       "caution": "Malaysia has no national traffic-light scheme: a named design decision.",
       "education_only": false,
       "source": "Carried over from 'NutriPal Nutrition Analysis Rules' (8 Nov 2026) 2023"
+    },
+    {
+      "id": "GEN-23",
+      "areas": [
+        "General"
+      ],
+      "topic": "UK FSA front-of-pack traffic light thresholds (low, medium, high)",
+      "guidance": "Food per 100 g: Low <=3.0 g fat, <=1.5 g saturates, <=5.0 g sugars, <=0.3 g salt; Medium is above Low and <=17.5 g fat, <=5.0 g saturates, <=22.5 g sugars, <=1.5 g salt; High is above those Medium limits. For portions over 100 g, High applies above 21 g fat, 6 g saturates, 27 g sugars or 1.8 g salt. Drinks per 100 ml: Low <=1.5 g fat, <=0.75 g saturates, <=2.5 g sugars, <=0.3 g salt; Medium is above Low and <=8.75 g fat, <=2.5 g saturates, <=11.25 g sugars, <=0.75 g salt; High is above those Medium limits. For portions over 150 ml, High applies above 10.5 g fat, 3 g saturates, 13.5 g sugars or 0.9 g salt. Sodium converts to salt at x2.5.",
+      "applies_to": "UK front-of-pack scheme for pre-packed foods and drinks; used by NutriPal for product-level traffic lights.",
+      "nutripal_use": "Defines the per-100 g/ml and per-portion product-level traffic light thresholds used by NutriPal.",
+      "caution": "This traffic light follows the UK FSA scheme, which is why drinks use the FSA sodium value rather than the Malaysian 'low sodium' claim value (see GEN-03).",
+      "education_only": false,
+      "source": "Department of Health, Food Standards Agency, and devolved administrations of Scotland, Northern Ireland and Wales (2016), Guide to creating a front of pack (FoP) nutrition label for pre-packed products sold through retail outlets, Table 2 (food, per 100 g, p. 19) and Table 3 (drinks, per 100 ml, p. 20). Current use of the same thresholds: Dicken, Batterham and Brown (2024), British Journal of Nutrition 131(9), 1619-1632, doi:10.1017/S0007114524000096."
     },
     {
       "id": "GEN-09",
@@ -1112,9 +1125,9 @@
       "topic": "Healthy gain",
       "guidance": "Gain gradually with about 300-500 extra kcal/day; small frequent meals; add nuts, seeds, cheese, milky drinks; protein from beans, pulses, fish, eggs, lean meat; do not rely on chocolate, cakes and sugary drinks; see a GP for unexplained weight loss.",
       "applies_to": "UK adults",
-      "nutripal_use": "Source of the gain amount (300 kcal more, lower end of the range, applied internally, R-EN-02); sugar and saturated fat still flagged.",
+      "nutripal_use": "The general 300-500 kcal/day gain range is shown for education only and is NOT applied to NutriPal's energy target; all goals use maintenance energy.",
       "caution": "Unexplained weight loss -> GP.",
-      "education_only": false,
+      "education_only": true,
       "source": "NHS (England) 2023"
     },
     {
@@ -1151,9 +1164,9 @@
       "topic": "Calorie restriction options",
       "guidance": "Calorie restriction should be individualised (age, sex, readiness, activity, comorbidities, preference). Any one of: 1,200-1,500 kcal/day for women; 1,500-1,800 kcal/day for men; or reduce daily energy by 500-750 kcal from usual intake, for an initial loss of 0.5-1 kg/week.",
       "applies_to": "Adults with overweight or obesity",
-      "nutripal_use": "Source of the lose default (500 kcal less, lower end of the range) and the 1,200/1,500 kcal floors (R-EN-02); the full range is shown as education.",
+      "nutripal_use": "The general 500-750 kcal/day deficit and 1,200/1,500 kcal/day ranges are shown for education only and are NOT applied to NutriPal's energy target; all goals use maintenance energy.",
       "caution": "Nutrient inadequacy reported with restriction.",
-      "education_only": false,
+      "education_only": true,
       "source": "Ministry of Health Malaysia, MEMS, MASO, MDA, FMSA 2023"
     },
     {
@@ -1250,6 +1263,19 @@
       "caution": null,
       "education_only": false,
       "source": "National Academies of Sciences, Engineering, and Medicine 2023"
+    },
+    {
+      "id": "WT-22",
+      "areas": [
+        "Weight"
+      ],
+      "topic": "NASEM 2023 adult EER equations and uncertainty",
+      "guidance": "For adults aged 19 years and over, EER (kcal/day) = intercept + age coefficient x age (years) + height coefficient x height (cm) + weight coefficient x weight (kg). Male: Inactive = 753.07 - 10.83 x age + 6.50 x height + 14.10 x weight; Low active = 581.47 - 10.83 x age + 8.30 x height + 14.94 x weight; Active = 1004.82 - 10.83 x age + 6.52 x height + 15.91 x weight; Very active = -517.88 - 10.83 x age + 15.61 x height + 19.11 x weight. Female: Inactive = 584.90 - 7.01 x age + 5.72 x height + 11.71 x weight; Low active = 575.77 - 7.01 x age + 6.60 x height + 12.14 x weight; Active = 710.25 - 7.01 x age + 6.54 x height + 12.34 x weight; Very active = 511.83 - 7.01 x age + 9.07 x height + 12.56 x weight. Standard error of predicted value: 342 kcal for men and 241 kcal for women.",
+      "applies_to": "Adults aged 19 years and over",
+      "nutripal_use": "These equations estimate maintenance energy and provide the standard-error range shown by NutriPal.",
+      "caution": "Derived from US/Canadian doubly labelled water data; not validated on Malaysian adults.",
+      "education_only": false,
+      "source": "National Academies of Sciences, Engineering, and Medicine (NASEM) 2023, Dietary Reference Intakes for Energy, Table 5-16 p. 100; SEPV pp. 152 and 156"
     }
   ]
 }

@@ -12,17 +12,11 @@
 //   pp. 152, 156         standard error of the prediction
 //   Table 7-1, p. 148    examples of each activity level
 //
-// The EER is the energy needed to keep the current
-// weight. For a weight goal NutriPal then applies a
-// fixed, general change (GoalEnergy below; not a user
-// setting, a provider's daily figure replaces it):
-//   lose  500 kcal less, never below 1,200 kcal (women)
-//         or 1,500 kcal (men), and none when BMI is below
-//         18.5
-//   gain  300 kcal more
-// Only the energy target changes; the other limits stay
-// based on the EER. A daily figure from the user's doctor
-// or dietitian replaces all of this when one is entered.
+// The EER estimates energy to maintain the current weight.
+// NutriPal uses maintenance energy for every weight goal;
+// the general 500 kcal loss and 300 kcal gain amounts below
+// are not applied to the energy target. A daily figure from
+// the user's doctor or dietitian replaces the estimate.
 //
 // Knowledge base: GEN-19 (equations), GEN-20 (standard
 // error), GEN-21 (activity levels), GEN-22 (maintenance,
