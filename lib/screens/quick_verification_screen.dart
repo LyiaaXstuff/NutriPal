@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/nutrition_label_data.dart';
+import '../models/scan_record.dart';
 import '../services/nutrition_analysis_service.dart';
 import '../services/nutrition_label_editor.dart';
 import '../services/value_check_service.dart';
@@ -27,11 +28,14 @@ class QuickVerificationScreen extends StatefulWidget {
 
   final ScanFlowContext flow;
 
+  final ScanEvaluationMetadata evaluation;
+
   const QuickVerificationScreen({
     super.key,
     required this.data,
     required this.issues,
     required this.flow,
+    required this.evaluation,
     this.imagePath,
   });
 
@@ -129,6 +133,9 @@ class _QuickVerificationScreenState extends State<QuickVerificationScreen> {
           data: data,
           imagePath: widget.imagePath,
           flow: widget.flow,
+          evaluation: widget.evaluation.copyWith(
+            valuesAfterVerification: ScanEvaluationMetadata.captureValues(data),
+          ),
         ),
       ),
     );

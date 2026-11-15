@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/nutrition_analysis.dart';
 import '../models/nutrition_label_data.dart';
+import '../models/scan_record.dart';
 import '../services/nutrition_analysis_service.dart';
 import '../services/nutrition_extraction_service.dart';
 import '../services/product_name_service.dart';
@@ -81,10 +82,15 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
         ? ProductNameService.detect(widget.imagePath!)
         : Future<DetectedProductName?>.value(null);
 
-    NutritionLabelData data;
+    final NutritionExtractionResult extraction;
 
     try {
-      data = widget.data ?? await NutritionExtractionService.extract(widget.imagePath!);
+      extraction = widget.data == null
+          ? await NutritionExtractionService.extract(widget.imagePath!)
+          : NutritionExtractionResult(
+              data: widget.data!,
+              evaluation: ScanEvaluationMetadata.forLabel(widget.data!),
+            );
     } catch (_) {
       if (!mounted) return;
 
@@ -92,6 +98,8 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
           'NutriPal could not read the nutrition values. Please try another photo.');
       return;
     }
+
+    NutritionLabelData data = extraction.data;
 
     if (!mounted) return;
 
@@ -115,6 +123,29 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
     // ---- 2. double-check --------------------------------
 
     final List<ValueIssue> issues = ValueCheckService.find(data);
+    ScanEvaluationMetadata evaluation = extraction.evaluation.copyWith(
+      quickVerificationShown: issues.isNotEmpty,
+      quickVerificationIssues: <Map<String, dynamic>>[
+        for (final ValueIssue issue in issues)
+          <String, dynamic>{
+            'row': issue.row,
+            'column': issue.column,
+            'valueIndex': issue.valueIndex,
+            'nutrient': issue.nutrient,
+            'columnLabel': issue.columnLabel,
+            'current': <String, dynamic>{
+              'amount': issue.current.amount,
+              'unit': issue.current.unit,
+            },
+            'kind': issue.kind.name,
+            'message': issue.message,
+            'suggestedAmount': issue.suggestedAmount,
+            'suggestedUnit': issue.suggestedUnit,
+          },
+      ],
+      valuesBeforeVerification: ScanEvaluationMetadata.captureValues(data),
+      valuesAfterVerification: ScanEvaluationMetadata.captureValues(data),
+    );
 
     if (!mounted) return;
 
@@ -165,6 +196,10 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
       }
     }
 
+    evaluation = evaluation.copyWith(
+      valuesAfterVerification: ScanEvaluationMetadata.captureValues(data),
+    );
+
     _set(3, _StepState.done);
 
     // ---- 4. next screen ---------------------------------
@@ -177,12 +212,14 @@ class _AnalysingScreenState extends State<AnalysingScreen> {
                 data: data,
                 imagePath: widget.imagePath,
                 flow: widget.flow,
+                evaluation: evaluation,
               )
             : QuickVerificationScreen(
                 data: data,
                 issues: issues,
                 imagePath: widget.imagePath,
                 flow: widget.flow,
+                evaluation: evaluation,
               ),
       ),
     );

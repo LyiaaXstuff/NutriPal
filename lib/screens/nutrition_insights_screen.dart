@@ -44,6 +44,8 @@ class NutritionInsightsScreen extends StatefulWidget {
 
   final String? savedProductName;
 
+  final ScanEvaluationMetadata? evaluation;
+
   const NutritionInsightsScreen({
     super.key,
     required this.data,
@@ -51,6 +53,7 @@ class NutritionInsightsScreen extends StatefulWidget {
     this.imagePath,
     this.savedRecordId,
     this.savedProductName,
+    this.evaluation,
   });
 
   @override
@@ -92,6 +95,7 @@ class _NutritionInsightsScreenState extends State<NutritionInsightsScreen> {
       label: _data,
       productName: _productName,
       imagePath: widget.imagePath,
+      evaluation: widget.evaluation ?? ScanEvaluationMetadata.forLabel(_data),
       // This name came from the barcode, the photo or the
       // default: a name saved earlier for the same product
       // (for example one the user typed) wins.
@@ -2365,4 +2369,3 @@ class _PortionGrid extends StatelessWidget {
     );
   }
 }
-

@@ -35,16 +35,21 @@
 const { onCall, HttpsError } = require('firebase-functions/https');
 const functionsV1 = require('firebase-functions/v1');
 const { initializeApp, getApps } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { FieldValue, getFirestore } = require('firebase-admin/firestore');
 const { defineSecret, defineString, defineBoolean } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 
 const { readNutritionLabel, LabelReaderError } = require('./src/label_reader');
-const { askNutriPal, AskNutriPalError } = require('./src/ask_nutripal');
+const {
+  askNutriPal,
+  AskNutriPalError,
+  buildEvaluationRecord,
+} = require('./src/ask_nutripal');
 const { readProductName } = require('./src/product_name');
 const { deleteUserData } = require('./src/user_cleanup');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const GIT_COMMIT_HASH = process.env.GIT_COMMIT_HASH || process.env.GITHUB_SHA || null;
 
 // The prototype uses Claude Sonnet 5.5 (also set in
 // functions/.env.nutripal-fyp). Change without code
@@ -196,6 +201,19 @@ exports.askNutriPal = onCall(
         uid,
         db: uid ? db() : undefined,
       });
+
+      if (result.evaluation) {
+        const evaluationDb = db();
+        const document = buildEvaluationRecord({
+          evaluation: result.evaluation,
+          finalAnswer: result.answer,
+          model: result.model,
+          timestamp: FieldValue.serverTimestamp(),
+          gitCommitHash: GIT_COMMIT_HASH,
+        });
+
+        await evaluationDb.collection('eval_runs').add(document);
+      }
 
       logger.info('ask nutripal answered', {
         model: result.model,

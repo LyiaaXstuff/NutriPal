@@ -224,12 +224,15 @@ class ScanHistoryService extends ChangeNotifier {
     required String productName,
     String? imagePath,
     bool keepExistingName = false,
+    ScanEvaluationMetadata? evaluation,
   }) async {
     await _ensureLoaded();
 
     final String key = ScanRecord.productKeyFor(label);
     final DateTime time = now;
     final _Summary summary = _summaryFor(label);
+    final ScanEvaluationMetadata scanEvaluation =
+        evaluation ?? ScanEvaluationMetadata.forLabel(label);
 
     final int existing = _records.indexWhere((ScanRecord r) => r.productKey == key);
 
@@ -249,6 +252,7 @@ class ScanHistoryService extends ChangeNotifier {
         energyKcal: summary.energy,
         sugarsG: summary.sugars,
         sodiumMg: summary.sodium,
+        evaluation: scanEvaluation,
       );
     } else {
       record = ScanRecord(
@@ -261,6 +265,7 @@ class ScanHistoryService extends ChangeNotifier {
         energyKcal: summary.energy,
         sugarsG: summary.sugars,
         sodiumMg: summary.sodium,
+        evaluation: scanEvaluation,
       );
     }
 

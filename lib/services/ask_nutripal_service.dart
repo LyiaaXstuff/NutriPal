@@ -293,6 +293,7 @@ class AskNutriPalService {
         'messages': <Map<String, String>>[
           for (final ChatTurn t in history) <String, String>{'role': t.role, 'text': t.text},
         ],
+        if (kDebugMode) 'evalMode': true,
       });
 
       final Object? data = result.data;

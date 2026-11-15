@@ -33,6 +33,13 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Firebase Admin service-account keys
+**/serviceAccount.json
+**/*-firebase-adminsdk-*.json
+
+# Generated evaluation exports
+/evaluation/results/
+
 # Symbolication related
 app.*.symbols
 

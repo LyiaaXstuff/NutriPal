@@ -41,7 +41,7 @@ const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 2000;
 const MAX_TOOL_ROUNDS = 4;
 
-const { searchGuidelines } = require('./guidelines');
+const { searchGuidelines, KB_VERSION } = require('./guidelines');
 const { compareWithHistory, NUTRIENTS } = require('./history');
 
 const SYSTEM_PROMPT = `You are NutriPal, a friendly nutrition-label assistant in a Malaysian mobile app for people managing diabetes, high blood pressure, high LDL cholesterol or their weight.
@@ -432,6 +432,20 @@ function buildSystem(context) {
   return `${SYSTEM_PROMPT}\n\n<context>\n${JSON.stringify(context)}\n</context>`;
 }
 
+function buildEvaluationRecord({ evaluation, finalAnswer, model, timestamp, gitCommitHash }) {
+  return {
+    timestamp,
+    question: evaluation.question,
+    toolsCalled: evaluation.toolsCalled,
+    searchGuidelinesResults: evaluation.searchGuidelinesResults,
+    found: evaluation.found,
+    finalAnswer,
+    model,
+    kbVersion: evaluation.kbVersion,
+    ...(gitCommitHash ? { gitCommitHash } : {}),
+  };
+}
+
 async function callClaude({ apiKey, model, system, messages, fetchImpl }) {
   let response;
 
@@ -526,6 +540,7 @@ async function runTool(use, { context, uid, db }) {
  */
 async function askNutriPal({ data, apiKey, model, uid, db, fetchImpl = fetch }) {
   const request = validateAskRequest(data);
+  const evalMode = data && data.evalMode === true;
 
   if (!apiKey) {
     throw new AskNutriPalError('failed-precondition', 'Ask NutriPal is not configured.');
@@ -536,6 +551,8 @@ async function askNutriPal({ data, apiKey, model, uid, db, fetchImpl = fetch }) 
   const steps = ['Checked your profile and this label'];
   const evidence = new Set();
   const usage = [];
+  const toolsCalled = [];
+  const searchGuidelinesResults = [];
 
   for (let turn = 0; turn <= MAX_TOOL_ROUNDS; turn++) {
     const body = await callClaude({ apiKey, model, system, messages, fetchImpl });
@@ -561,7 +578,24 @@ async function askNutriPal({ data, apiKey, model, uid, db, fetchImpl = fetch }) 
         throw new AskNutriPalError('internal', 'NutriPal had no answer. Please try again.');
       }
 
-      return { answer, steps, evidence_ids: [...evidence], model: body.model || model, usage };
+      return {
+        answer,
+        steps,
+        evidence_ids: [...evidence],
+        model: body.model || model,
+        usage,
+        ...(evalMode
+          ? {
+              evaluation: {
+                question: [...request.messages].reverse().find((message) => message.role === 'user').text,
+                toolsCalled,
+                searchGuidelinesResults,
+                found: searchGuidelinesResults.some((result) => result.found),
+                kbVersion: KB_VERSION,
+              },
+            }
+          : {}),
+      };
     }
 
     messages.push({ role: 'assistant', content });
@@ -569,7 +603,22 @@ async function askNutriPal({ data, apiKey, model, uid, db, fetchImpl = fetch }) 
     const results = [];
 
     for (const use of toolUses) {
+      if (evalMode) toolsCalled.push({ name: use.name, input: use.input || {} });
+
       const { result, step, evidence: ids } = await runTool(use, { context: request.context, uid, db });
+
+      if (evalMode && use.name === 'search_guidelines') {
+        searchGuidelinesResults.push({
+          found: result.found === true,
+          entries: (Array.isArray(result.entries) ? result.entries : []).map((entry) => ({
+            id: entry.id,
+            topic: entry.topic,
+            guidance: entry.guidance,
+            caution: entry.caution ?? null,
+            source: entry.source ?? null,
+          })),
+        });
+      }
 
       if (step && !steps.includes(step)) steps.push(step);
 
@@ -620,6 +669,7 @@ module.exports = {
   runTool,
   MAX_TOOL_ROUNDS,
   buildSystem,
+  buildEvaluationRecord,
   AskNutriPalError,
   SYSTEM_PROMPT,
   TOOLS,

@@ -19,6 +19,121 @@
 import 'nutrition_label_data.dart';
 import 'nutrition_label_json.dart';
 
+enum ScanExtractionPath {
+  mlkit('mlkit'),
+  claude('claude'),
+  claudeRejected('claude_rejected'),
+  barcode('barcode');
+
+  const ScanExtractionPath(this.value);
+
+  final String value;
+
+  static ScanExtractionPath? fromValue(Object? value) {
+    for (final ScanExtractionPath path in values) {
+      if (path.value == value) return path;
+    }
+
+    return null;
+  }
+}
+
+class ScanEvaluationMetadata {
+  final ScanExtractionPath extractionPath;
+  final List<String> fallbackReasons;
+  final bool quickVerificationShown;
+  final List<Map<String, dynamic>> quickVerificationIssues;
+  final List<Map<String, dynamic>> valuesBeforeVerification;
+  final List<Map<String, dynamic>> valuesAfterVerification;
+
+  const ScanEvaluationMetadata({
+    required this.extractionPath,
+    this.fallbackReasons = const <String>[],
+    this.quickVerificationShown = false,
+    this.quickVerificationIssues = const <Map<String, dynamic>>[],
+    this.valuesBeforeVerification = const <Map<String, dynamic>>[],
+    this.valuesAfterVerification = const <Map<String, dynamic>>[],
+  });
+
+  factory ScanEvaluationMetadata.forLabel(NutritionLabelData label) {
+    final List<Map<String, dynamic>> values = captureValues(label);
+
+    return ScanEvaluationMetadata(
+      extractionPath: label.extractionMethod == NutritionExtractionMethod.barcode
+          ? ScanExtractionPath.barcode
+          : ScanExtractionPath.mlkit,
+      valuesBeforeVerification: values,
+      valuesAfterVerification: values,
+    );
+  }
+
+  static List<Map<String, dynamic>> captureValues(NutritionLabelData label) {
+    return <Map<String, dynamic>>[
+      for (final NutrientRow row in label.nutrients)
+        <String, dynamic>{
+          'name': row.name,
+          'values': <List<Map<String, dynamic>>>[
+            for (final List<NutritionValue> cell in row.valuesByColumn)
+              <Map<String, dynamic>>[
+                for (final NutritionValue value in cell)
+                  <String, dynamic>{'amount': value.amount, 'unit': value.unit},
+              ],
+          ],
+        },
+    ];
+  }
+
+  ScanEvaluationMetadata copyWith({
+    ScanExtractionPath? extractionPath,
+    List<String>? fallbackReasons,
+    bool? quickVerificationShown,
+    List<Map<String, dynamic>>? quickVerificationIssues,
+    List<Map<String, dynamic>>? valuesBeforeVerification,
+    List<Map<String, dynamic>>? valuesAfterVerification,
+  }) {
+    return ScanEvaluationMetadata(
+      extractionPath: extractionPath ?? this.extractionPath,
+      fallbackReasons: fallbackReasons ?? this.fallbackReasons,
+      quickVerificationShown: quickVerificationShown ?? this.quickVerificationShown,
+      quickVerificationIssues: quickVerificationIssues ?? this.quickVerificationIssues,
+      valuesBeforeVerification: valuesBeforeVerification ?? this.valuesBeforeVerification,
+      valuesAfterVerification: valuesAfterVerification ?? this.valuesAfterVerification,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'extractionPath': extractionPath.value,
+        'fallbackReasons': fallbackReasons,
+        'quickVerificationShown': quickVerificationShown,
+        'quickVerificationIssues': quickVerificationIssues,
+        'valuesBeforeVerification': valuesBeforeVerification,
+        'valuesAfterVerification': valuesAfterVerification,
+      };
+
+  static ScanEvaluationMetadata? fromJson(Map<String, dynamic> json) {
+    final ScanExtractionPath? path = ScanExtractionPath.fromValue(json['extractionPath']);
+    if (path == null) return null;
+
+    List<Map<String, dynamic>> maps(Object? raw) => raw is List
+        ? raw.whereType<Map>().map((Map value) => Map<String, dynamic>.from(value)).toList()
+        : <Map<String, dynamic>>[];
+
+    final Object? rawReasons = json['fallbackReasons'];
+
+    return ScanEvaluationMetadata(
+      extractionPath: path,
+      fallbackReasons: <String>[
+        for (final dynamic reason in (rawReasons is List ? rawReasons : const <dynamic>[]))
+          if (reason is String) reason,
+      ],
+      quickVerificationShown: json['quickVerificationShown'] == true,
+      quickVerificationIssues: maps(json['quickVerificationIssues']),
+      valuesBeforeVerification: maps(json['valuesBeforeVerification']),
+      valuesAfterVerification: maps(json['valuesAfterVerification']),
+    );
+  }
+}
+
 class ScanRecord {
   final String id;
 
@@ -50,6 +165,9 @@ class ScanRecord {
   // The confirmed label, to reopen the full result.
   final NutritionLabelData label;
 
+  // Evaluation metadata for the extraction and verification flow.
+  final ScanEvaluationMetadata? evaluation;
+
   const ScanRecord({
     required this.id,
     required this.productKey,
@@ -63,6 +181,7 @@ class ScanRecord {
     this.energyKcal,
     this.sugarsG,
     this.sodiumMg,
+    this.evaluation,
   });
 
   String? get servingText {
@@ -91,6 +210,7 @@ class ScanRecord {
     double? sugarsG,
     double? sodiumMg,
     NutritionLabelData? label,
+    ScanEvaluationMetadata? evaluation,
   }) {
     return ScanRecord(
       id: id,
@@ -105,6 +225,7 @@ class ScanRecord {
       sugarsG: sugarsG ?? this.sugarsG,
       sodiumMg: sodiumMg ?? this.sodiumMg,
       label: label ?? this.label,
+      evaluation: evaluation ?? this.evaluation,
     );
   }
 
@@ -120,6 +241,7 @@ class ScanRecord {
         'energyKcal': energyKcal,
         'sugarsG': sugarsG,
         'sodiumMg': sodiumMg,
+        ...?evaluation?.toJson(),
         'label': NutritionLabelJson.toJson(label),
       };
 
@@ -147,6 +269,7 @@ class ScanRecord {
         energyKcal: number(raw['energyKcal']),
         sugarsG: number(raw['sugarsG']),
         sodiumMg: number(raw['sodiumMg']),
+        evaluation: ScanEvaluationMetadata.fromJson(raw),
         label: NutritionLabelJson.fromJson(
           raw['label'] as Map<String, dynamic>? ?? const <String, dynamic>{},
         ),

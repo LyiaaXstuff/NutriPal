@@ -88,11 +88,53 @@ void main() {
       final ScanRecord r = await service.recordScan(label: homesoy(), productName: 'Homesoy');
 
       expect(service.recent().single.id, r.id);
+      expect(r.evaluation?.extractionPath, ScanExtractionPath.mlkit);
+      expect(r.evaluation?.quickVerificationShown, isFalse);
       expect(r.energyKcal, 92);
       expect(r.sodiumMg, 40);
       expect(r.summaryBasis, 'per serving');
       expect(r.servingText, '236 ml per serving');
       expect(r.isFavourite, isFalse);
+    });
+
+    test('a scan persists extraction and verification evaluation metadata', () async {
+      final ScanEvaluationMetadata evaluation = ScanEvaluationMetadata(
+        extractionPath: ScanExtractionPath.claudeRejected,
+        fallbackReasons: const <String>['missing energy row'],
+        quickVerificationShown: true,
+        quickVerificationIssues: const <Map<String, dynamic>>[
+          <String, dynamic>{'nutrient': 'Energy', 'kind': 'notConfirmed'},
+        ],
+        valuesBeforeVerification: const <Map<String, dynamic>>[
+          <String, dynamic>{'name': 'Energy', 'value': 92},
+        ],
+        valuesAfterVerification: const <Map<String, dynamic>>[
+          <String, dynamic>{'name': 'Energy', 'value': 90},
+        ],
+      );
+
+      final ScanRecord record = await service.recordScan(
+        label: homesoy(),
+        productName: 'Homesoy',
+        evaluation: evaluation,
+      );
+      final ScanRecord restored = ScanRecord.fromJson(record.toJson())!;
+
+      expect(restored.evaluation?.extractionPath, ScanExtractionPath.claudeRejected);
+      expect(restored.evaluation?.fallbackReasons, <String>['missing energy row']);
+      expect(restored.evaluation?.quickVerificationShown, isTrue);
+      expect(restored.evaluation?.quickVerificationIssues.single['nutrient'], 'Energy');
+      expect(restored.evaluation?.valuesBeforeVerification.single['value'], 92);
+      expect(restored.evaluation?.valuesAfterVerification.single['value'], 90);
+    });
+
+    test('barcode scans keep their distinct extraction path', () async {
+      final ScanRecord record = await service.recordScan(
+        label: homesoy().copyWith(extractionMethod: NutritionExtractionMethod.barcode),
+        productName: 'Homesoy',
+      );
+
+      expect(record.evaluation?.extractionPath, ScanExtractionPath.barcode);
     });
 
     test('rescanning the same label updates it instead of duplicating', () async {

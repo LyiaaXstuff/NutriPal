@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/nutrition_label_data.dart';
+import '../models/scan_record.dart';
 import 'ai_label_reader_service.dart';
 import 'label_reading_assessor.dart';
 import 'nutrition_label_parser_service.dart';
@@ -29,6 +30,16 @@ import 'nutrition_label_parser_service.dart';
 //
 // =======================================================
 
+class NutritionExtractionResult {
+  final NutritionLabelData data;
+  final ScanEvaluationMetadata evaluation;
+
+  const NutritionExtractionResult({
+    required this.data,
+    required this.evaluation,
+  });
+}
+
 class NutritionExtractionService {
   NutritionExtractionService._();
 
@@ -36,7 +47,7 @@ class NutritionExtractionService {
   /// evaluating on-device vs AI accuracy for the report).
   static bool alwaysUseAi = false;
 
-  static Future<NutritionLabelData> extract(String imagePath) async {
+  static Future<NutritionExtractionResult> extract(String imagePath) async {
     // ---------------------------------------------------
     // PERCEIVE
     // ---------------------------------------------------
@@ -54,7 +65,15 @@ class NutritionExtractionService {
 
     _log('on-device: ${onDevice.nutrients.length} rows, problems: $problems');
 
-    if (problems.isEmpty && !alwaysUseAi) return onDevice;
+    if (problems.isEmpty && !alwaysUseAi) {
+      return NutritionExtractionResult(
+        data: onDevice,
+        evaluation: ScanEvaluationMetadata(
+          extractionPath: ScanExtractionPath.mlkit,
+          fallbackReasons: problems,
+        ),
+      );
+    }
 
     // Arabic, Thai... on the label: the phone kept only the
     // English / Malay names.
@@ -66,7 +85,13 @@ class NutritionExtractionService {
 
     if (!AiLabelReaderService.isAvailable) {
       _log('AI reading not available (Firebase not set up)');
-      return onDevice.copyWith(notes: <String>[...onDevice.notes, ...scriptNote]);
+      return NutritionExtractionResult(
+        data: onDevice.copyWith(notes: <String>[...onDevice.notes, ...scriptNote]),
+        evaluation: ScanEvaluationMetadata(
+          extractionPath: ScanExtractionPath.mlkit,
+          fallbackReasons: problems,
+        ),
+      );
     }
 
     // ---------------------------------------------------
@@ -80,22 +105,34 @@ class NutritionExtractionService {
     } on AiLabelReaderException catch (error) {
       _log('AI reading failed: $error');
 
-      return onDevice.copyWith(
-        notes: <String>[
-          ...onDevice.notes,
-          ...scriptNote,
-          'AI check was not available: ${error.message}',
-        ],
+      return NutritionExtractionResult(
+        data: onDevice.copyWith(
+          notes: <String>[
+            ...onDevice.notes,
+            ...scriptNote,
+            'AI check was not available: ${error.message}',
+          ],
+        ),
+        evaluation: ScanEvaluationMetadata(
+          extractionPath: ScanExtractionPath.mlkit,
+          fallbackReasons: problems,
+        ),
       );
     } catch (error) {
       _log('AI reading failed: $error');
 
-      return onDevice.copyWith(
-        notes: <String>[
-          ...onDevice.notes,
-          ...scriptNote,
-          'AI check was not available. Please check the values carefully.',
-        ],
+      return NutritionExtractionResult(
+        data: onDevice.copyWith(
+          notes: <String>[
+            ...onDevice.notes,
+            ...scriptNote,
+            'AI check was not available. Please check the values carefully.',
+          ],
+        ),
+        evaluation: ScanEvaluationMetadata(
+          extractionPath: ScanExtractionPath.mlkit,
+          fallbackReasons: problems,
+        ),
       );
     }
 
@@ -136,27 +173,50 @@ class NutritionExtractionService {
       notes: aiNotes,
     );
 
-    if (check.accepted) return aiResult;
+    final ScanExtractionPath extractionPath =
+        check.accepted ? ScanExtractionPath.claude : ScanExtractionPath.claudeRejected;
+
+    if (check.accepted) {
+      return NutritionExtractionResult(
+        data: aiResult,
+        evaluation: ScanEvaluationMetadata(
+          extractionPath: extractionPath,
+          fallbackReasons: problems,
+        ),
+      );
+    }
 
     // The on-device reading is unusable but the AI found a
     // table: show it, clearly marked for checking.
     if (onDevice.nutrients.length < 3 && ai.nutrients.length >= 3) {
-      return aiResult.copyWith(
-        notes: <String>[
-          'The AI reading could not be fully confirmed. '
-              'Please compare every value with the label.',
-          ...aiNotes,
-        ],
+      return NutritionExtractionResult(
+        data: aiResult.copyWith(
+          notes: <String>[
+            'The AI reading could not be fully confirmed. '
+                'Please compare every value with the label.',
+            ...aiNotes,
+          ],
+        ),
+        evaluation: ScanEvaluationMetadata(
+          extractionPath: extractionPath,
+          fallbackReasons: problems,
+        ),
       );
     }
 
-    return onDevice.copyWith(
-      notes: <String>[
-        ...onDevice.notes,
-        ...scriptNote,
-        'An AI check did not confirm this reading. '
-            'Please compare the values with the label.',
-      ],
+    return NutritionExtractionResult(
+      data: onDevice.copyWith(
+        notes: <String>[
+          ...onDevice.notes,
+          ...scriptNote,
+          'An AI check did not confirm this reading. '
+              'Please compare the values with the label.',
+        ],
+      ),
+      evaluation: ScanEvaluationMetadata(
+        extractionPath: extractionPath,
+        fallbackReasons: problems,
+      ),
     );
   }
 

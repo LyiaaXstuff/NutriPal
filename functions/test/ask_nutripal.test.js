@@ -9,6 +9,7 @@ const {
   recalculatePortion,
   rateAmount,
   buildSystem,
+  buildEvaluationRecord,
   AskNutriPalError,
 } = require('../src/ask_nutripal');
 const { CONTEXT, scan, fakeDb } = require('./helpers');
@@ -373,6 +374,109 @@ test('agent loop: search_guidelines returns evidence IDs to the server only', as
   const toolResult = JSON.parse(calls[1].body.messages[2].content[0].content);
   assert.equal(toolResult.found, true);
   assert.equal(toolResult.evidence_ids, undefined);
+});
+
+test('evaluation mode captures tool inputs and full guideline search results', async () => {
+  const fetchImpl = fakeFetch([
+    {
+      status: 200,
+      body: {
+        stop_reason: 'tool_use',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_eval',
+            name: 'search_guidelines',
+            input: { query: 'traffic light medium' },
+          },
+        ],
+      },
+    },
+    {
+      status: 200,
+      body: {
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'Medium describes the nutrient level.' }],
+      },
+    },
+  ]);
+
+  const result = await askNutriPal({
+    data: {
+      context: CONTEXT,
+      messages: [{ role: 'user', text: 'What does medium mean in a traffic light?' }],
+      evalMode: true,
+    },
+    apiKey: 'k',
+    model: 'm',
+    fetchImpl,
+  });
+
+  assert.equal(result.evaluation.question, 'What does medium mean in a traffic light?');
+  assert.deepEqual(result.evaluation.toolsCalled, [
+    { name: 'search_guidelines', input: { query: 'traffic light medium' } },
+  ]);
+  assert.equal(result.evaluation.found, true);
+  assert.equal(result.evaluation.kbVersion, '1.7.0');
+
+  const fsaEntry = result.evaluation.searchGuidelinesResults
+    .flatMap((search) => search.entries)
+    .find((entry) => entry.id === 'GEN-23');
+
+  assert.ok(fsaEntry);
+  assert.ok(fsaEntry.topic);
+  assert.ok(fsaEntry.guidance);
+  assert.ok(fsaEntry.caution);
+  assert.ok(fsaEntry.source);
+  assert.equal(result.answer, 'Medium describes the nutrient level.');
+});
+
+test('evaluation data is omitted when evaluation mode is not enabled', async () => {
+  const result = await askNutriPal({
+    data: { context: CONTEXT, messages: [{ role: 'user', text: 'Hi' }] },
+    apiKey: 'k',
+    model: 'm',
+    fetchImpl: fakeFetch([
+      {
+        status: 200,
+        body: {
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: 'Hello.' }],
+        },
+      },
+    ]),
+  });
+
+  assert.equal(Object.hasOwn(result, 'evaluation'), false);
+});
+
+test('evaluation document contains only the requested whitelist fields', () => {
+  const document = buildEvaluationRecord({
+    evaluation: {
+      question: 'What does medium mean?',
+      toolsCalled: [{ name: 'search_guidelines', input: { query: 'medium' } }],
+      searchGuidelinesResults: [{ found: true, entries: [{ id: 'GEN-23' }] }],
+      found: true,
+      kbVersion: '1.7.0',
+    },
+    finalAnswer: 'It describes a nutrient level.',
+    model: 'test-model',
+    timestamp: 'server-time',
+  });
+
+  assert.deepEqual(Object.keys(document), [
+    'timestamp',
+    'question',
+    'toolsCalled',
+    'searchGuidelinesResults',
+    'found',
+    'finalAnswer',
+    'model',
+    'kbVersion',
+  ]);
+  assert.equal(document.gitCommitHash, undefined);
+  assert.equal(Object.hasOwn(document, 'uid'), false);
+  assert.equal(Object.hasOwn(document, 'profile'), false);
 });
 
 test('agent loop: compare_with_history reads only the signed-in user', async () => {

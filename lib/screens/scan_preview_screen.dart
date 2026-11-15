@@ -253,7 +253,7 @@ class _ScanPreviewScreenState
       // PARSE THE NUTRITION LABEL
       // =================================================
 
-      final nutritionData =
+      final extraction =
           await NutritionExtractionService.extract(
         _currentImagePath,
       );
@@ -279,7 +279,7 @@ class _ScanPreviewScreenState
           ) {
             return ExtractedNutritionReviewScreen(
               data:
-                  nutritionData,
+                  extraction.data,
             );
           },
         ),
